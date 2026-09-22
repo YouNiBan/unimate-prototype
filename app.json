@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "UNIMATE 优你伴",
+    "slug": "unimate",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": { "backgroundColor": "#F5FAFF" },
+    "ios": { "supportsTablet": true, "bundleIdentifier": "com.unimate.studentlife", "infoPlist": { "NSLocationWhenInUseUsageDescription": "UNIMATE uses your location to show nearby events, restaurants and services when you choose to enable it." } },
+    "android": { "package": "com.unimate.studentlife", "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"] },
+    "plugins": [
+      ["expo-location", { "locationWhenInUsePermission": "Allow UNIMATE to use your location to find nearby events, restaurants and services." }],
+      ["expo-image-picker", { "photosPermission": "Allow UNIMATE to access a photo you choose for an event or marketplace listing." }]
+    ]
+  }
+}
