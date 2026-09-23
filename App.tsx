@@ -4951,6 +4951,9 @@ function AirportTransferForm({ language, onCheckout, isUnavailable, isTimeUnavai
   const [selectedDay, setSelectedDay] = useState(() => bookingDateFromToday(7));
   const [hour, setHour] = useState("10");
   const [minute, setMinute] = useState("00");
+  const [flightNumber, setFlightNumber] = useState("BA 2836");
+  const [passportType, setPassportType] = useState("Chinese passport");
+  const [customAirportTime, setCustomAirportTime] = useState(false);
   const [passengers, setPassengers] = useState("1 passenger");
   const [smallCases, setSmallCases] = useState("1 small suitcase");
   const [largeCases, setLargeCases] = useState("1 large suitcase");
@@ -5381,10 +5384,18 @@ function AirportTransferForm({ language, onCheckout, isUnavailable, isTimeUnavai
       <View style={styles.field}>
         <Text style={styles.fieldLabel}>{labels.flight}</Text>
         <TextInput
+          value={flightNumber}
+          onChangeText={setFlightNumber}
           placeholder={labels.flightHint}
           placeholderTextColor="#A1ADBE"
           autoCapitalize="characters"
         />
+      </View>
+      <SelectField label={tr(language, "Traveller passport", "旅客护照", "旅客護照")} value={passportType} options={["UK passport", "EU/EEA passport", "Chinese passport", "Other passport"]} onChange={setPassportType} />
+      <View style={styles.workspaceCard}>
+        <View style={styles.workspaceCardTop}><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{journey === "pickup" ? tr(language, "Recommended airport pickup", "建议机场接机时间", "建議機場接機時間") : tr(language, "Recommended home pickup", "建议上门接送时间", "建議上門接送時間")}</Text><Text style={styles.workspaceCardText}>{journey === "pickup" ? `${hour}:${minute} ${tr(language, "flight arrival", "航班抵达", "航班抵達")} · ${passportType === "Chinese passport" ? tr(language, "allows extra border time", "已预留较长入境时间", "已預留較長入境時間") : tr(language, "standard border allowance", "标准入境预留时间", "標準入境預留時間")}` : `${tr(language, "Driver arrival", "司机到达", "司機到達")} 06:20 · ${tr(language, "target airport arrival", "预计抵达机场", "預計抵達機場")} 07:35`}</Text></View><Ionicons name="sparkles" size={20} color={palette.blue} /></View>
+        <Pressable accessibilityRole="switch" accessibilityState={{ checked: customAirportTime }} style={[styles.toggle, customAirportTime && styles.toggleOn]} onPress={() => setCustomAirportTime(!customAirportTime)}><View style={[styles.toggleKnob, customAirportTime && styles.toggleKnobOn]} /></Pressable>
+        <Text style={styles.workspaceHint}>{customAirportTime ? tr(language, "Custom time selected. UniMate will show any timing risk before payment.", "已选择自定义时间。优你伴会在付款前提示时间风险。", "已選擇自訂時間。優你伴會在付款前提示時間風險。") : tr(language, "Recommendation considers flight time, live route allowance, airport guidance and passport processing time.", "建议时间会综合航班时间、路线预留、机场指引和护照入境时间。", "建議時間會綜合航班時間、路線預留、機場指引及護照入境時間。")}</Text>
       </View>
       <View style={styles.addressSearchWrap}>
         <Text style={styles.fieldLabel}>{labels.london}</Text>
@@ -7585,6 +7596,15 @@ function FoodForum({ language, visitedPlaces, setVisitedPlaces, submittedReviews
             placeholderTextColor="#8B98AD"
           />
         </View>
+        <View style={styles.workspaceCard}>
+          <View style={styles.workspaceCardTop}><View><Text style={styles.workspaceCardTitle}>{tr(language, "Food reviewer leaderboard", "美食点评达人榜", "美食評論達人榜")}</Text><Text style={styles.workspaceHint}>{tr(language, "Based on helpful, verified student reviews", "按真实到访且有帮助的学生点评排名", "按真實到訪且有幫助的學生評論排名")}</Text></View><Ionicons name="trophy" size={24} color="#E7A51A" /></View>
+          {[
+            ["1", "Jenna · UniMate official reviewer", "42", "4.9"],
+            ["2", "@londonlatte", "28", "4.8"],
+            ["3", "@studybuddy_uk", "17", "4.7"],
+          ].map(([rank, name, reviews, rating]) => <View key={rank} style={[styles.friend, { paddingHorizontal: 0 }]}><View style={[styles.avatar, { backgroundColor: rank === "1" ? "#FFF0BD" : "#DCEBFF" }]}><Text style={styles.avatarText}>{rank}</Text></View><View style={{ flex: 1 }}><Text style={styles.friendName}>{name}</Text><Text style={styles.friendInterests}>{reviews} {tr(language, "reviews", "条点评", "則評論")} · ★ {rating}</Text></View>{rank === "1" && <VerificationBadge kind="staff" language={language} />}</View>)}
+          <Text style={styles.workspaceHint}>{tr(language, "Jenna independently reviews value, dishes and student offers, and helps restaurants join UniMate. Official reviews are labelled and are never restaurant photoshoots.", "Jenna 会独立点评价格、菜品和学生优惠，并协助餐厅加入优你伴。官方点评均有明确标识，绝不使用餐厅摆拍照片。", "Jenna 會獨立評論價錢、菜式及學生優惠，並協助餐廳加入優你伴。官方評論均有清晰標示，絕不使用餐廳擺拍相片。")}</Text>
+        </View>
         <SlidableCategories language={language} rowStyle={styles.foodModeRow}>
           {modeOptions.map((item) => (
             <Pressable
@@ -7760,7 +7780,7 @@ function FoodForum({ language, visitedPlaces, setVisitedPlaces, submittedReviews
                   </Pressable>
                 </View>
                 <Text style={styles.dish}>{item.dish}</Text>
-                {mode === "visited" && <Text style={styles.foodSectionHint}>{tr(language, "Visited", "到访", "到訪")} · {visitedPlaces.find((visit) => visit.name === item.name)?.date}</Text>}
+                {mode === "visited" && <Text style={styles.foodSectionHint}>{tr(language, "Visited", "到访", "到訪")} · {visitedPlaces.find((visit) => visit.name === item.name)?.date} · 1 {tr(language, "visit", "次", "次")}</Text>}
                 <Text style={styles.quote}>
                   “{language === "EN" ? item.quote : item.translation}”
                 </Text>
@@ -7897,6 +7917,7 @@ function FoodForum({ language, visitedPlaces, setVisitedPlaces, submittedReviews
                 ? tr(language, "In your visit history · Remove", "已在到访记录中 · 移除", "已在到訪紀錄中 · 移除")
                 : tr(language, "Add to my visit history", "添加到我的到访记录", "加入我的到訪紀錄")}</Text>
             </Pressable>
+            <View style={[styles.workspaceNotice, { marginTop: 10 }]}><Ionicons name="repeat-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{visitedPlaces.some((visit) => visit.name === selected.name) ? tr(language, "You have visited this restaurant 1 time", "你已到访这家餐厅 1 次", "你已到訪這間餐廳 1 次") : tr(language, "No visits recorded yet", "尚未记录到访", "尚未記錄到訪")}</Text></View>
             <View style={styles.scoreGrid}>
               <View style={styles.scoreCard}>
                 <Ionicons name="star" size={20} color="#F2A91B" />
@@ -8405,6 +8426,8 @@ function Marketplace({
     null,
   );
   const [sellerProfileIndex, setSellerProfileIndex] = useState<number | null>(null);
+  const [checkoutProduct, setCheckoutProduct] = useState<(typeof products)[number] | null>(null);
+  const [deliveryMethod, setDeliveryMethod] = useState<"collection" | "delivery">("collection");
   const names =
     language === "EN"
       ? products.map((item) => item.name)
@@ -8769,17 +8792,7 @@ function Marketplace({
               </Pressable>}
               <Pressable
                 style={[styles.primaryButton, styles.productBuyButton]}
-                onPress={() =>
-                  Alert.alert(
-                    tr(language, "Ready to purchase", "准备购买", "準備購買"),
-                    tr(
-                      language,
-                      "Checkout will confirm collection or UNIMATE delivery.",
-                      "结账时将确认自取或UNIMATE配送。",
-                      "結帳時將確認自取或UNIMATE配送。",
-                    ),
-                  )
-                }
+                onPress={() => { setCheckoutProduct(selected); setSelected(null); }}
               >
                 <Text style={styles.primaryButtonText}>
                   {tr(language, "Buy now", "立即购买", "立即購買")}
@@ -8788,6 +8801,16 @@ function Marketplace({
             </View>
           </ScrollView>
         )}
+      </Sheet>
+      <Sheet visible={checkoutProduct !== null} title={tr(language, "Secure checkout", "安全结账", "安全結帳")} onClose={() => setCheckoutProduct(null)}>
+        {checkoutProduct && <ScrollView contentContainerStyle={styles.modalBody}>
+          <View style={styles.workspaceCard}><View style={{ flexDirection: "row", gap: 12 }}><Image source={{ uri: checkoutProduct.image }} style={{ width: 72, height: 72, borderRadius: 12 }} /><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{names[products.indexOf(checkoutProduct)]}</Text><Text style={styles.workspaceCardText}>{checkoutProduct.price}</Text><Text style={styles.workspaceHint}>{tr(language, "Sold through UniMate marketplace", "通过优你伴市场出售", "透過優你伴市集出售")}</Text></View></View></View>
+          <Text style={styles.formSectionTitle}>{tr(language, "How would you like to receive it?", "选择收货方式", "選擇收貨方式")}</Text>
+          <View style={{ flexDirection: "row", gap: 9 }}><Pressable style={[styles.marketCategory, { flex: 1 }, deliveryMethod === "collection" && styles.marketCategoryActive]} onPress={() => setDeliveryMethod("collection")}><Text style={[styles.marketCategoryText, deliveryMethod === "collection" && styles.marketCategoryTextActive]}>{tr(language, "Collect from seller", "向卖家自取", "向賣家自取")}</Text></Pressable><Pressable style={[styles.marketCategory, { flex: 1 }, deliveryMethod === "delivery" && styles.marketCategoryActive]} onPress={() => setDeliveryMethod("delivery")}><Text style={[styles.marketCategoryText, deliveryMethod === "delivery" && styles.marketCategoryTextActive]}>{tr(language, "UniMate delivery", "优你伴配送", "優你伴配送")}</Text></Pressable></View>
+          <View style={styles.bookingReferenceCard}><Ionicons name="shield-checkmark" size={20} color={palette.green} /><Text style={styles.bookingReferenceText}>{tr(language, "Payment is released after collection or delivery is confirmed. No real payment is taken in this prototype.", "确认取货或送达后才会向卖家放款。此原型不会实际扣款。", "確認取貨或送達後才會向賣家放款。此原型不會實際扣款。")}</Text></View>
+          <SelectField label={tr(language, "Payment method", "付款方式", "付款方式")} value="Apple Pay" options={["Apple Pay", "Visa •••• 4242", "WeChat Pay"]} onChange={() => {}} />
+          <Pressable style={styles.primaryButton} onPress={() => { Alert.alert(tr(language, "Purchase confirmed", "购买已确认", "購買已確認"), tr(language, "Your prototype order has been added to Purchase history.", "示例订单已加入购买记录。", "示例訂單已加入購買紀錄。")); setCheckoutProduct(null); }}><Text style={styles.primaryButtonText}>{tr(language, `Pay ${checkoutProduct.price}`, `支付 ${checkoutProduct.price}`, `支付 ${checkoutProduct.price}`)}</Text></Pressable>
+        </ScrollView>}
       </Sheet>
       <Sheet visible={sellerProfileIndex !== null} title={profileSeller?.name || tr(language, "Seller profile", "卖家主页", "賣家主頁")} onClose={() => { if (sellerProfileIndex !== null) setSelected(products[sellerProfileIndex]); setSellerProfileIndex(null); }}>
         {profileSeller && <SellerPublicProfile seller={profileSeller} displayName={profileSeller.name === "@loopandloom" ? "Loop & Loom" : profileSeller.name === "@littleorbitstudio" ? "Little Orbit Studio" : profileSeller.name === "@campuslabel" ? "Campus Label" : profileSeller.name === "@bloomnotes" ? "Bloom Notes" : undefined} listingIndices={profileListingIndices} listingNames={names} language={language} onOpenListing={(index) => { setSellerProfileIndex(null); setSelected(products[index]); }} />}
@@ -12367,7 +12390,7 @@ function Profile({
     Douyin: false,
   });
   const [profilePrivate, setProfilePrivate] = useState(false);
-  const [publicSections, setPublicSections] = useState({ bio: true, interests: true, activity: true, reviews: true });
+  const [publicSections, setPublicSections] = useState({ bio: true, interests: true, activity: true, reviews: true, age: true, origin: true });
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
@@ -12394,6 +12417,16 @@ function Profile({
     "public",
   );
   const [editOpen, setEditOpen] = useState(false);
+  const [contactOpen, setContactOpen] = useState(false);
+  const [purchaseHistoryOpen, setPurchaseHistoryOpen] = useState(false);
+  const [birthday, setBirthday] = useState("2003-08-16");
+  const [originCountry, setOriginCountry] = useState("China");
+  const [originRegion, setOriginRegion] = useState("Fujian");
+  const [personalEmail, setPersonalEmail] = useState("sophie.chen@example.com");
+  const [universityEmail, setUniversityEmail] = useState("sophie.chen.23@ucl.ac.uk");
+  const [phoneNumber, setPhoneNumber] = useState("+44 7700 900123");
+  const memberSince = "September 2026";
+  const age = Math.max(13, new Date().getFullYear() - Number(birthday.slice(0, 4)) - (new Date().toISOString().slice(5, 10) < birthday.slice(5, 10) ? 1 : 0));
   const initialHandle = accountName && accountRole === "student" ? "@new_student_demo" : accountRole === "student" ? "@studybuddy_uk" : accountRole === "staff" ? "@unimate_staff_demo" : "@organisation_demo";
   const [displayName, setDisplayName] = useState(accountName || (accountRole === "student" ? "Sophie Chen" : accountRole === "staff" ? "Staff account preview" : "Organisation account preview"));
   const [username, setUsername] = useState(initialHandle);
@@ -12496,6 +12529,8 @@ function Profile({
           "My events",
           "My bookings",
           "Payment methods",
+          "Contact details",
+          "Purchase history",
           "My marketplace",
           "Settings",
         ]
@@ -12506,6 +12541,8 @@ function Profile({
             "我的活动",
             "我的预订",
             "付款方式",
+            "联系信息",
+            "购买记录",
             "我的市场",
             "设置",
           ]
@@ -12515,6 +12552,8 @@ function Profile({
             "我的活動",
             "我的預訂",
             "付款方式",
+            "聯絡資料",
+            "購買紀錄",
             "我的市場",
             "設定",
           ];
@@ -12524,6 +12563,8 @@ function Profile({
     "calendar-outline",
     "receipt-outline",
     "card-outline",
+    "mail-outline",
+    "bag-check-outline",
     "bag-outline",
     "settings-outline",
   ];
@@ -12533,8 +12574,10 @@ function Profile({
     if (index === 2) onNavigate("events");
     if (index === 3) onNavigate("bookings");
     if (index === 4) setPaymentOpen(true);
-    if (index === 5) { setStudentMarketplaceTab("listings"); setStudentMarketplaceOpen(true); }
-    if (index === 6) setSettingsOpen(true);
+    if (index === 5) setContactOpen(true);
+    if (index === 6) setPurchaseHistoryOpen(true);
+    if (index === 7) { setStudentMarketplaceTab("listings"); setStudentMarketplaceOpen(true); }
+    if (index === 8) setSettingsOpen(true);
   };
   const pickProfilePhoto = async (source?: PhotoSource) => {
     if (!source) {
@@ -12649,6 +12692,9 @@ function Profile({
             <Text style={styles.profileUni}>
               {accountRole === "student" ? studentVerified ? tr(language, "University College London · Verified student", "伦敦大学学院 · 已认证学生", "倫敦大學學院 · 已認證學生") : studentStatus === "pending" ? tr(language, "Student · Verification pending", "学生 · 待审核", "學生 · 待審核") : tr(language, "Student · Verification needed", "学生 · 尚未认证", "學生 · 尚未認證") : accountRole === "staff" ? tr(language, "Staff account · Verification pending", "员工账号 · 待认证", "員工帳戶 · 待認證") : tr(language, "Organisation account · Verification pending", "机构账号 · 待认证", "機構帳戶 · 待認證")}
             </Text>
+            <Text style={[styles.friendInterests, { marginTop: 6 }]}>{tr(language, "Member since", "加入时间", "加入時間")} · {memberSince}</Text>
+            {(previewAudience === "friend" || publicSections.age) && <Text style={[styles.friendInterests, { marginTop: 4 }]}>{tr(language, "Age", "年龄", "年齡")} · {age}</Text>}
+            {(previewAudience === "friend" || publicSections.origin) && <Text style={[styles.friendInterests, { marginTop: 4 }]}><Ionicons name="location-outline" size={13} color={palette.blue} /> {tr(language, "Originally from", "来自", "來自")} {originRegion}, {originCountry}</Text>}
           </View>
           <View style={styles.profileSocialStats}>
             {([{ key: "followers", value: 0, label: tr(language, "Followers", "粉丝", "追蹤者") }, { key: "following", value: followedOrganisations.length + 2, label: tr(language, "Following", "关注中", "追蹤中") }, { key: "friends", value: acceptedFriends.length, label: tr(language, "Friends", "好友", "好友") }, { key: "mutual", value: acceptedFriends.length, label: tr(language, "Mutual", "共同好友", "共同好友") }] as const).map((stat) => <Pressable key={stat.key} accessibilityRole="button" accessibilityLabel={`${stat.label}: ${stat.value}`} accessibilityState={{ disabled: previewAudience !== "friend" }} disabled={previewAudience !== "friend"} style={styles.profileSocialStat} onPress={() => { if (previewAudience !== "friend") return; setConnectionsTab(stat.key); setPreviewOpen(false); setConnectionsOpen(true); }}><Text style={styles.profileSocialStatValue}>{stat.value}</Text><Text style={styles.profileSocialStatLabel}>{stat.label}</Text></Pressable>)}
@@ -12887,6 +12933,11 @@ function Profile({
               placeholderTextColor="#A1ADBE"
             />
           </View>
+          <Text style={styles.formSectionTitle}>{tr(language, "Student details", "学生资料", "學生資料")}</Text>
+          <Text style={styles.fieldHint}>{tr(language, "Your birthday is used to calculate your age. You control whether age and hometown appear publicly in Privacy and safety.", "生日仅用于计算年龄。你可以在“隐私与安全”中控制是否公开年龄和家乡。", "生日只用於計算年齡。你可在「私隱及安全」控制是否公開年齡及家鄉。")}</Text>
+          <View style={styles.field}><Text style={styles.fieldLabel}>{tr(language, "Birthday (YYYY-MM-DD)", "生日（年-月-日）", "生日（年-月-日）")}</Text><TextInput value={birthday} onChangeText={setBirthday} placeholder="2003-08-16" placeholderTextColor="#A1ADBE" /></View>
+          <SelectField label={tr(language, "Country of origin", "来自国家", "來自國家")} value={originCountry} options={["China", "Italy", "Spain", "United Kingdom", "France", "Germany", "India"]} onChange={(value) => { setOriginCountry(value); setOriginRegion(""); }} />
+          <View style={styles.field}><Text style={styles.fieldLabel}>{tr(language, "Province, city or state", "省／城市／州", "省／城市／州")}</Text><TextInput value={originRegion} onChangeText={setOriginRegion} placeholder={originCountry === "China" ? "Fujian" : tr(language, "e.g. region or city", "例如省份或城市", "例如地區或城市")} placeholderTextColor="#A1ADBE" /></View>
           <Text style={styles.formSectionTitle}>
             {tr(language, "Hobbies and interests", "兴趣爱好", "興趣愛好")}
           </Text>
@@ -12958,6 +13009,25 @@ function Profile({
           </Pressable>
         </ScrollView>
       </Sheet>
+      <Sheet visible={contactOpen} title={tr(language, "Contact details", "联系信息", "聯絡資料")} onClose={() => setContactOpen(false)}>
+        <ScrollView contentContainerStyle={styles.modalBody}>
+          <View style={styles.privacyIntro}><Ionicons name="lock-closed" size={20} color={palette.green} /><Text style={styles.privacyIntroText}>{tr(language, "These details stay private. They can be securely pre-filled for restaurant bookings and service orders.", "这些信息不会公开，可安全地自动填写到餐厅预订和服务订单中。", "這些資料不會公開，可安全地自動填寫到餐廳預訂及服務訂單中。")}</Text></View>
+          <View style={styles.field}><Text style={styles.fieldLabel}>{tr(language, "Personal email", "个人邮箱", "個人電郵")}</Text><TextInput value={personalEmail} onChangeText={setPersonalEmail} keyboardType="email-address" autoCapitalize="none" /></View>
+          <View style={styles.field}><Text style={styles.fieldLabel}>{tr(language, "University email", "大学邮箱", "大學電郵")}</Text><TextInput value={universityEmail} onChangeText={setUniversityEmail} keyboardType="email-address" autoCapitalize="none" /></View>
+          <View style={styles.field}><Text style={styles.fieldLabel}>{tr(language, "Phone number", "手机号码", "電話號碼")}</Text><TextInput value={phoneNumber} onChangeText={setPhoneNumber} keyboardType="phone-pad" /></View>
+          <Pressable style={styles.primaryButton} onPress={() => setContactOpen(false)}><Text style={styles.primaryButtonText}>{tr(language, "Save contact details", "保存联系信息", "儲存聯絡資料")}</Text></Pressable>
+        </ScrollView>
+      </Sheet>
+      <Sheet visible={purchaseHistoryOpen} title={tr(language, "Purchase history", "购买记录", "購買紀錄")} onClose={() => setPurchaseHistoryOpen(false)}>
+        <ScrollView contentContainerStyle={styles.modalBody}>
+          {[
+            { icon: "restaurant-outline", title: "Dishoom Shoreditch", detail: tr(language, "Table booking deposit · 18 Sep 2026", "订座押金 · 2026年9月18日", "訂座訂金 · 2026年9月18日"), price: "£20.00", ref: "UM-R-2081" },
+            { icon: "ticket-outline", title: "Thames River Cruise", detail: tr(language, "Event ticket · 12 Sep 2026", "活动门票 · 2026年9月12日", "活動門票 · 2026年9月12日"), price: "£18.00", ref: "UM-E-1042" },
+            { icon: "bag-handle-outline", title: "Student lamp", detail: tr(language, "Marketplace purchase · Collected", "市场购买 · 已取货", "市集購買 · 已取貨"), price: "£12.00", ref: "UM-1048" },
+          ].map((purchase) => <View key={purchase.ref} style={styles.workspaceCard}><View style={styles.workspaceCardTop}><View style={{ flexDirection: "row", gap: 10, flex: 1 }}><Ionicons name={purchase.icon as any} size={21} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{purchase.title}</Text><Text style={styles.workspaceCardText}>{purchase.detail}</Text><Text style={styles.workspaceHint}>{purchase.ref}</Text></View></View><Text style={styles.workspaceCardTitle}>{purchase.price}</Text></View></View>)}
+          <Text style={styles.workspaceHint}>{tr(language, "This preview combines marketplace orders, event tickets, restaurant deposits and service payments in one history.", "此预览将市场订单、活动门票、餐厅押金和服务付款集中显示。", "此預覽將市集訂單、活動門票、餐廳訂金及服務付款集中顯示。")}</Text>
+        </ScrollView>
+      </Sheet>
       <Sheet
         visible={privacyOpen}
         title={tr(language, "Privacy and safety", "隐私与安全", "私隱及安全")}
@@ -12986,6 +13056,8 @@ function Profile({
               ["interests", tr(language, "Interests", "兴趣爱好", "興趣愛好")],
               ["activity", tr(language, "Recent activities", "最近活动", "最近活動")],
               ["reviews", tr(language, "Reviews", "评价", "評價")],
+              ["age", tr(language, "Age", "年龄", "年齡")],
+              ["origin", tr(language, "Country and hometown", "国家与家乡", "國家及家鄉")],
             ] as const).map(([key, label]) => <View key={key} style={[styles.profilePrivacyHead, { marginTop: 15 }]}>
               <Text style={[styles.formTitle, { flex: 1 }]}>{label}</Text>
               <Pressable accessibilityRole="switch" accessibilityLabel={`${label} visible to public`} accessibilityState={{ checked: publicSections[key] }} style={[styles.toggle, publicSections[key] && styles.toggleOn]} onPress={() => setPublicSections((current) => ({ ...current, [key]: !current[key] }))}>
