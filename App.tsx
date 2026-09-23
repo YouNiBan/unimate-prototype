@@ -1,4 +1,4 @@
-import React, { useContext, useMemo, useRef, useState } from "react";
+import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Image,
@@ -220,7 +220,7 @@ function TextInput(props: React.ComponentProps<typeof NativeTextInput>) {
     <NativeTextInput
       {...props}
       style={themedStyle(props.style, darkMode)}
-      placeholderTextColor={darkMode ? "#8190A6" : props.placeholderTextColor}
+      placeholderTextColor={darkMode ? "#B7C8DB" : props.placeholderTextColor}
       selectionColor={darkMode ? "#5BB0FF" : props.selectionColor}
     />
   );
@@ -295,6 +295,7 @@ const formatBookingDate = (value: string, language: Language) =>
     language === "EN" ? "en-GB" : language === "简体" ? "zh-CN" : "zh-TW",
     { day: "numeric", month: "long", year: "numeric" },
   );
+const formatStaffBookingDate = (value: string) => { const date = dateFromKey(value); return `${date.getDate()} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][date.getMonth()]} ${date.getFullYear()}`; };
 const categoryLabel = (language: Language, category: string) =>
   ({
     All: tr(language, "All", "全部", "全部"),
@@ -609,7 +610,7 @@ const events = [
     lastEntry: "20:00",
     category: "Culture",
     tag: "Student event",
-    going: 86,
+    going: 16,
     spotsLeft: 14,
     releaseAt: "20 September · 18:00",
     summary:
@@ -636,6 +637,17 @@ const events = [
   },
 ];
 
+// Sample checked-in history for the prototype. Production history requires a verified check-in record.
+const pastAttendedEvents = [
+  { title: "Freshers Welcome Walk", date: "10 September 2026", endedAt: "2026-09-10T18:00:00+01:00", place: "South Bank, London", image: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=900" },
+];
+
+// Demo attendance is visible only for sample friends who have opted to share it.
+const eventFriendAttendees: Record<string, string[]> = {
+  "Thames River Cruise": ["@londonlatte", "@citylily"],
+  "Outdoor Movie Night": ["@londonlatte", "@danplays"],
+};
+
 const friends = [
   {
     username: "@londonlatte",
@@ -645,6 +657,10 @@ const friends = [
     interests: ["Photography", "Travel", "Good food", "K-dramas"],
     color: "#FFE0D1",
     initials: "LL",
+    followers: 128,
+    following: 84,
+    friendsCount: 36,
+    mutualCount: 7,
     prompt: "My perfect London Sunday…",
     answer: "A slow brunch, a gallery, and finding the best matcha in town.",
     socials: ["WeChat", "Instagram", "RedNote"],
@@ -658,6 +674,10 @@ const friends = [
     interests: ["Football", "Gym", "Music", "Gaming"],
     color: "#DCEBFF",
     initials: "DP",
+    followers: 94,
+    following: 71,
+    friendsCount: 29,
+    mutualCount: 4,
     prompt: "We’ll get along if…",
     answer: "You are always up for a game, concert, or late-night food run.",
     socials: ["Instagram", "TikTok"],
@@ -671,6 +691,10 @@ const friends = [
     interests: ["Coffee", "Films", "City walks", "Food"],
     color: "#F7DAF5",
     initials: "CL",
+    followers: 62,
+    following: 48,
+    friendsCount: 21,
+    mutualCount: 2,
     prompt: "Together we could…",
     answer: "Explore a different London neighbourhood every weekend.",
     socials: ["WeChat", "RedNote", "Douyin"],
@@ -684,6 +708,10 @@ const friends = [
     interests: ["Technology", "Basketball", "Travel", "Anime"],
     color: "#DDF5E6",
     initials: "TH",
+    followers: 77,
+    following: 55,
+    friendsCount: 24,
+    mutualCount: 3,
     prompt: "A fact about me…",
     answer:
       "I can build an app and miss an open three-pointer on the same day.",
@@ -691,6 +719,42 @@ const friends = [
     socialVisible: true,
   },
 ];
+
+type AccountRole = "student" | "staff" | "organisation" | "seller";
+type StaffService = "cleaning" | "moving" | "airport";
+type OrganisationType = "events" | "restaurant" | "both";
+type StudentVerificationStatus = "verified" | "unverified" | "pending" | "failed";
+type StudentVerificationDecision = "verified" | "pending" | "failed";
+type OrganisationProfile = {
+  id: string;
+  name: string;
+  handle: string;
+  category: string;
+  initials: string;
+  color: string;
+  description: string;
+  verifiedOnUniMate: boolean;
+  links: { label: string; url: string; icon: string }[];
+};
+const organisationProfiles: OrganisationProfile[] = [
+  {
+    id: "unimate", name: "UniMate", handle: "@unimate", category: "Student community", initials: "U", color: "#DCEBFF",
+    description: "The official UniMate page for student events, places and community updates.", verifiedOnUniMate: true,
+    links: [],
+  },
+  {
+    id: "ministry-of-sound", name: "Ministry of Sound", handle: "@ministryofsoundclub", category: "London club", initials: "MS", color: "#EEE8FF",
+    description: "Example organisation listing. This page is not claimed, partnered or verified on UniMate.", verifiedOnUniMate: false,
+    links: [
+      { label: "Website", url: "https://ministryofsound.com/the-club/", icon: "globe-outline" },
+      { label: "Instagram", url: "https://www.instagram.com/ministryofsoundclub/", icon: "logo-instagram" },
+      { label: "TikTok", url: "https://www.tiktok.com/@ministryofsoundclub", icon: "logo-tiktok" },
+    ],
+  },
+];
+
+const friendsGoingToEvent = (eventTitle: string, acceptedFriends: string[]) =>
+  friends.filter((friend) => acceptedFriends.includes(friend.username) && (eventFriendAttendees[eventTitle] || []).includes(friend.username));
 
 const services = [
   { id: "events", icon: "calendar", color: "#FF4657" },
@@ -742,7 +806,7 @@ const restaurants = [
     category: "Chinese",
     occasion: "Friends",
     dish: "Tomato hot pot · 番茄火锅",
-    price: "££",
+    price: "£££",
     image: "https://images.unsplash.com/photo-1547592180-85f173990554?w=900",
     quote: "Perfect for a group dinner. Brilliant service and lots of choice.",
     translation: "非常适合朋友聚餐，服务周到，选择也很多。",
@@ -927,7 +991,16 @@ const products = [
     category: "Homeware",
     image: "https://images.unsplash.com/photo-1527515637462-cff94eecc1ac?w=500",
   },
+  { name: "Hand-crocheted tote", price: "£28", condition: "New", category: "Handmade", image: "https://images.unsplash.com/photo-1746301989947-ec94ca0a23fb?w=500" },
+  { name: "Custom beaded necklace", price: "£19", condition: "New", category: "Jewellery", image: "https://images.unsplash.com/photo-1611652022419-a9419f74343d?w=500" },
+  { name: "Student-designed sweatshirt", price: "£35", condition: "New", category: "Clothing", image: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?w=500" },
+  { name: "Sealed artisan perfume", price: "£32", condition: "New", category: "Fragrance", image: "https://images.unsplash.com/photo-1541643600914-78b084683601?w=500" },
 ];
+
+type MarketplaceIssueReason = "refund" | "fault" | "harassment" | "scam";
+type MarketplaceMessage = { author: "buyer" | "seller" | "support"; text: string; attachment?: ChatAttachment };
+type MarketplaceConversation = { id: string; productName: string; productPrice: string; productImage: string; sellerHandle: string; buyerName: string; status: "enquiry" | "sold" | "received"; requestStatus: "pending" | "accepted" | "declined" | "blocked"; issue?: { reason: MarketplaceIssueReason; details: string }; messages: MarketplaceMessage[] };
+const marketplaceIssueLabel = (language: Language, reason: MarketplaceIssueReason) => reason === "refund" ? tr(language, "Refund request", "退款申请", "退款申請") : reason === "fault" ? tr(language, "Product fault", "商品故障", "商品故障") : reason === "harassment" ? tr(language, "Harassment", "骚扰", "騷擾") : tr(language, "Suspected scam", "疑似诈骗", "疑似詐騙");
 
 function Header({
   language,
@@ -1296,6 +1369,11 @@ function EventCard({
   favourite = false,
   onToggleFavourite,
   recommendationReason,
+  reserved = false,
+  cancelPending = false,
+  onReserve,
+  onCancelReservation,
+  goingFriends = [],
 }: {
   event: (typeof events)[number];
   language: Language;
@@ -1303,6 +1381,11 @@ function EventCard({
   favourite?: boolean;
   onToggleFavourite?: () => void;
   recommendationReason?: string;
+  reserved?: boolean;
+  cancelPending?: boolean;
+  onReserve?: () => void;
+  onCancelReservation?: () => void;
+  goingFriends?: Array<(typeof friends)[number]>;
 }) {
   const position = events.findIndex((item) => item.title === event.title);
   const traditionalTitles = ["泰晤士河遊船", "戶外電影之夜", "國際學生之夜"];
@@ -1422,6 +1505,14 @@ function EventCard({
             </View>
           </View>
         </View>
+        {goingFriends.length > 0 && (
+          <View style={styles.eventFriendsGoing}>
+            <View style={styles.eventFriendAvatars}>
+              {goingFriends.slice(0, 3).map((friend) => <View key={friend.username} style={[styles.eventFriendAvatar, { backgroundColor: friend.color }]}><Text style={styles.eventFriendInitials}>{friend.initials}</Text></View>)}
+            </View>
+            <Text style={styles.eventFriendsText} numberOfLines={1}>{goingFriends.map((friend) => friend.fullName.split(" ")[0]).join(" & ")} {tr(language, "going", "将参加", "將參加")}</Text>
+          </View>
+        )}
         <View style={styles.eventReleaseCard}>
           <Ionicons
             name={soldOut ? "alarm-outline" : "calendar-clear-outline"}
@@ -1444,7 +1535,7 @@ function EventCard({
           <View style={styles.eventAttendanceItem}>
             <Ionicons name="people-outline" size={18} color={palette.blue} />
             <View>
-              <Text style={styles.eventAttendanceValue}>{event.going}</Text>
+              <Text style={styles.eventAttendanceValue}>{event.going + (reserved ? 1 : 0)}</Text>
               <Text style={styles.eventAttendanceLabel}>
                 {tr(language, "Going", "人参加", "人參加")}
               </Text>
@@ -1466,7 +1557,7 @@ function EventCard({
               >
                 {soldOut
                   ? tr(language, "Sold out", "已售罄", "已售罄")
-                  : event.spotsLeft}
+                  : event.spotsLeft - (reserved ? 1 : 0)}
               </Text>
               {!soldOut && (
                 <Text style={styles.eventAttendanceLabel}>
@@ -1478,24 +1569,24 @@ function EventCard({
         </View>
         <View style={styles.eventFooter}>
           <Text style={styles.price}>{price}</Text>
-          {event.price === "Free" && !soldOut ? (
+          {event.price === "Free" && (!soldOut || reserved) ? (
             <Pressable
-              style={styles.confirmGoingButton}
-              onPress={() =>
-                Alert.alert(
-                  tr(language, "You are going", "已确认参加", "已確認參加"),
-                  tr(
-                    language,
-                    "Your place is confirmed and you have been added automatically to the event group chat in Messages.",
-                    "名额已确认，你也已自动加入“消息”中的活动群聊。",
-                    "名額已確認，你亦已自動加入「訊息」中的活動群聊。",
-                  ),
-                )
-              }
+              accessibilityRole="button"
+              accessibilityLabel={reserved ? (cancelPending ? tr(language, "Confirm cancellation", "确认取消预订", "確認取消預訂") : tr(language, "Cancel reservation", "取消预订", "取消預訂")) : tr(language, "Reserve my place", "预留名额", "預留名額")}
+              style={[styles.confirmGoingButton, reserved && styles.cancelGoingButton]}
+              onPress={(eventPress) => {
+                eventPress.stopPropagation?.();
+                if (reserved) onCancelReservation?.();
+                else onReserve?.();
+              }}
             >
-              <Ionicons name="checkmark-circle" size={16} color="white" />
-              <Text style={styles.confirmGoingText}>
-                {tr(language, "Reserve my place", "预留名额", "預留名額")}
+              <Ionicons name={reserved ? "close-circle-outline" : "checkmark-circle"} size={16} color={reserved ? palette.coral : "white"} />
+              <Text style={[styles.confirmGoingText, reserved && styles.cancelGoingText]}>
+                {reserved
+                  ? cancelPending
+                    ? tr(language, "Confirm cancellation", "确认取消预订", "確認取消預訂")
+                    : tr(language, "Cancel reservation", "取消预订", "取消預訂")
+                  : tr(language, "Reserve my place", "预留名额", "預留名額")}
               </Text>
             </Pressable>
           ) : (
@@ -1516,20 +1607,30 @@ function StudentVerificationSheet({
   visible,
   language,
   onClose,
+  status = "verified",
+  onSubmit,
+  onContactSupport,
+  startApply = false,
 }: {
   visible: boolean;
   language: Language;
   onClose: () => void;
+  status?: StudentVerificationStatus;
+  onSubmit?: (decision: StudentVerificationDecision) => void;
+  onContactSupport?: () => void;
+  startApply?: boolean;
 }) {
-  const [applyMode, setApplyMode] = useState(false);
+  const [applyMode, setApplyMode] = useState(startApply);
   const [university, setUniversity] = useState("University College London");
   const [email, setEmail] = useState("");
   const [studentId, setStudentId] = useState("");
   const [selfie, setSelfie] = useState("");
+  const [demoDecision, setDemoDecision] = useState<StudentVerificationDecision>("verified");
   const pickVerificationPhoto = async (
     type: "id" | "selfie",
     source?: PhotoSource,
   ) => {
+    if (type === "selfie") source = "camera";
     if (!source) {
       askPhotoSource(language, (selectedSource) =>
         pickVerificationPhoto(type, selectedSource),
@@ -1542,6 +1643,12 @@ function StudentVerificationSheet({
     if (uris[0]) type === "id" ? setStudentId(uris[0]) : setSelfie(uris[0]);
   };
   const ready = university && email.includes("@") && studentId && selfie;
+  const useDemoEvidence = () => {
+    setUniversity("University College London");
+    setEmail("sample.student@ucl.ac.uk");
+    setStudentId("demo:student-id");
+    setSelfie("demo:live-selfie");
+  };
   return (
     <Sheet
       visible={visible}
@@ -1555,14 +1662,14 @@ function StudentVerificationSheet({
         {!applyMode ? (
           <>
             <View style={styles.verificationHero}>
-              <View style={styles.verificationTick}>
-                <Ionicons name="checkmark" size={31} color="white" />
+              <View style={[styles.verificationTick, status !== "verified" && { backgroundColor: status === "pending" ? "#F1B547" : status === "failed" ? palette.coral : palette.blue }]}>
+                <Ionicons name={status === "verified" ? "checkmark" : status === "pending" ? "time-outline" : status === "failed" ? "close" : "school-outline"} size={29} color="white" />
               </View>
               <Text style={styles.verificationTitle}>
-                {tr(language, "Student verified", "学生已认证", "學生已認證")}
+                {status === "verified" ? tr(language, "Student verified", "学生已认证", "學生已認證") : status === "pending" ? tr(language, "Verification needs review", "认证需要审核", "認證需要審核") : status === "failed" ? tr(language, "Verification not completed", "认证未通过", "認證未通過") : tr(language, "Verify your student status", "认证学生身份", "認證學生身份")}
               </Text>
               <Text style={styles.verificationText}>
-                {tr(
+                {status === "pending" ? tr(language, "The automated checks could not reach a clear result. Student features stay locked while the case is reviewed.", "自动核验未得出明确结果。审核期间学生功能仍会锁定。", "自動核驗未得出明確結果。審核期間學生功能仍會鎖定。") : status === "failed" ? tr(language, "We could not verify your student status. Check that your ID is current and readable, then try again. You can also contact support.", "无法核验您的学生身份。请检查学生证是否有效且清晰，然后重试；您也可以联系支持团队。", "無法核實您的學生身分。請檢查學生證是否有效及清晰，然後重試；您亦可聯絡支援團隊。") : status === "unverified" ? tr(language, "Use your university email, student ID and a live camera selfie to request access to student-only features.", "使用大学邮箱、学生证和相机自拍申请学生专属功能。", "使用大學電郵、學生證和相機自拍申請學生專屬功能。") : tr(
                   language,
                   "Your identity and current university enrolment have been checked. The green tick helps the community know this is a genuine student account.",
                   "你的身份及当前大学在读状态已完成核验。绿色认证标记帮助社区确认这是真实学生账号。",
@@ -1570,7 +1677,7 @@ function StudentVerificationSheet({
                 )}
               </Text>
             </View>
-            <View style={styles.verificationChecks}>
+            {status === "verified" && <View style={styles.verificationChecks}>
               {[
                 {
                   icon: "school-outline",
@@ -1642,7 +1749,7 @@ function StudentVerificationSheet({
                   />
                 </View>
               ))}
-            </View>
+            </View>}
             <View style={styles.verificationPrivacy}>
               <Ionicons name="lock-closed" size={19} color={palette.blue} />
               <Text style={styles.verificationPrivacyText}>
@@ -1654,19 +1761,20 @@ function StudentVerificationSheet({
                 )}
               </Text>
             </View>
-            <Pressable
+            {status !== "pending" && <Pressable
               style={styles.secondaryButton}
               onPress={() => setApplyMode(true)}
             >
               <Text style={styles.secondaryButtonText}>
                 {tr(
                   language,
-                  "View verification process",
+                  status === "verified" ? "View verification process" : status === "failed" ? "Try verification again" : "Start verification",
                   "查看认证流程",
                   "查看認證流程",
                 )}
               </Text>
-            </Pressable>
+            </Pressable>}
+            {status === "failed" && onContactSupport && <Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 10 }]} onPress={onContactSupport}><Text style={styles.secondaryButtonText}>{tr(language, "Contact support", "联系支持团队", "聯絡支援團隊")}</Text></Pressable>}
           </>
         ) : (
           <>
@@ -1682,9 +1790,9 @@ function StudentVerificationSheet({
               <Text style={styles.formDesc}>
                 {tr(
                   language,
-                  "Complete every step. An admin reviews the evidence before the verified tick appears.",
-                  "请完成所有步骤。管理员审核材料后才会显示认证标记。",
-                  "請完成所有步驟。管理員審核材料後才會顯示認證標記。",
+                  "Complete every step. Passing automated checks unlocks student access; unclear results go to review.",
+                  "完成所有步骤。自动核验通过后即可使用学生功能；结果不明确时进入审核。",
+                  "完成所有步驟。自動核驗通過後即可使用學生功能；結果不明確時進入審核。",
                 )}
               </Text>
             </View>
@@ -1713,32 +1821,15 @@ function StudentVerificationSheet({
                   studentId && styles.verificationUploadDone,
                 ]}
               >
-                {studentId ? (
-                  <Image
-                    source={{ uri: studentId }}
-                    style={styles.verificationUploadImage}
-                  />
-                ) : (
-                  <Ionicons
-                    name="card-outline"
-                    size={28}
-                    color={palette.blue}
-                  />
-                )}
-                <Text style={styles.verificationUploadTitle}>
-                  {tr(language, "Student ID", "学生证", "學生證")}
-                </Text>
-                <Text style={styles.verificationUploadMeta}>
-                  {studentId
-                    ? tr(language, "Added", "已添加", "已加入")
-                    : tr(language, "Upload front", "上传正面", "上載正面")}
-                </Text>
-                <PhotoSourceActions
-                  compact
-                  language={language}
-                  onCamera={() => pickVerificationPhoto("id", "camera")}
-                  onLibrary={() => pickVerificationPhoto("id", "library")}
-                />
+                <View style={styles.verificationUploadContent}>
+                  <View style={styles.verificationUploadVisual}>{studentId && !studentId.startsWith("demo:") ? <Image source={{ uri: studentId }} style={styles.verificationUploadImage} /> : <Ionicons name={studentId ? "checkmark-circle" : "card-outline"} size={28} color={studentId ? palette.green : palette.blue} />}</View>
+                  <Text style={styles.verificationUploadTitle}>{tr(language, "Student ID", "学生证", "學生證")}</Text>
+                  <Text style={styles.verificationUploadMeta}>{studentId ? tr(language, "Added", "已添加", "已加入") : tr(language, "Upload front", "上传正面", "上載正面")}</Text>
+                </View>
+                <View style={styles.verificationUploadActions}>
+                  <Pressable style={[styles.photoSourceButton, styles.photoSourceButtonCompact]} accessibilityLabel={tr(language, "Take student ID photo with camera", "使用相机拍摄学生证", "使用相機拍攝學生證")} onPress={() => pickVerificationPhoto("id", "camera")}><Ionicons name="camera-outline" size={15} color={palette.blue} /><Text style={styles.photoSourceText}>{tr(language, "Camera", "相机", "相機")}</Text></Pressable>
+                  <Pressable style={[styles.photoSourceButton, styles.photoSourceButtonCompact]} accessibilityLabel={tr(language, "Choose student ID from photo library", "从照片库选择学生证", "從相片庫選擇學生證")} onPress={() => pickVerificationPhoto("id", "library")}><Ionicons name="images-outline" size={15} color={palette.blue} /><Text style={styles.photoSourceText}>{tr(language, "Photo library", "照片库", "相片庫")}</Text></Pressable>
+                </View>
               </View>
               <View
                 style={[
@@ -1746,37 +1837,15 @@ function StudentVerificationSheet({
                   selfie && styles.verificationUploadDone,
                 ]}
               >
-                {selfie ? (
-                  <Image
-                    source={{ uri: selfie }}
-                    style={styles.verificationUploadImage}
-                  />
-                ) : (
-                  <Ionicons
-                    name="scan-outline"
-                    size={28}
-                    color={palette.blue}
-                  />
-                )}
-                <Text style={styles.verificationUploadTitle}>
-                  {tr(language, "Face verification", "人脸核验", "人臉核驗")}
-                </Text>
-                <Text style={styles.verificationUploadMeta}>
-                  {selfie
-                    ? tr(language, "Added", "已添加", "已加入")
-                    : tr(
-                        language,
-                        "Add clear selfie",
-                        "添加清晰自拍",
-                        "加入清晰自拍",
-                      )}
-                </Text>
-                <PhotoSourceActions
-                  compact
-                  language={language}
-                  onCamera={() => pickVerificationPhoto("selfie", "camera")}
-                  onLibrary={() => pickVerificationPhoto("selfie", "library")}
-                />
+                <View style={styles.verificationUploadContent}>
+                  <View style={styles.verificationUploadVisual}>{selfie && !selfie.startsWith("demo:") ? <Image source={{ uri: selfie }} style={styles.verificationUploadImage} /> : <Ionicons name={selfie ? "checkmark-circle" : "scan-outline"} size={28} color={selfie ? palette.green : palette.blue} />}</View>
+                  <Text style={styles.verificationUploadTitle}>{tr(language, "Face verification", "人脸核验", "人臉核驗")}</Text>
+                  <Text style={styles.verificationUploadMeta}>{selfie ? tr(language, "Added", "已添加", "已加入") : tr(language, "Take a clear selfie with your camera", "使用相机拍摄清晰自拍", "使用相機拍攝清晰自拍")}</Text>
+                </View>
+                <View style={styles.verificationUploadActions}>
+                  <Pressable style={[styles.photoSourceButton, styles.photoSourceButtonCompact]} accessibilityLabel={tr(language, "Capture face with camera", "用相机拍摄人脸", "用相機拍攝人臉")} onPress={() => pickVerificationPhoto("selfie", "camera")}><Ionicons name="camera-outline" size={15} color={palette.blue} /><Text style={styles.photoSourceText}>{tr(language, "Open camera", "打开相机", "開啟相機")}</Text></Pressable>
+                  <View style={styles.verificationCameraOnly}><Ionicons name="lock-closed-outline" size={12} color={palette.muted} /><Text style={styles.verificationCameraOnlyText}>{tr(language, "Live camera only", "仅限实时拍摄", "僅限即時拍攝")}</Text></View>
+                </View>
               </View>
             </View>
             <View style={styles.verificationPrivacy}>
@@ -1788,17 +1857,29 @@ function StudentVerificationSheet({
               <Text style={styles.verificationPrivacyText}>
                 {tr(
                   language,
-                  "UNIMATE checks the university, document validity and face match. Failed or unclear checks require a manual review.",
-                  "UNIMATE会核验大学、证件有效性及人脸一致性。失败或不清晰的材料将进入人工审核。",
-                  "UNIMATE會核驗大學、證件有效性及人臉一致性。失敗或不清晰的材料將進入人工審核。",
+                  "A live service must check university email ownership, ID authenticity, liveness and face match before granting access. This prototype does not perform those checks. Do not use real ID or selfie images here.",
+                  "正式服务须核验大学邮箱所有权、证件真伪、活体及人脸一致性后才能开放权限。此原型不会进行这些核验，请勿上传真实证件或自拍。",
+                  "正式服務須核驗大學電郵擁有權、證件真偽、活體及人臉一致性後才能開放權限。此原型不會進行這些核驗，請勿上載真實證件或自拍。",
                 )}
               </Text>
+            </View>
+            <View style={styles.verificationDemoPanel}>
+              <Text style={styles.verificationDemoTitle}>{tr(language, "Prototype controls", "原型预览控制", "原型預覽控制")}</Text>
+              <Text style={styles.verificationDemoText}>{tr(language, "Use sample evidence and choose a result to preview the journey. No identity check or support request is sent.", "使用示例资料并选择结果以预览流程。不会执行身份核验或发送支持请求。", "使用示例資料並選擇結果以預覽流程。不會執行身分核驗或發送支援請求。")}</Text>
+              <Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 10 }]} onPress={useDemoEvidence}><Text style={styles.secondaryButtonText}>{tr(language, "Use sample evidence", "使用示例资料", "使用示例資料")}</Text></Pressable>
+              <View style={styles.verificationDemoOutcomes}>{([
+                ["verified", tr(language, "Checks pass", "核验通过", "核驗通過")],
+                ["failed", tr(language, "Checks fail", "核验失败", "核驗失敗")],
+                ["pending", tr(language, "Needs review", "需要审核", "需要審核")],
+              ] as const).map(([decision, label]) => <Pressable key={decision} accessibilityRole="button" accessibilityState={{ selected: demoDecision === decision }} style={[styles.verificationDemoOption, demoDecision === decision && styles.verificationDemoOptionActive]} onPress={() => setDemoDecision(decision)}><Text style={[styles.verificationDemoOptionText, demoDecision === decision && styles.verificationDemoOptionTextActive]}>{label}</Text></Pressable>)}</View>
             </View>
             <Pressable
               disabled={!ready}
               style={[styles.primaryButton, !ready && { opacity: 0.45 }]}
-              onPress={() =>
-                Alert.alert(
+              onPress={() => {
+                setApplyMode(false);
+                if (onSubmit) onSubmit(demoDecision);
+                else Alert.alert(
                   tr(
                     language,
                     "Verification submitted",
@@ -1807,12 +1888,12 @@ function StudentVerificationSheet({
                   ),
                   tr(
                     language,
-                    "Your badge remains unverified until the admin review is complete.",
-                    "管理员审核完成前，账号将保持未认证状态。",
-                    "管理員審核完成前，帳號將維持未認證狀態。",
+                    "This is a prototype result preview; no real verification took place.",
+                    "这只是原型结果预览，未进行真实认证。",
+                    "這只是原型結果預覽，未進行真實認證。",
                   ),
-                )
-              }
+                );
+              }}
             >
               <Text style={styles.primaryButtonText}>
                 {tr(
@@ -1845,20 +1926,34 @@ function StudentVerificationSheet({
 
 function Home({
   language,
+  studentStatus = "verified",
+  onOpenVerification,
   setTab,
   openService,
   openFriends,
   openEvent,
   favourites,
   onToggleFavourite,
+  reservedEvents,
+  pendingCancellation,
+  onReserveEvent,
+  onCancelReservation,
+  acceptedFriends,
 }: {
   language: Language;
+  studentStatus?: StudentVerificationStatus;
+  onOpenVerification?: () => void;
   setTab: (tab: Tab) => void;
   openService: (service: "airport" | "cleaning" | "moving" | "market") => void;
   openFriends: () => void;
   openEvent: (eventTitle: string) => void;
   favourites: string[];
   onToggleFavourite: (eventTitle: string) => void;
+  reservedEvents: string[];
+  pendingCancellation: string | null;
+  onReserveEvent: (eventTitle: string) => void;
+  onCancelReservation: (eventTitle: string) => void;
+  acceptedFriends: string[];
 }) {
   const t = copy[language];
   const [verificationOpen, setVerificationOpen] = useState(false);
@@ -1902,11 +1997,11 @@ function Home({
         </View>
         <Pressable
           style={styles.studentBadge}
-          onPress={() => setVerificationOpen(true)}
+          onPress={() => studentStatus === "verified" ? setVerificationOpen(true) : onOpenVerification?.()}
         >
-          <Ionicons name="checkmark-circle" size={16} color={palette.green} />
+          <Ionicons name={studentStatus === "verified" ? "checkmark-circle" : studentStatus === "pending" ? "time-outline" : "lock-closed-outline"} size={16} color={studentStatus === "verified" ? palette.green : palette.blue} />
           <Text style={styles.studentBadgeText}>
-            {tr(language, "Student verified", "学生已认证", "學生已認證")}
+            {studentStatus === "verified" ? tr(language, "Student verified", "学生已认证", "學生已認證") : studentStatus === "pending" ? tr(language, "Verification pending", "认证待审核", "認證待審核") : tr(language, "Verify student status", "认证学生身份", "認證學生身份")}
           </Text>
         </Pressable>
       </View>
@@ -1932,7 +2027,7 @@ function Home({
           <Ionicons name="business" size={82} color="rgba(255,255,255,.22)" />
         </View>
       </LinearGradient>
-      <View style={styles.homeStatusRow}>
+      {studentStatus !== "verified" ? <Pressable accessibilityRole="button" onPress={onOpenVerification} style={{ marginTop: 16, marginBottom: 13, padding: 15, borderRadius: 14, backgroundColor: "#EAF4FF", borderWidth: 1, borderColor: "#CDE4F8", flexDirection: "row", alignItems: "center", gap: 11 }}><Ionicons name={studentStatus === "pending" ? "time-outline" : "shield-checkmark-outline"} size={21} color={palette.blue} /><View style={{ flex: 1 }}><Text style={{ color: palette.navy, fontSize: 13, fontWeight: "800" }}>{studentStatus === "pending" ? tr(language, "Student verification pending", "学生认证待审核", "學生認證待審核") : tr(language, "Unlock student features", "解锁学生专属功能", "解鎖學生專屬功能")}</Text><Text style={{ color: palette.muted, fontSize: 11, lineHeight: 16, marginTop: 3 }}>{studentStatus === "pending" ? tr(language, "Awaiting review. Tap to view status.", "等待审核。点击查看状态。", "等候審核。點按查看狀態。") : tr(language, "Verify to join events, chat and read reviews.", "认证后可参加活动、聊天和查看点评。", "認證後可參加活動、聊天及查看評價。")}</Text></View><Ionicons name="chevron-forward" size={17} color={palette.blue} /></Pressable> : <View style={styles.homeStatusRow}>
         <Pressable
           style={styles.homeStatusCard}
           onPress={() => setTab("bookings")}
@@ -1973,7 +2068,7 @@ function Home({
           </View>
           <Ionicons name="chevron-forward" size={16} color={palette.muted} />
         </Pressable>
-      </View>
+      </View>}
       <View style={styles.sectionHead}>
         <View>
           <Text style={styles.sectionTitle}>
@@ -2039,7 +2134,7 @@ function Home({
           </Pressable>
         ))}
       </View>
-      <View style={styles.sectionHead}>
+      {studentStatus === "verified" ? <><View style={styles.sectionHead}>
         <Text style={styles.sectionTitle}>{t.featured}</Text>
         <Pressable onPress={() => setTab("events")}>
           <Text style={styles.seeAll}>{t.see}</Text>
@@ -2053,6 +2148,11 @@ function Home({
           favourite={favourites.includes(event.title)}
           onToggleFavourite={() => onToggleFavourite(event.title)}
           onOpen={() => openEvent(event.title)}
+          reserved={reservedEvents.includes(event.title)}
+          cancelPending={pendingCancellation === event.title}
+          onReserve={() => onReserveEvent(event.title)}
+          onCancelReservation={() => onCancelReservation(event.title)}
+          goingFriends={friendsGoingToEvent(event.title, acceptedFriends)}
           recommendationReason={
             index === 0
               ? tr(
@@ -2069,12 +2169,12 @@ function Home({
                 )
           }
         />
-      ))}
-      <StudentVerificationSheet
+      ))}</> : <Pressable accessibilityRole="button" onPress={onOpenVerification} style={{ borderRadius: 15, padding: 17, borderWidth: 1, borderColor: "#D6E1F1", backgroundColor: "#F4F8FD", flexDirection: "row", alignItems: "center", gap: 10, marginTop: 17 }}><Ionicons name="calendar-outline" size={22} color={palette.blue} /><View style={{ flex: 1 }}><Text style={{ color: palette.navy, fontWeight: "800", fontSize: 13 }}>{tr(language, "Events unlock after verification", "认证后解锁活动", "認證後解鎖活動")}</Text><Text style={{ color: palette.muted, fontSize: 11, marginTop: 3 }}>{tr(language, "Verify your student account to browse and join.", "认证学生账号后可浏览并参加。", "認證學生帳戶後可瀏覽並參加。")}</Text></View><Ionicons name="chevron-forward" size={17} color={palette.blue} /></Pressable>}
+      {studentStatus === "verified" && <StudentVerificationSheet
         visible={verificationOpen}
         language={language}
         onClose={() => setVerificationOpen(false)}
-      />
+      />}
     </ScrollView>
   );
 }
@@ -2084,12 +2184,14 @@ function TicketModal({
   event,
   onClose,
   onOpenGroupChat,
+  onBookingConfirmed,
   language,
 }: {
   visible: boolean;
   event: (typeof events)[number];
   onClose: () => void;
   onOpenGroupChat: () => void;
+  onBookingConfirmed: () => void;
   language: Language;
 }) {
   const tiers = [
@@ -2322,7 +2424,7 @@ function TicketModal({
               </View>
             )}
             <View style={styles.eventPaymentSecure}><Ionicons name="shield-checkmark" size={19} color={palette.green} /><Text style={styles.eventPaymentSecureText}>{tr(language, "Encrypted payment · Your payment details are protected.", "加密付款 · 你的付款资料受到保护。", "加密付款 · 你的付款資料受到保護。")}</Text></View>
-            <Pressable style={styles.primaryButton} onPress={() => setCheckoutStep("complete")}>
+            <Pressable style={styles.primaryButton} onPress={() => { onBookingConfirmed(); setCheckoutStep("complete"); }}>
               <Ionicons name="lock-closed" size={16} color="white" />
               <Text style={styles.primaryButtonText}>{tr(language, `Pay £${total.toFixed(2)}`, `支付£${total.toFixed(2)}`, `支付£${total.toFixed(2)}`)}</Text>
             </Pressable>
@@ -2348,22 +2450,36 @@ function EventsForum({
   language,
   onPost,
   initialEvent,
+  onClearInitialEvent,
   view,
   onViewChange,
   favourites,
   onToggleFavourite,
+  reservedEvents,
+  pendingCancellation,
+  onReserveEvent,
+  onCancelReservation,
   onOpenGroupChat,
   onPublishAnnouncement,
+  onLargeEventRequest,
+  acceptedFriends,
 }: {
   language: Language;
   onPost?: () => void;
   initialEvent?: string | null;
-  view: "browse" | "mine";
-  onViewChange: (view: "browse" | "mine") => void;
+  onClearInitialEvent: () => void;
+  view: "browse" | "going" | "mine";
+  onViewChange: (view: "browse" | "going" | "mine") => void;
   favourites: string[];
   onToggleFavourite: (eventTitle: string) => void;
+  reservedEvents: string[];
+  pendingCancellation: string | null;
+  onReserveEvent: (eventTitle: string) => void;
+  onCancelReservation: (eventTitle: string) => void;
   onOpenGroupChat: () => void;
   onPublishAnnouncement: (announcement: string) => void;
+  onLargeEventRequest: () => void;
+  acceptedFriends: string[];
 }) {
   const [category, setCategory] = useState("All");
   const [selected, setSelected] = useState<(typeof events)[number] | null>(
@@ -2371,15 +2487,16 @@ function EventsForum({
   );
   const [ticketOpen, setTicketOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [friendsGoingExpanded, setFriendsGoingExpanded] = useState(false);
   const [sharedWith, setSharedWith] = useState<string[]>([]);
-  const [attending, setAttending] = useState<string[]>([]);
   const [editingEvent, setEditingEvent] = useState<"approved" | "declined" | null>(null);
   const [declinedResubmitted, setDeclinedResubmitted] = useState(false);
   const [managedEventTitle, setManagedEventTitle] = useState("Outdoor Movie Night");
   const [managedEventDate, setManagedEventDate] = useState("29 September 2026");
   const [managedEventTime, setManagedEventTime] = useState("18:00–21:00");
   const [managedEventLocation, setManagedEventLocation] = useState("Regent’s Park");
-  const [managedEventCapacity, setManagedEventCapacity] = useState("50");
+  const [managedEventCapacity, setManagedEventCapacity] = useState("30");
+  const managedEventBookedPercent = Math.min(100, Math.round(1200 / Math.max(1, Number(managedEventCapacity) || 30)));
   const [draftEventTitle, setDraftEventTitle] = useState(managedEventTitle);
   const [draftEventLocation, setDraftEventLocation] = useState(managedEventLocation);
   const [draftEventCapacity, setDraftEventCapacity] = useState(managedEventCapacity);
@@ -2407,6 +2524,7 @@ function EventsForum({
   };
   const categories = [
     "All",
+    "Friends going",
     "Sports",
     "Parties",
     "Culture",
@@ -2436,7 +2554,28 @@ function EventsForum({
         { text: tr(language, "Cancel", "取消", "取消"), style: "cancel" },
       ],
     );
+  const eventViewTabs = (
+    <View style={styles.eventViewTabs}>
+      {([
+        { id: "browse", icon: "compass-outline", label: tr(language, "Discover", "发现活动", "發現活動") },
+        { id: "going", icon: "checkmark-circle-outline", label: tr(language, "Going", "我将参加", "我將參加") },
+        { id: "mine", icon: "calendar-outline", label: tr(language, "My events", "我的活动", "我的活動") },
+      ] as const).map((item) => (
+        <Pressable
+          key={item.id}
+          accessibilityRole="button"
+          accessibilityState={{ selected: view === item.id }}
+          style={[styles.eventViewTab, view === item.id && styles.eventViewTabActive]}
+          onPress={() => onViewChange(item.id)}
+        >
+          <Ionicons name={item.icon} size={16} color={view === item.id ? "white" : palette.muted} />
+          <Text style={[styles.eventViewTabText, view === item.id && styles.eventViewTabTextActive]}>{item.label}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
   if (selected) {
+    const goingFriends = friendsGoingToEvent(selected.title, acceptedFriends);
     const position = events.findIndex((item) => item.title === selected.title);
     const title =
       language === "EN"
@@ -2501,7 +2640,7 @@ function EventsForum({
           contentContainerStyle={styles.eventDetail}
           showsVerticalScrollIndicator={false}
         >
-          <Pressable style={styles.backLink} onPress={() => setSelected(null)}>
+          <Pressable style={styles.backLink} onPress={() => { setSelected(null); onClearInitialEvent(); }}>
             <Ionicons name="arrow-back" size={20} color={palette.blue} />
             <Text style={styles.backText}>{words[language].eventForum}</Text>
           </Pressable>
@@ -2600,14 +2739,22 @@ function EventsForum({
               </Pressable>
             )}
           </View>
+          <View style={styles.detailFriendsCard}>
+            <Pressable accessibilityRole="button" accessibilityLabel={tr(language, "Show friends going to this event", "查看参加此活动的好友", "查看參加此活動的好友")} style={styles.detailFriendsHead} onPress={() => setFriendsGoingExpanded(!friendsGoingExpanded)}>
+              <View style={styles.detailFriendsIcon}><Ionicons name="people-outline" size={19} color={palette.blue} /></View>
+              <View style={{ flex: 1 }}><Text style={styles.friendName}>{tr(language, "Friends going", "参加的好友", "參加的好友")}</Text><Text style={styles.metaText}>{goingFriends.length ? tr(language, `${goingFriends.length} friend${goingFriends.length === 1 ? "" : "s"} shared attendance`, `${goingFriends.length}位好友分享了参加状态`, `${goingFriends.length}位好友分享了參加狀態`) : tr(language, "No friends have shared attendance yet", "暂无好友分享参加状态", "暫無好友分享參加狀態")}</Text></View>
+              <Ionicons name={friendsGoingExpanded ? "chevron-up" : "chevron-down"} size={18} color={palette.blue} />
+            </Pressable>
+            {friendsGoingExpanded && <View style={styles.detailFriendsList}>{goingFriends.length ? goingFriends.map((friend) => <View key={friend.username} style={styles.detailFriendRow}><View style={[styles.avatar, { backgroundColor: friend.color }]}><Text style={styles.avatarText}>{friend.initials}</Text></View><View><Text style={styles.friendName}>{friend.fullName}</Text><Text style={styles.metaText}>{friend.uni} · {friend.username}</Text></View></View>) : <Text style={styles.metaText}>{tr(language, "When a mutual friend opts to share their RSVP, they will appear here.", "互相关注的好友选择分享报名状态后，会显示在这里。", "互相關注的好友選擇分享報名狀態後，會顯示在這裡。")}</Text>}</View>}
+          </View>
           <View style={styles.organiserCard}>
             <View style={styles.organiserLogo}>
               <Text style={styles.organiserInitial}>U</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.friendName}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}><Text style={styles.friendName}>
                 UNIMATE {tr(language, "Events", "活动", "活動")}
-              </Text>
+              </Text><VerificationBadge kind="organisation" language={language} /></View>
               <Text style={styles.metaText}>
                 {tr(
                   language,
@@ -2659,38 +2806,27 @@ function EventsForum({
             </Text>
           </View>
           <Pressable
-            disabled={selected.spotsLeft === 0}
+            disabled={selected.spotsLeft === 0 && !reservedEvents.includes(selected.title)}
             style={[
               styles.primaryButton,
-              selected.spotsLeft === 0 && { opacity: 0.45 },
-              attending.includes(selected.title) && styles.attendingButton,
+              selected.spotsLeft === 0 && !reservedEvents.includes(selected.title) && { opacity: 0.45 },
+              reservedEvents.includes(selected.title) && styles.attendingButton,
             ]}
             onPress={() =>
-              attending.includes(selected.title)
+              reservedEvents.includes(selected.title)
                 ? onOpenGroupChat()
                 : selected.price === "Free"
-                ? (() => {
-                    setAttending([...attending, selected.title]);
-                    Alert.alert(
-                      tr(language, "You are going", "已确认参加", "已確認參加"),
-                      tr(
-                        language,
-                        "Your place is confirmed and you have been added automatically to the event group chat in Messages.",
-                        "名额已确认，你也已自动加入“消息”中的活动群聊。",
-                        "名額已確認，你亦已自動加入「訊息」中的活動群聊。",
-                      ),
-                    );
-                  })()
+                ? onReserveEvent(selected.title)
                 : setTicketOpen(true)
             }
           >
-            {attending.includes(selected.title) && (
+            {reservedEvents.includes(selected.title) && (
               <Ionicons name="checkmark-circle" size={19} color="white" />
             )}
             <Text style={styles.primaryButtonText}>
-              {selected.spotsLeft === 0
+              {selected.spotsLeft === 0 && !reservedEvents.includes(selected.title)
                 ? tr(language, "Sold out", "已售罄", "已售罄")
-                : attending.includes(selected.title)
+                : reservedEvents.includes(selected.title)
                   ? tr(
                       language,
                       "Going · Added to group chat",
@@ -2702,6 +2838,20 @@ function EventsForum({
                     : tr(language, "Get tickets", "购买门票", "購買門票")}
             </Text>
           </Pressable>
+          {selected.price === "Free" && reservedEvents.includes(selected.title) && (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={pendingCancellation === selected.title ? tr(language, "Confirm cancellation", "确认取消预订", "確認取消預訂") : tr(language, "Cancel reservation", "取消预订", "取消預訂")}
+              style={styles.cancelReservationDetail}
+              onPress={() => onCancelReservation(selected.title)}
+            >
+              <Text style={styles.cancelReservationDetailText}>
+                {pendingCancellation === selected.title
+                  ? tr(language, "Confirm cancellation", "确认取消预订", "確認取消預訂")
+                  : tr(language, "Cancel reservation", "取消预订", "取消預訂")}
+              </Text>
+            </Pressable>
+          )}
         </ScrollView>
         <TicketModal
           visible={ticketOpen}
@@ -2709,6 +2859,7 @@ function EventsForum({
           language={language}
           onClose={() => setTicketOpen(false)}
           onOpenGroupChat={onOpenGroupChat}
+          onBookingConfirmed={() => onReserveEvent(selected.title)}
         />
         <Sheet
           visible={shareOpen}
@@ -2733,6 +2884,43 @@ function EventsForum({
           </ScrollView>
         </Sheet>
       </>
+    );
+  }
+  if (view === "going") {
+    const attending = events.filter((event) => reservedEvents.includes(event.title));
+    return (
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <View style={styles.eventsTitleRow}>
+          <View>
+            <Text style={[styles.pageTitle, { marginBottom: 0 }]}>{tr(language, "Going", "我将参加", "我將參加")}</Text>
+            <Text style={styles.myEventsSubtitle}>{tr(language, "Events you have confirmed a place at.", "你已确认参加的活动。", "你已確認參加的活動。")}</Text>
+          </View>
+          {onPost && <Pressable style={styles.postEventButton} onPress={onPost}><Ionicons name="add" size={17} color="white" /><Text style={styles.postEventButtonText}>{words[language].post}</Text></Pressable>}
+        </View>
+        {eventViewTabs}
+        {attending.length ? attending.map((event) => (
+          <View key={event.title}>
+            <View style={styles.goingStatusRow}><Ionicons name="checkmark-circle" size={17} color={palette.green} /><Text style={styles.goingStatusText}>{tr(language, "Confirmed", "已确认", "已確認")}</Text></View>
+            <EventCard
+              event={event}
+              language={language}
+              favourite={favourites.includes(event.title)}
+              onToggleFavourite={() => onToggleFavourite(event.title)}
+              onOpen={() => setSelected(event)}
+              reserved
+              cancelPending={pendingCancellation === event.title}
+              onCancelReservation={() => onCancelReservation(event.title)}
+              goingFriends={friendsGoingToEvent(event.title, acceptedFriends)}
+            />
+          </View>
+        )) : <View style={styles.noEvents}><Ionicons name="calendar-outline" size={38} color={palette.blue} /><Text style={styles.emptyTitle}>{tr(language, "No confirmed events yet", "暂无已确认活动", "暫無已確認活動")}</Text><Text style={styles.emptyText}>{tr(language, "Reserve a place or complete a ticket booking to see it here.", "预留名额或完成购票后，活动会显示在这里。", "預留名額或完成購票後，活動會顯示在這裡。")}</Text></View>}
+        <View style={styles.goingPendingNote}><Ionicons name="time-outline" size={19} color={palette.muted} /><Text style={styles.metaText}>{tr(language, "Pending event requests will appear here when you have one.", "待确认的活动申请将在这里显示。", "待確認的活動申請將在這裡顯示。")}</Text></View>
+        <View style={[styles.sectionHead, { marginTop: 26 }]}><View><Text style={styles.sectionTitle}>{tr(language, "Past events", "参加过的活动", "參加過的活動")}</Text><Text style={styles.foodSectionHint}>{tr(language, "Events you checked into after they end", "已结束且完成签到的活动", "已結束且完成簽到的活動")}</Text></View></View>
+        {pastAttendedEvents.filter((event) => new Date(event.endedAt).getTime() < Date.now()).map((event) => <View key={event.title} style={styles.foodCard}>
+          <Image source={{ uri: event.image }} style={{ width: "100%", height: 110 }} />
+          <View style={{ padding: 14, gap: 5 }}><Text style={styles.eventTitle}>{event.title}</Text><Text style={styles.metaText}>{event.date} · {event.place}</Text><View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}><Ionicons name="checkmark-circle" size={16} color={palette.green} /><Text style={styles.goingStatusText}>{tr(language, "Attended · Sample record", "已参加记录", "已參加紀錄")}</Text></View></View>
+        </View>)}
+      </ScrollView>
     );
   }
   if (view === "mine") {
@@ -2762,20 +2950,7 @@ function EventsForum({
             </Pressable>
           )}
         </View>
-        <View style={styles.eventViewTabs}>
-          <Pressable style={styles.eventViewTab} onPress={() => onViewChange("browse")}>
-            <Ionicons name="compass-outline" size={17} color={palette.muted} />
-            <Text style={styles.eventViewTabText}>
-              {tr(language, "Discover", "发现活动", "發現活動")}
-            </Text>
-          </Pressable>
-          <Pressable style={[styles.eventViewTab, styles.eventViewTabActive]}>
-            <Ionicons name="calendar-outline" size={17} color="white" />
-            <Text style={[styles.eventViewTabText, styles.eventViewTabTextActive]}>
-              {tr(language, "My events", "我的活动", "我的活動")}
-            </Text>
-          </Pressable>
-        </View>
+        {eventViewTabs}
         <View style={styles.myEventsSummary}>
           {[{ value: eventCancelled ? "0" : "1", label: tr(language, "Live", "已上线", "已上線"), color: palette.green }, { value: declinedResubmitted ? "2" : "1", label: tr(language, "Pending", "待审核", "待審核"), color: "#B97A0D" }, { value: declinedResubmitted ? "0" : "1", label: tr(language, "Declined", "未通过", "未通過"), color: palette.coral }].map((item) => (
             <View key={item.label} style={styles.myEventsSummaryItem}>
@@ -2802,13 +2977,13 @@ function EventsForum({
           </Text>
           {updatePending && <View style={styles.myEventReviewNotice}><Ionicons name="shield-checkmark-outline" size={18} color="#B97A0D" /><Text style={styles.myEventReviewText}>{tr(language, "Your current event remains live with its existing details while the admin team reviews your changes. Once approved, paid attendees will receive a group-chat announcement automatically.", "审核更改期间，当前活动将以现有详情继续上线。通过后，已付款参加者会自动收到群聊公告。", "審核更改期間，目前活動將以現有詳情繼續上線。通過後，已付款參加者會自動收到群組聊天公告。")}</Text></View>}
           {!eventCancelled && <><View style={styles.myEventProgressTrack}>
-            <View style={styles.myEventProgressFill} />
+            <View style={[styles.myEventProgressFill, { width: `${managedEventBookedPercent}%` as `${number}%` }]} />
           </View>
           <View style={styles.myEventCapacityLine}>
             <Text style={styles.myEventCapacityText}>
               {tr(language, `12 of ${managedEventCapacity} places reserved`, `${managedEventCapacity}个名额已预订12个`, `${managedEventCapacity}個名額已預訂12個`)}
             </Text>
-            <Text style={styles.myEventCapacityText}>24%</Text>
+            <Text style={styles.myEventCapacityText}>{managedEventBookedPercent}%</Text>
           </View></>}
           {eventCancelled && <><View style={styles.cancelledEventNotice}><Ionicons name="information-circle-outline" size={18} color={palette.coral} /><Text style={styles.cancelledEventNoticeText}>{tr(language, "This event has been cancelled. Ticket holders were notified in the group chat and full refunds were allocated automatically.", "此活动已取消。持票者已在群聊中收到通知，全额退款已自动分配。", "此活動已取消。持票者已在群組聊天中收到通知，全額退款已自動分配。")}</Text></View><View style={styles.eventRefundCard}><View style={styles.eventRefundHead}><View style={styles.eventRefundIcon}><Ionicons name="cash-outline" size={20} color={palette.green} /></View><View style={{ flex: 1 }}><Text style={styles.eventRefundTitle}>{tr(language, "Refunds allocated", "退款已分配", "退款已分配")}</Text><Text style={styles.eventRefundMeta}>{tr(language, "Returning to original payment methods", "原路退回付款方式", "原路退回付款方式")}</Text></View><Text style={styles.eventRefundAmount}>£144.00</Text></View><View style={styles.eventRefundFacts}><Text style={styles.eventRefundFact}>12 {tr(language, "attendees", "名参加者", "名參加者")}</Text><Text style={styles.eventRefundFact}>£12.00 {tr(language, "each", "每人", "每人")}</Text><Text style={styles.eventRefundFact}>{tr(language, "5–10 working days", "5–10个工作日", "5–10個工作日")}</Text></View></View></>}
           {!eventCancelled && <View style={styles.myEventActions}>
@@ -2891,7 +3066,7 @@ function EventsForum({
           <ScrollView contentContainerStyle={styles.eventEditBody}>
             <View style={styles.eventEditAnnouncementNotice}><Ionicons name="shield-checkmark-outline" size={20} color={palette.blue} /><Text style={styles.eventEditAnnouncementText}>{tr(language, "Every change requires admin reapproval. Your existing event details stay live during review. After approval, the new details are published and paid attendees receive an automatic group-chat announcement.", "每次更改都需要管理员重新审核。审核期间，现有活动详情继续上线。批准后，新详情才会发布，已付款参加者会自动收到群聊公告。", "每次更改都需要管理員重新審核。審核期間，現有活動詳情繼續上線。批准後，新詳情才會發佈，已付款參加者會自動收到群組聊天公告。")}</Text></View>
             <Text style={styles.formSectionLabel}>{tr(language, "EVENT CATEGORY", "活动分类", "活動分類")}</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryRow}>{["Sports", "Parties", "House parties", "Culture", "Trips", "Other"].map((item) => <Pressable key={item} style={[styles.categoryChip, draftEventCategory === item && styles.categoryChipActive]} onPress={() => setDraftEventCategory(item)}><Text style={[styles.categoryChipText, draftEventCategory === item && styles.categoryChipTextActive]}>{categoryLabel(language, item)}</Text></Pressable>)}</ScrollView>
+            <SlidableCategories language={language} rowStyle={styles.categoryRow}>{["Sports", "Parties", "House parties", "Culture", "Trips", "Other"].map((item) => <Pressable key={item} style={[styles.categoryChip, draftEventCategory === item && styles.categoryChipActive]} onPress={() => setDraftEventCategory(item)}><Text style={[styles.categoryChipText, draftEventCategory === item && styles.categoryChipTextActive]}>{categoryLabel(language, item)}</Text></Pressable>)}</SlidableCategories>
             <View style={styles.photoPicker}>{draftEventPhoto ? <Image source={{ uri: draftEventPhoto }} style={styles.photoPreview} /> : <><View style={styles.photoIcon}><Ionicons name="image-outline" size={27} color={palette.blue} /></View><Text style={styles.photoTitle}>{tr(language, "Update event cover photo", "更新活动封面照片", "更新活動封面相片")}</Text></>}</View>
             <PhotoSourceActions language={language} onCamera={() => pickDraftEventPhoto("camera")} onLibrary={() => pickDraftEventPhoto("library")} />
             <View style={styles.field}><Text style={styles.fieldLabel}>{tr(language, "Event name", "活动名称", "活動名稱")}</Text><TextInput value={editingEvent === "approved" ? draftEventTitle : "Freshers House Party"} onChangeText={editingEvent === "approved" ? setDraftEventTitle : undefined} /></View>
@@ -2902,7 +3077,16 @@ function EventsForum({
             <View style={[styles.field, { minHeight: 100 }]}><Text style={styles.fieldLabel}>{tr(language, "Summary of the event", "活动简介", "活動簡介")}</Text><TextInput multiline value={draftEventSummary} onChangeText={setDraftEventSummary} /></View>
             <View style={styles.field}><Text style={styles.fieldLabel}>{tr(language, "Cost / ticket price", "费用 / 票价", "費用 / 票價")}</Text><View style={styles.currencyInputRow}><Text style={styles.currencyPrefix}>£</Text><TextInput value={draftEventPrice} onChangeText={setDraftEventPrice} keyboardType="decimal-pad" style={styles.currencyInput} /></View></View>
             <EventTimeField label={tr(language, "Last entry time", "最晚入场时间", "最晚入場時間")} value={draftEventLastEntry} onChange={setDraftEventLastEntry} />
-            <View style={styles.eventCapacityField}><View style={styles.eventCapacityHead}><View style={styles.eventCapacityIcon}><Ionicons name="people-outline" size={20} color={palette.blue} /></View><View style={{ flex: 1 }}><Text style={styles.fieldLabel}>{tr(language, "Event capacity", "活动人数上限", "活動人數上限")}</Text><Text style={styles.eventCapacityHint}>{tr(language, "Student events can host up to 50 people.", "学生个人活动最多可容纳50人。", "學生個人活動最多可容納50人。")}</Text></View></View><View style={styles.eventCapacityControl}><Pressable style={styles.eventCapacityButton} onPress={() => setDraftEventCapacity(String(Math.max(12, Number(draftEventCapacity || 12) - 1)))}><Ionicons name="remove" size={20} color={palette.blue} /></Pressable><View style={styles.eventCapacityValueWrap}><Text style={styles.eventCapacityValue}>{draftEventCapacity}</Text><Text style={styles.eventCapacityUnit}>{tr(language, "spots", "个名额", "個名額")}</Text></View><Pressable style={styles.eventCapacityButton} onPress={() => setDraftEventCapacity(String(Math.min(50, Number(draftEventCapacity || 12) + 1)))}><Ionicons name="add" size={20} color={palette.blue} /></Pressable></View><View style={styles.eventCapacityPresets}>{[20, 30, 40, 50].map((value) => <Pressable key={value} style={[styles.eventCapacityPreset, draftEventCapacity === String(value) && styles.eventCapacityPresetActive]} onPress={() => setDraftEventCapacity(String(value))}><Text style={[styles.eventCapacityPresetText, draftEventCapacity === String(value) && styles.eventCapacityPresetTextActive]}>{value}</Text></Pressable>)}</View></View>
+            <View style={styles.eventCapacityField}>
+              <View style={styles.eventCapacityHead}><View style={styles.eventCapacityIcon}><Ionicons name="people-outline" size={20} color={palette.blue} /></View><View style={{ flex: 1 }}><Text style={styles.fieldLabel}>{tr(language, "Event capacity", "活动人数上限", "活動人數上限")}</Text><Text style={styles.eventCapacityHint}>{tr(language, "Standard student events can host 2–30 people.", "普通学生活动可容纳2至30人。", "一般學生活動可容納2至30人。")}</Text></View></View>
+              <View style={styles.eventCapacityControl}>
+                <Pressable accessibilityLabel={tr(language, "Reduce capacity", "减少人数", "減少人數")} accessibilityState={{ disabled: Number(draftEventCapacity) <= 2 }} disabled={Number(draftEventCapacity) <= 2} style={[styles.eventCapacityButton, Number(draftEventCapacity) <= 2 && styles.eventCapacityButtonDisabled]} onPress={() => setDraftEventCapacity(String(Math.max(2, Number(draftEventCapacity || 2) - 1)))}><Ionicons name="remove" size={20} color={Number(draftEventCapacity) <= 2 ? "#AAB7C5" : palette.blue} /></Pressable>
+                <View style={styles.eventCapacityValueWrap}><Text style={styles.eventCapacityValue}>{draftEventCapacity}</Text><Text style={styles.eventCapacityUnit}>{tr(language, "spots", "个名额", "個名額")}</Text></View>
+                <Pressable accessibilityLabel={tr(language, "Increase capacity", "增加人数", "增加人數")} accessibilityState={{ disabled: Number(draftEventCapacity) >= 30 }} disabled={Number(draftEventCapacity) >= 30} style={[styles.eventCapacityButton, Number(draftEventCapacity) >= 30 && styles.eventCapacityButtonDisabled]} onPress={() => setDraftEventCapacity(String(Math.min(30, Number(draftEventCapacity || 2) + 1)))}><Ionicons name="add" size={20} color={Number(draftEventCapacity) >= 30 ? "#AAB7C5" : palette.blue} /></Pressable>
+              </View>
+              <View style={styles.eventCapacityPresets}>{[10, 20, 30].map((value) => <Pressable key={value} style={[styles.eventCapacityPreset, draftEventCapacity === String(value) && styles.eventCapacityPresetActive]} onPress={() => setDraftEventCapacity(String(value))}><Text style={[styles.eventCapacityPresetText, draftEventCapacity === String(value) && styles.eventCapacityPresetTextActive]}>{value}</Text></Pressable>)}</View>
+              <Pressable style={styles.reviewCountAction} onPress={onLargeEventRequest}><Text style={styles.reviewCountActionText}>{tr(language, "Request more than 30 spots", "申请超过30个名额", "申請超過30個名額")}</Text><Ionicons name="chevron-forward" size={17} color={palette.blue} /></Pressable>
+            </View>
             <Pressable style={styles.primaryButton} onPress={() => {
               if (editingEvent === "approved") {
                 setUpdatePending(true);
@@ -2921,7 +3105,7 @@ function EventsForum({
   const shown =
     category === "All"
       ? events
-      : events.filter((event) => event.category === category);
+      : events.filter((event) => category === "Friends going" ? friendsGoingToEvent(event.title, acceptedFriends).length > 0 : event.category === category);
   return (
     <ScrollView
       contentContainerStyle={styles.scroll}
@@ -2940,27 +3124,9 @@ function EventsForum({
           </Pressable>
         )}
       </View>
-      <View style={styles.eventViewTabs}>
-        <Pressable style={[styles.eventViewTab, styles.eventViewTabActive]}>
-          <Ionicons name="compass-outline" size={17} color="white" />
-          <Text style={[styles.eventViewTabText, styles.eventViewTabTextActive]}>
-            {tr(language, "Discover", "发现活动", "發現活動")}
-          </Text>
-        </Pressable>
-        <Pressable style={styles.eventViewTab} onPress={() => onViewChange("mine")}>
-          <Ionicons name="calendar-outline" size={17} color={palette.muted} />
-          <Text style={styles.eventViewTabText}>
-            {tr(language, "My events", "我的活动", "我的活動")}
-          </Text>
-        </Pressable>
-      </View>
+      {eventViewTabs}
       <Search placeholder={words[language].eventSearch} />
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.categoryScroller}
-        contentContainerStyle={styles.categoryRow}
-      >
+      <SlidableCategories language={language} containerStyle={styles.categoryScroller} rowStyle={styles.categoryRow}>
         {categories.map((item) => (
           <Pressable
             key={item}
@@ -2976,11 +3142,11 @@ function EventsForum({
                 category === item && styles.categoryChipTextActive,
               ]}
             >
-              {categoryLabel(language, item)}
+              {item === "Friends going" ? tr(language, "Friends going", "好友将参加", "好友將參加") : categoryLabel(language, item)}
             </Text>
           </Pressable>
         ))}
-      </ScrollView>
+      </SlidableCategories>
       {shown.length ? (
         shown.map((event) => (
           <EventCard
@@ -2990,6 +3156,11 @@ function EventsForum({
             favourite={favourites.includes(event.title)}
             onToggleFavourite={() => onToggleFavourite(event.title)}
             onOpen={() => setSelected(event)}
+            reserved={reservedEvents.includes(event.title)}
+            cancelPending={pendingCancellation === event.title}
+            onReserve={() => onReserveEvent(event.title)}
+            onCancelReservation={() => onCancelReservation(event.title)}
+            goingFriends={friendsGoingToEvent(event.title, acceptedFriends)}
           />
         ))
       ) : (
@@ -3039,7 +3210,7 @@ function FriendRequestCard({
         <View style={{ flex: 1 }}>
           <View style={styles.requestNameRow}>
             <Text style={styles.requestName}>{friend.username}</Text>
-            <Ionicons name="shield-checkmark" size={15} color={palette.green} />
+            <VerificationBadge kind="student" language={language} />
           </View>
           <Text style={styles.requestUniversity}>{friend.uni}</Text>
           <Text style={styles.requestTime}>
@@ -3101,16 +3272,18 @@ function FriendRequestCard({
   );
 }
 
-function FriendsHub({ language }: { language: Language }) {
+function FriendsHub({ language, acceptedFriends, setAcceptedFriends, followedOrganisations, onToggleOrganisationFollow }: { language: Language; acceptedFriends: string[]; setAcceptedFriends: (friends: string[]) => void; followedOrganisations: string[]; onToggleOrganisationFollow: (id: string) => void }) {
   const [view, setView] = useState<
     "discover" | "requests" | "friends" | "following"
   >("discover");
   const [filter, setFilter] = useState<
-    "you" | "university" | "interests" | "events" | "mutual" | "contacts"
+    "you" | "university" | "interests" | "events" | "mutual" | "contacts" | "organisations"
   >("you");
+  const [selectedOrganisation, setSelectedOrganisation] = useState<OrganisationProfile | null>(null);
   const [selected, setSelected] = useState<(typeof friends)[number] | null>(
     null,
   );
+  const [selectedConnectionsTab, setSelectedConnectionsTab] = useState<"followers" | "following" | "friends" | "mutual" | null>(null);
   const [sent, setSent] = useState<string[]>([]);
   const [requests, setRequests] = useState([friends[1], friends[3]]);
   const [addFriendOpen, setAddFriendOpen] = useState(false);
@@ -3121,32 +3294,12 @@ function FriendsHub({ language }: { language: Language }) {
   const [requestMode, setRequestMode] = useState<"received" | "sent">(
     "received",
   );
-  const [acceptedFriends, setAcceptedFriends] = useState([
-    friends[0].username,
-    friends[1].username,
-  ]);
   const [blockedFriends, setBlockedFriends] = useState<string[]>([]);
   const [mutedFriends, setMutedFriends] = useState<string[]>([]);
   const [following, setFollowing] = useState([
     friends[2].username,
     friends[3].username,
   ]);
-  const friendFilterRef = useRef<NativeScrollView>(null);
-  const [friendFilterX, setFriendFilterX] = useState(0);
-  const [friendFilterContentWidth, setFriendFilterContentWidth] = useState(0);
-  const [friendFilterViewportWidth, setFriendFilterViewportWidth] = useState(0);
-  const friendFilterMaxX = Math.max(
-    0,
-    friendFilterContentWidth - friendFilterViewportWidth,
-  );
-  const moveFriendFilters = (direction: -1 | 1) => {
-    const nextX = Math.max(
-      0,
-      Math.min(friendFilterMaxX, friendFilterX + direction * 180),
-    );
-    friendFilterRef.current?.scrollTo({ x: nextX, animated: true });
-    setFriendFilterX(nextX);
-  };
   const labels =
     language === "EN"
       ? {
@@ -3399,30 +3552,36 @@ function FriendsHub({ language }: { language: Language }) {
     );
   if (selected)
     return (
+      <>
       <ScrollView contentContainerStyle={styles.friendProfile}>
         <Pressable style={styles.backLink} onPress={() => setSelected(null)}>
           <Ionicons name="arrow-back" size={20} color={palette.blue} />
           <Text style={styles.backText}>{labels.title}</Text>
         </Pressable>
         <View style={styles.friendProfileHero}>
-          <View
-            style={[
-              styles.avatar,
-              styles.largeAvatar,
-              { backgroundColor: selected.color },
-            ]}
-          >
-            <Text style={styles.largeAvatarText}>{selected.initials}</Text>
+          <View style={styles.friendAvatarBadgeWrap}>
+            <View style={[styles.avatar, styles.largeAvatar, { backgroundColor: selected.color }]}>
+              <Text style={styles.largeAvatarText}>{selected.initials}</Text>
+            </View>
+            <View style={styles.profileAvatarBadge}><VerificationBadge kind="student" language={language} /></View>
           </View>
-          <Text style={styles.friendProfileName}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}><Text style={styles.friendProfileName}>
             {selectedIsFriend ? selected.fullName : selected.username}
-          </Text>
+          </Text></View>
           {selectedIsFriend && (
             <Text style={styles.friendUsername}>{selected.username}</Text>
           )}
           <Text style={styles.friendUni}>
             {selected.uni} · {courseLabel}
           </Text>
+          <View style={styles.friendProfileStats}>
+            {([
+              ["followers", selected.followers, tr(language, "Followers", "粉丝", "追蹤者")],
+              ["following", selected.following, tr(language, "Following", "关注中", "追蹤中")],
+              ["friends", selected.friendsCount, tr(language, "Friends", "好友", "好友")],
+              ["mutual", selected.mutualCount, tr(language, "Mutual", "共同", "共同")],
+            ] as const).map(([key, value, label]) => <Pressable key={key} accessibilityRole="button" accessibilityLabel={`${label}: ${value}`} style={styles.friendProfileStat} onPress={() => setSelectedConnectionsTab(key)}><Text style={styles.profileSocialStatValue}>{value}</Text><Text style={styles.profileSocialStatLabel}>{label}</Text></Pressable>)}
+          </View>
           <View
             style={[
               styles.privacyPill,
@@ -3605,6 +3764,16 @@ function FriendsHub({ language }: { language: Language }) {
           </Pressable>
         )}
       </ScrollView>
+      <Sheet visible={selectedConnectionsTab !== null} title={selectedConnectionsTab ? ({ followers: tr(language, "Followers", "粉丝", "追蹤者"), following: tr(language, "Following", "关注中", "追蹤中"), friends: tr(language, "Friends", "好友", "好友"), mutual: tr(language, "Mutual friends", "共同好友", "共同好友") })[selectedConnectionsTab] : ""} onClose={() => setSelectedConnectionsTab(null)}>
+        <ScrollView contentContainerStyle={styles.modalBody}>
+          {!selectedIsFriend ? <View style={styles.profileConnectionsLocked}><Ionicons name="lock-closed-outline" size={19} color={palette.muted} /><Text style={styles.profileConnectionsLockedText}>{tr(language, "You can see the totals, but connection names are private until you become friends.", "您可以查看人数，但成为好友前无法查看社交关系列表。", "您可以查看人數，但成為好友前無法查看社交關係名單。")}</Text></View> : <>
+            <Text style={styles.formDesc}>{tr(language, "Showing sample profiles in this prototype. The full list requires a connected account system.", "此原型仅显示示例资料。完整名单需要连接账号系统。", "此原型僅顯示示例資料。完整名單需要連接帳戶系統。")}</Text>
+            {selectedConnectionsTab === "following" && organisationProfiles.slice(0, 1).map((organisation) => <View key={organisation.id} style={styles.friend}><View style={[styles.avatar, { backgroundColor: organisation.color }]}><Text style={styles.avatarText}>{organisation.initials}</Text></View><View style={{ flex: 1 }}><View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}><Text style={styles.friendName}>{organisation.name}</Text><VerificationBadge kind="organisation" language={language} /></View><Text style={styles.friendInterests}>{organisation.category}</Text></View></View>)}
+            {friends.filter((friend) => friend.username !== selected.username).slice(0, selectedConnectionsTab === "mutual" ? selected.mutualCount : 3).map((friend) => <View key={friend.username} style={styles.friend}><View style={[styles.avatar, { backgroundColor: friend.color }]}><Text style={styles.avatarText}>{friend.initials}</Text></View><View style={{ flex: 1 }}><View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}><Text style={styles.friendName}>{friend.fullName}</Text><VerificationBadge kind="student" language={language} /></View><Text style={styles.friendInterests}>{friend.username} · {friend.uni}</Text></View></View>)}
+          </>}
+        </ScrollView>
+      </Sheet>
+      </>
     );
   const matchReason = (friend: (typeof friends)[number]) =>
     filter === "events"
@@ -3777,7 +3946,7 @@ function FriendsHub({ language }: { language: Language }) {
                     <Text style={styles.avatarText}>{friend.initials}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.friendName}>{friend.fullName}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}><Text style={styles.friendName}>{friend.fullName}</Text><VerificationBadge kind="student" language={language} /></View>
                     <Text style={styles.friendInterests}>
                       {friend.username} · {friend.uni}
                     </Text>
@@ -3857,6 +4026,11 @@ function FriendsHub({ language }: { language: Language }) {
                 </Text>
               </View>
             </View>
+            {organisationProfiles.filter((organisation) => followedOrganisations.includes(organisation.id)).map((organisation) => <Pressable key={organisation.id} style={styles.friend} onPress={() => setSelectedOrganisation(organisation)}>
+              <View style={[styles.avatar, { backgroundColor: organisation.color }]}><Text style={styles.avatarText}>{organisation.initials}</Text></View>
+              <View style={{ flex: 1 }}><View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}><Text style={styles.friendName}>{organisation.name}</Text><VerificationBadge kind={organisation.verifiedOnUniMate ? "organisation" : "unverified"} language={language} /></View><Text style={styles.friendInterests}>{organisation.category} · {organisation.handle}</Text></View>
+              <Text style={styles.followingButtonText}>{tr(language, "Following", "已关注", "已追蹤")}</Text>
+            </Pressable>)}
             {friends
               .filter(
                 (friend) =>
@@ -3875,7 +4049,7 @@ function FriendsHub({ language }: { language: Language }) {
                     style={{ flex: 1 }}
                     onPress={() => setSelected(friend)}
                   >
-                    <Text style={styles.friendName}>{friend.fullName}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}><Text style={styles.friendName}>{friend.fullName}</Text><VerificationBadge kind="student" language={language} /></View>
                     <Text style={styles.friendInterests}>
                       {friend.username} · {friend.uni}
                     </Text>
@@ -3928,23 +4102,12 @@ function FriendsHub({ language }: { language: Language }) {
             <Search placeholder={labels.search} />
             <View style={styles.friendFilterShell}>
               <ScrollView
-                ref={friendFilterRef}
                 horizontal
                 nestedScrollEnabled
                 directionalLockEnabled
                 showsHorizontalScrollIndicator={false}
                 style={styles.friendFilterScroller}
                 contentContainerStyle={styles.friendFilterRow}
-                scrollEventThrottle={16}
-                onLayout={(event) =>
-                  setFriendFilterViewportWidth(event.nativeEvent.layout.width)
-                }
-                onContentSizeChange={(width) =>
-                  setFriendFilterContentWidth(width)
-                }
-                onScroll={(event) =>
-                  setFriendFilterX(event.nativeEvent.contentOffset.x)
-                }
               >
                 {[
                   { id: "you", label: labels.forYou },
@@ -3953,6 +4116,7 @@ function FriendsHub({ language }: { language: Language }) {
                   { id: "events", label: labels.sameEvents },
                   { id: "mutual", label: labels.mutual },
                   { id: "contacts", label: labels.contacts },
+                  { id: "organisations", label: tr(language, "Organisations", "机构主页", "機構主頁") },
                 ].map((item) => (
                   <Pressable
                     key={item.id}
@@ -3968,48 +4132,6 @@ function FriendsHub({ language }: { language: Language }) {
                   </Pressable>
                 ))}
               </ScrollView>
-              {friendFilterX > 6 && (
-                <Pressable
-                  accessibilityLabel={tr(
-                    language,
-                    "Previous filters",
-                    "查看前面的筛选项",
-                    "查看前面的篩選項",
-                  )}
-                  style={[
-                    styles.friendFilterArrow,
-                    styles.friendFilterArrowLeft,
-                  ]}
-                  onPress={() => moveFriendFilters(-1)}
-                >
-                  <Ionicons
-                    name="chevron-back"
-                    size={18}
-                    color={palette.blue}
-                  />
-                </Pressable>
-              )}
-              {friendFilterX < friendFilterMaxX - 6 && (
-                <Pressable
-                  accessibilityLabel={tr(
-                    language,
-                    "More filters",
-                    "查看更多筛选项",
-                    "查看更多篩選項",
-                  )}
-                  style={[
-                    styles.friendFilterArrow,
-                    styles.friendFilterArrowRight,
-                  ]}
-                  onPress={() => moveFriendFilters(1)}
-                >
-                  <Ionicons
-                    name="chevron-forward"
-                    size={18}
-                    color={palette.blue}
-                  />
-                </Pressable>
-              )}
             </View>
             {filter === "events" && (
               <View style={styles.matchSourceCard}>
@@ -4082,7 +4204,13 @@ function FriendsHub({ language }: { language: Language }) {
                 />
               </Pressable>
             )}
-            {friends
+            {filter === "organisations" && <View style={styles.matchSourceCard}><Ionicons name="business-outline" size={22} color={palette.blue} /><Text style={[styles.matchSourceText, { flex: 1 }]}>{tr(language, "Follow official pages and explore organisation profiles. Only pages with a verified badge are claimed by UniMate.", "关注官方主页并浏览机构资料。只有带认证标识的主页才获优你伴认证。", "追蹤官方主頁並瀏覽機構資料。只有帶認證標記的主頁才獲優你伴認證。")}</Text></View>}
+            {filter === "organisations" && organisationProfiles.map((organisation) => <Pressable key={organisation.id} style={styles.friend} onPress={() => setSelectedOrganisation(organisation)}>
+              <View style={[styles.avatar, { backgroundColor: organisation.color }]}><Text style={styles.avatarText}>{organisation.initials}</Text></View>
+              <View style={{ flex: 1 }}><View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}><Text style={styles.friendName}>{organisation.name}</Text><VerificationBadge kind={organisation.verifiedOnUniMate ? "organisation" : "unverified"} language={language} /></View><Text style={styles.friendUni}>{organisation.category}</Text><Text style={styles.friendInterests}>{organisation.verifiedOnUniMate ? tr(language, "Official page", "官方主页", "官方主頁") : tr(language, "Example · Unverified", "示例 · 未认证", "示例 · 未認證")}</Text></View>
+              <Pressable style={styles.follow} onPress={(event) => { event.stopPropagation?.(); onToggleOrganisationFollow(organisation.id); }}><Text style={styles.followText}>{followedOrganisations.includes(organisation.id) ? "✓" : "+"}</Text></Pressable>
+            </Pressable>)}
+            {filter !== "organisations" && friends
               .filter(
                 (friend) =>
                   !acceptedFriends.includes(friend.username) &&
@@ -4100,7 +4228,7 @@ function FriendsHub({ language }: { language: Language }) {
                     <Text style={styles.avatarText}>{friend.initials}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.friendName}>{friend.username}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}><Text style={styles.friendName}>{friend.username}</Text><VerificationBadge kind="student" language={language} /></View>
                     <Text style={styles.friendUni}>{friend.uni}</Text>
                     <Text style={styles.friendInterests}>
                       {matchReason(friend)}
@@ -4522,6 +4650,7 @@ function FriendsHub({ language }: { language: Language }) {
           )}
         </ScrollView>
       </Sheet>
+      <OrganisationProfileSheet organisation={selectedOrganisation} language={language} following={!!selectedOrganisation && followedOrganisations.includes(selectedOrganisation.id)} onToggleFollow={onToggleOrganisationFollow} onClose={() => setSelectedOrganisation(null)} />
     </>
   );
 }
@@ -4532,6 +4661,7 @@ function SelectField({
   options,
   onChange,
   hint,
+  schedule = false,
   formatOption = (option) => option,
 }: {
   label: string;
@@ -4539,19 +4669,24 @@ function SelectField({
   options: string[];
   onChange: (value: string) => void;
   hint?: string;
+  schedule?: boolean;
   formatOption?: (value: string) => string;
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <View style={styles.selectWrap}>
-      <Text style={styles.fieldLabel}>{label}</Text>
+    <View style={[styles.selectWrap, schedule && styles.scheduleSelectWrap]}>
+      {!schedule && <Text style={styles.fieldLabel}>{label}</Text>}
       <Pressable
         accessibilityRole="button"
+        accessibilityLabel={schedule ? `${label}: ${formatOption(value)}` : undefined}
         accessibilityState={{ expanded: open }}
-        style={[styles.selectField, open && styles.selectFieldOpen]}
+        style={[styles.selectField, schedule && styles.scheduleSelectField, open && styles.selectFieldOpen]}
         onPress={() => setOpen(!open)}
       >
-        <Text style={styles.selectValue}>{formatOption(value)}</Text>
+        {schedule ? <>
+          <View style={styles.eventScheduleIcon}><Ionicons name="time-outline" size={19} color={palette.blue} /></View>
+          <View style={{ flex: 1 }}><Text style={styles.eventScheduleLabel}>{label}</Text><Text style={styles.eventTimeValue}>{formatOption(value)}</Text></View>
+        </> : <Text style={styles.selectValue}>{formatOption(value)}</Text>}
         <Ionicons
           name={open ? "chevron-up" : "chevron-down"}
           size={17}
@@ -4598,7 +4733,203 @@ function SelectField({
   );
 }
 
-function AirportTransferForm({ language }: { language: Language }) {
+function SlidableCategories({
+  language,
+  children,
+  containerStyle,
+  rowStyle,
+}: {
+  language: Language;
+  children: React.ReactNode;
+  containerStyle?: React.ComponentProps<typeof NativeView>["style"];
+  rowStyle?: React.ComponentProps<typeof NativeScrollView>["contentContainerStyle"];
+}) {
+  return (
+    <View style={[styles.slidableCategories, containerStyle]}>
+      <ScrollView
+        horizontal
+        nestedScrollEnabled
+        directionalLockEnabled
+        showsHorizontalScrollIndicator={false}
+        style={styles.slidableCategoryScroll}
+        contentContainerStyle={rowStyle}
+      >
+        {children}
+      </ScrollView>
+    </View>
+  );
+}
+
+type ServiceCheckoutOrder = {
+  service: "airport" | "cleaning" | "moving";
+  title: string;
+  details: string;
+  when: string;
+  total: number;
+  dueNow: number;
+  note: string;
+  bookingDate?: string;
+  bookingTime?: string;
+  bookingAddress?: string;
+  intake?: { fields: { label: string; value: string }[]; photos: string[] };
+};
+
+type StaffAvailability = { areas: string[]; blockedDates: Record<string, "blocked" | "holiday" | "emergency"> };
+const londonServiceAreas = ["Central London", "North London", "South London", "East London", "West London", "Camden", "Islington", "Hackney", "Tower Hamlets", "Westminster", "Hammersmith & Fulham", "Greenwich", "Croydon", "Richmond", "Watford", "Epsom", "Dartford", "Bromley"];
+const addressAreaTags = (address: string) => {
+  const value = address.toLowerCase();
+  const tags = londonServiceAreas.filter((area) => value.includes(area.toLowerCase()));
+  if (/\b(?:wc\d|ec\d|w1\b|sw1\b)\b|bloomsbury|holborn|soho/.test(value)) tags.push("Central London");
+  if (/\b(?:nw\d|n\d)\b|camden|islington/.test(value)) tags.push("North London");
+  if (/\b(?:se\d|sw\d)\b|croydon|greenwich/.test(value)) tags.push("South London");
+  if (/\b(?:e\d)\b|hackney|tower hamlets|shoreditch|stratford/.test(value)) tags.push("East London");
+  if (/\b(?:w\d)\b|hammersmith|richmond/.test(value)) tags.push("West London");
+  if (/bloomsbury|holborn/.test(value)) tags.push("Central London");
+  return [...new Set(tags)];
+};
+const serviceOrderAddresses = (order: ServiceCheckoutOrder) => order.service === "airport" ? [order.intake?.fields.find((field) => field.label === "London address")?.value || ""] : order.service === "moving" ? (order.bookingAddress || "").split("→").map((part) => part.trim()) : [order.bookingAddress || ""];
+const isOrderInWorkAreas = (order: ServiceCheckoutOrder, areas: string[]) => serviceOrderAddresses(order).every((address) => address.trim() && addressAreaTags(address).some((area) => areas.includes(area)));
+const bookingTimeRange = (value: string) => { const matches = [...value.matchAll(/\b(\d{1,2}):(\d{2})\b/g)]; const start = matches[0] ? Number(matches[0][1]) * 60 + Number(matches[0][2]) : 0; const end = matches[1] ? Number(matches[1][1]) * 60 + Number(matches[1][2]) : start + 90; return [start, end] as const; };
+const bookingTimesOverlap = (first: string, second: string) => { const [aStart, aEnd] = bookingTimeRange(first); const [bStart, bEnd] = bookingTimeRange(second); return aStart < bEnd && bStart < aEnd; };
+
+type SavedPaymentMethod = {
+  id: string;
+  brand: "Visa" | "Mastercard" | "Amex";
+  last4: string;
+};
+
+function PaymentMethodsSheet({ visible, language, methods, defaultId, onClose, onAdd, onSetDefault, onRemove }: {
+  visible: boolean;
+  language: Language;
+  methods: SavedPaymentMethod[];
+  defaultId: string | null;
+  onClose: () => void;
+  onAdd: (brand: SavedPaymentMethod["brand"], last4: string, makeDefault: boolean) => void;
+  onSetDefault: (id: string) => void;
+  onRemove: (id: string) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [brand, setBrand] = useState<SavedPaymentMethod["brand"]>("Visa");
+  const [last4, setLast4] = useState("");
+  const [makeDefault, setMakeDefault] = useState(true);
+  const [removeId, setRemoveId] = useState<string | null>(null);
+  return (
+    <Sheet visible={visible} title={tr(language, "Payment methods", "付款方式", "付款方式")} onClose={onClose}>
+      <ScrollView contentContainerStyle={styles.paymentSettingsBody} showsVerticalScrollIndicator={false}>
+        <View style={styles.secureNote}><Ionicons name="shield-checkmark-outline" size={19} color={palette.blue} /><Text style={styles.secureNoteText}>{tr(language, "Prototype only. Add a card label and last four digits to preview a default payment method. Do not enter a full card number or CVC; no card is saved or charged.", "仅供原型预览。输入银行卡类型及末四位以预览默认付款方式。请勿输入完整卡号或安全码；不会保存银行卡或扣款。", "僅供原型預覽。輸入銀行卡類型及末四位以預覽預設付款方式。請勿輸入完整卡號或安全碼；不會儲存銀行卡或扣款。")}</Text></View>
+        <Text style={styles.formSectionTitle}>{tr(language, "Your cards", "你的银行卡", "你的銀行卡")}</Text>
+        {methods.length ? methods.map((method) => <View key={method.id} style={styles.savedMethodCard}>
+          <View style={styles.savedMethodIcon}><Ionicons name="card-outline" size={21} color={palette.blue} /></View>
+          <View style={{ flex: 1 }}><Text style={styles.savedMethodTitle}>{method.brand} ···· {method.last4}</Text><Text style={styles.metaText}>{tr(language, "Display-only sample card", "仅展示的预览银行卡", "僅展示的預覽銀行卡")}</Text></View>
+          {defaultId === method.id && <View style={styles.savedMethodDefaultBadge}><Text style={styles.savedMethodDefaultText}>{tr(language, "Default", "默认", "預設")}</Text></View>}
+          <View style={styles.savedMethodActions}>
+            {defaultId !== method.id && <Pressable accessibilityRole="button" onPress={() => onSetDefault(method.id)}><Text style={styles.savedMethodActionText}>{tr(language, "Set default", "设为默认", "設為預設")}</Text></Pressable>}
+            <Pressable accessibilityRole="button" onPress={() => setRemoveId(method.id)}><Text style={styles.savedMethodRemoveText}>{tr(language, "Remove", "移除", "移除")}</Text></Pressable>
+          </View>
+        </View>) : <View style={styles.paymentEmptyCard}><Ionicons name="card-outline" size={25} color={palette.muted} /><Text style={styles.emptyTitle}>{tr(language, "No payment method set", "尚未设置付款方式", "尚未設定付款方式")}</Text><Text style={styles.emptyText}>{tr(language, "You can set a default sample card below.", "你可以在下方设置默认预览银行卡。", "你可以在下方設定預設預覽銀行卡。")}</Text></View>}
+        {removeId && <View style={styles.paymentAddCard}><Text style={styles.formTitle}>{tr(language, "Remove sample card?", "移除预览银行卡？", "移除預覽銀行卡？")}</Text><Text style={styles.formDesc}>{methods.find((method) => method.id === removeId)?.brand} ···· {methods.find((method) => method.id === removeId)?.last4}</Text><View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}><Pressable style={[styles.secondaryButton, { flex: 1 }]} onPress={() => setRemoveId(null)}><Text style={styles.secondaryButtonText}>{tr(language, "Keep", "保留", "保留")}</Text></Pressable><Pressable style={[styles.secondaryButton, { flex: 1 }]} onPress={() => { onRemove(removeId); setRemoveId(null); }}><Text style={styles.savedMethodRemoveText}>{tr(language, "Remove", "移除", "移除")}</Text></Pressable></View></View>}
+        {adding ? <View style={styles.paymentAddCard}>
+          <Text style={styles.formSectionTitle}>{tr(language, "Add a sample card", "添加预览银行卡", "加入預覽銀行卡")}</Text>
+          <SelectField label={tr(language, "Card brand", "银行卡类型", "銀行卡類型")} value={brand} options={["Visa", "Mastercard", "Amex"]} onChange={(value) => setBrand(value as SavedPaymentMethod["brand"])} />
+          <View style={styles.field}><Text style={styles.fieldLabel}>{tr(language, "Last four digits only", "仅输入末四位", "只輸入末四位")}</Text><TextInput value={last4} onChangeText={(value) => setLast4(value.replace(/\D/g, "").slice(0, 4))} keyboardType="number-pad" maxLength={4} placeholder="1234" placeholderTextColor="#A1ADBE" /></View>
+          <Pressable accessibilityRole="switch" accessibilityState={{ checked: makeDefault }} style={styles.paymentDefaultToggle} onPress={() => setMakeDefault(!makeDefault)}><View style={{ flex: 1 }}><Text style={styles.friendName}>{tr(language, "Make default", "设为默认", "設為預設")}</Text><Text style={styles.metaText}>{tr(language, "Selected first at checkout", "结账时优先选择", "結帳時優先選擇")}</Text></View><View style={[styles.toggle, makeDefault && styles.toggleOn]}><View style={[styles.toggleKnob, makeDefault && styles.toggleKnobOn]} /></View></Pressable>
+          <Pressable style={[styles.primaryButton, last4.length !== 4 && { opacity: 0.45 }]} disabled={last4.length !== 4} onPress={() => { onAdd(brand, last4, makeDefault); setLast4(""); setAdding(false); }}><Text style={styles.primaryButtonText}>{tr(language, "Add sample card", "添加预览银行卡", "加入預覽銀行卡")}</Text></Pressable>
+        </View> : <Pressable style={styles.paymentAddButton} onPress={() => setAdding(true)}><Ionicons name="add-circle-outline" size={20} color={palette.blue} /><Text style={styles.paymentAddButtonText}>{tr(language, "Add a payment method", "添加付款方式", "加入付款方式")}</Text></Pressable>}
+      </ScrollView>
+    </Sheet>
+  );
+}
+
+function ServicePaymentPage({
+  order,
+  language,
+  onBack,
+  onDone,
+  onPaymentPreview,
+  defaultPaymentMethod,
+}: {
+  order: ServiceCheckoutOrder;
+  language: Language;
+  onBack: () => void;
+  onDone: () => void;
+  onPaymentPreview: (order: ServiceCheckoutOrder) => void;
+  defaultPaymentMethod: SavedPaymentMethod | null;
+}) {
+  const [method, setMethod] = useState<"Card" | "Apple Pay" | "Google Pay" | "WeChat Pay">("Card");
+  const [complete, setComplete] = useState(false);
+  const money = (value: number) => `£${value.toFixed(2)}`;
+  if (complete) {
+    return (
+      <View style={styles.ticketCompletePage}>
+        <View style={styles.ticketCompleteIcon}><Ionicons name="checkmark" size={42} color="white" /></View>
+        <Text style={styles.ticketCompleteTitle}>{tr(language, "Payment preview complete", "付款预览已完成", "付款預覽已完成")}</Text>
+        <Text style={styles.ticketCompleteText}>
+          {tr(language,
+            `${order.title} · ${money(order.dueNow)} via ${method}. A local sample booking was added for workspace review; no payment was taken or real booking created.`,
+            `${order.title} · 使用${method}预览支付${money(order.dueNow)}。已添加本地示例预订以供工作区查看；未实际扣款或创建真实预订。`,
+            `${order.title} · 使用${method}預覽支付${money(order.dueNow)}。已加入本機示例預訂以供工作區查看；未實際扣款或建立真實預訂。`)}
+        </Text>
+        <Pressable style={styles.primaryButton} onPress={onDone}><Text style={styles.primaryButtonText}>{tr(language, "Done", "完成", "完成")}</Text></Pressable>
+      </View>
+    );
+  }
+  return (
+    <ScrollView contentContainerStyle={styles.eventPaymentPage} showsVerticalScrollIndicator={false}>
+      <Pressable style={styles.paymentBack} onPress={onBack}>
+        <Ionicons name="arrow-back" size={18} color={palette.blue} />
+        <Text style={styles.paymentBackText}>{tr(language, "Back to service details", "返回服务详情", "返回服務詳情")}</Text>
+      </Pressable>
+      <View style={styles.eventPaymentHero}>
+        <View style={styles.eventPaymentLock}><Ionicons name="card-outline" size={23} color={palette.blue} /></View>
+        <Text style={styles.eventPaymentTitle}>{tr(language, "Review & payment", "确认与付款", "確認及付款")}</Text>
+        <Text style={styles.eventPaymentSubtitle}>{tr(language, "The same checkout for every student service.", "所有学生服务使用相同的付款流程。", "所有學生服務使用相同的付款流程。")}</Text>
+      </View>
+      <View style={styles.servicePaymentSummary}>
+        <Text style={styles.eventPaymentSummaryLabel}>{order.title}</Text>
+        <Text style={styles.servicePaymentDetail}>{order.details}</Text>
+        <Text style={styles.servicePaymentDetail}>{order.when}</Text>
+        <View style={styles.ticketOrderTotal}>
+          <Text style={styles.ticketOrderTotalLabel}>{tr(language, "Illustrative total", "预览总价", "預覽總價")}</Text>
+          <Text style={styles.ticketOrderTotalValue}>{money(order.total)}</Text>
+        </View>
+        {order.dueNow < order.total && (
+          <View style={styles.servicePaymentLine}>
+            <Text style={styles.fareLineLabel}>{tr(language, "Balance later", "稍后支付余款", "稍後支付餘款")}</Text>
+            <Text style={styles.fareLineValue}>{money(order.total - order.dueNow)}</Text>
+          </View>
+        )}
+        <View style={styles.servicePaymentLine}>
+          <Text style={styles.fareTotalLabel}>{tr(language, "25% deposit due today", "今日应付25%订金", "今日應付25%訂金")}</Text>
+          <Text style={styles.eventPaymentAmount}>{money(order.dueNow)}</Text>
+        </View>
+      </View>
+      <Text style={styles.formSectionTitle}>{tr(language, "Payment method", "付款方式", "付款方式")}</Text>
+      <View style={styles.eventPaymentMethods}>
+        {([
+          { name: "Card", label: defaultPaymentMethod ? `${defaultPaymentMethod.brand} ···· ${defaultPaymentMethod.last4} · ${tr(language, "Default sample card", "默认预览银行卡", "預設預覽銀行卡")}` : tr(language, "Debit or credit card", "银行卡", "銀行卡"), icon: "card-outline" },
+          { name: "Apple Pay", label: "Apple Pay", icon: "logo-apple" },
+          { name: "Google Pay", label: "Google Pay", icon: "logo-google" },
+          { name: "WeChat Pay", label: tr(language, "WeChat Pay", "微信支付", "微信支付"), icon: "chatbubble-ellipses-outline" },
+        ] as const).map((option) => (
+          <Pressable key={option.name} accessibilityRole="radio" accessibilityState={{ checked: method === option.name }} style={[styles.eventPaymentMethod, method === option.name && styles.eventPaymentMethodActive]} onPress={() => setMethod(option.name)}>
+            <View style={styles.eventPaymentMethodIcon}><Ionicons name={option.icon} size={21} color={palette.blue} /></View>
+            <Text style={[styles.eventPaymentMethodText, method === option.name && styles.eventPaymentMethodTextActive]}>{option.label}</Text>
+            <Ionicons name={method === option.name ? "radio-button-on" : "radio-button-off"} size={20} color={method === option.name ? palette.blue : "#AAB7C7"} />
+          </Pressable>
+        ))}
+      </View>
+      <View style={styles.secureNote}>
+        <Ionicons name="information-circle-outline" size={18} color={palette.blue} />
+        <Text style={styles.secureNoteText}>{tr(language, `${order.note} This is an illustrative checkout. No card details are collected and no payment is taken.`, `${order.note} 这是预览付款页面，不收集银行卡资料，也不会扣款。`, `${order.note} 這是預覽付款頁面，不收集銀行卡資料，也不會扣款。`)}</Text>
+      </View>
+      <Pressable style={styles.primaryButton} onPress={() => { onPaymentPreview(order); setComplete(true); }}>
+        <Text style={styles.primaryButtonText}>{tr(language, `Preview payment · ${money(order.dueNow)}`, `预览付款 · ${money(order.dueNow)}`, `預覽付款 · ${money(order.dueNow)}`)}</Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+function AirportTransferForm({ language, onCheckout, isUnavailable }: { language: Language; onCheckout: (order: ServiceCheckoutOrder) => void; isUnavailable?: (dayKey: string) => boolean }) {
   const isEnglish = language === "EN";
   const { width } = useWindowDimensions();
   const compact = width < 380;
@@ -4612,14 +4943,13 @@ function AirportTransferForm({ language }: { language: Language }) {
   const [largeCases, setLargeCases] = useState("1 large suitcase");
   const [meeting, setMeeting] = useState<"greet" | "carpark">("greet");
   const [luggageHelp, setLuggageHelp] = useState(true);
-  const [currency, setCurrency] = useState<"GBP" | "RMB" | "EUR">("GBP");
-  const [payment, setPayment] = useState<
-    "WeChat Pay" | "Apple Pay" | "Google Pay" | "Card"
-  >("WeChat Pay");
-  const [addressMode, setAddressMode] = useState(
+  const [locationQuery, setLocationQuery] = useState(
     "University College London · WC1E 6BT",
   );
-  const [manualAddress, setManualAddress] = useState("");
+  const [locationEditing, setLocationEditing] = useState(false);
+  const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [locationError, setLocationError] = useState(false);
   const airports = [
     "Heathrow · Terminal 2",
     "Heathrow · Terminal 3",
@@ -4631,12 +4961,8 @@ function AirportTransferForm({ language }: { language: Language }) {
     "Stansted Airport",
     "Luton Airport",
   ];
-  const hours = Array.from({ length: 24 }, (_, index) =>
-    String(index).padStart(2, "0"),
-  );
-  const minutes = Array.from({ length: 60 }, (_, index) =>
-    String(index).padStart(2, "0"),
-  );
+  const hours = airportTimeHours;
+  const minutes = airportTimeMinutes;
   const passengerOptions = [
     "1 passenger",
     "2 passengers",
@@ -4655,8 +4981,51 @@ function AirportTransferForm({ language }: { language: Language }) {
     "Imperial College London · SW7 2AZ",
     "King’s College London · WC2R 2LS",
     "London School of Economics · WC2A 2AE",
-    "Enter address manually",
   ];
+  useEffect(() => {
+    if (!locationEditing) return;
+    const query = locationQuery.trim();
+    const matchingPresets = londonLocations.filter((place) =>
+      place.toLowerCase().includes(query.toLowerCase()),
+    );
+    setLocationSuggestions(query ? matchingPresets : londonLocations);
+    setLocationError(false);
+    if (query.length < 3) {
+      setLocationLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = setTimeout(async () => {
+      setLocationLoading(true);
+      try {
+        const response = await fetch(
+          `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lat=51.5074&lon=-0.1278&limit=5&lang=en`,
+          { signal: controller.signal },
+        );
+        if (!response.ok) throw new Error("Address search unavailable");
+        const data = await response.json();
+        const found = (data.features || [])
+          .filter((feature: any) => feature.properties?.countrycode === "GB")
+          .map((feature: any) => {
+            const place = feature.properties;
+            const street = [place.housenumber, place.street].filter(Boolean).join(" ");
+            return [place.name, street, place.city || place.locality, place.postcode]
+              .filter((part: string, index: number, parts: string[]) => part && parts.indexOf(part) === index)
+              .join(" · ");
+          })
+          .filter(Boolean);
+        setLocationSuggestions([...new Set([...matchingPresets, ...found])].slice(0, 7));
+      } catch (error) {
+        if (!controller.signal.aborted) setLocationError(true);
+      } finally {
+        if (!controller.signal.aborted) setLocationLoading(false);
+      }
+    }, 450);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [locationQuery, locationEditing]);
   const airportOptionLabel = (value: string) =>
     isEnglish
       ? value
@@ -4728,7 +5097,7 @@ function AirportTransferForm({ language }: { language: Language }) {
         flightHint: "For example: BA317",
         london: journey === "pickup" ? "Drop-off location" : "Pickup location",
         addressHint:
-          "Choose a London location or enter a full address/postcode.",
+          "Search an address or postcode, then choose a suggestion. You can also type a full address manually.",
         manual: "Full address or postcode",
         passengers: "Passengers",
         small: "Small suitcases",
@@ -4768,8 +5137,8 @@ function AirportTransferForm({ language }: { language: Language }) {
               : "上車地點",
         addressHint:
           language === "简体"
-            ? "选择伦敦地点，或手动输入完整地址/邮编。"
-            : "選擇倫敦地點，或手動輸入完整地址/郵編。",
+            ? "搜索地址或邮编并选择建议，也可以手动输入完整地址。"
+            : "搜尋地址或郵編並選擇建議，也可以手動輸入完整地址。",
         manual: language === "简体" ? "完整地址或邮编" : "完整地址或郵編",
         passengers: language === "简体" ? "乘客人数" : "乘客人數",
         small: language === "简体" ? "小型行李箱" : "小型行李箱",
@@ -4814,7 +5183,7 @@ function AirportTransferForm({ language }: { language: Language }) {
         eligible: "Within our 2.5-hour airport service area",
         currency: "Pay in",
         payment: "Payment method",
-        cardNumber: "Demo card number",
+        cardNumber: "Sample card number",
         expiry: "Expiry",
         cvc: "CVC",
         secure:
@@ -4842,7 +5211,7 @@ function AirportTransferForm({ language }: { language: Language }) {
             : "在機場2.5小時服務範圍內",
         currency: language === "简体" ? "付款货币" : "付款貨幣",
         payment: language === "简体" ? "付款方式" : "付款方式",
-        cardNumber: language === "简体" ? "演示卡号" : "示範卡號",
+        cardNumber: language === "简体" ? "预览卡号" : "預覽卡號",
         expiry: language === "简体" ? "有效期" : "有效期",
         cvc: "CVC",
         secure:
@@ -4895,10 +5264,7 @@ function AirportTransferForm({ language }: { language: Language }) {
       total: base + mileage + airportAccess + greeting,
     };
   }, [journey, meeting, route]);
-  const rates = { GBP: 1, RMB: 9.1, EUR: 1.17 };
-  const symbols = { GBP: "£", RMB: "¥", EUR: "€" };
-  const money = (amount: number) =>
-    `${symbols[currency]}${(amount * rates[currency]).toFixed(currency === "RMB" ? 0 : 2)}`;
+  const money = (amount: number) => `£${amount.toFixed(2)}`;
   return (
     <View style={styles.formCard}>
       <View style={styles.formHero}>
@@ -4967,9 +5333,10 @@ function AirportTransferForm({ language }: { language: Language }) {
         onSelect={setSelectedDay}
         language={language}
         compact
+        isUnavailable={isUnavailable}
       />
       <View style={styles.timeTitleRow}>
-        <Text style={styles.formSectionTitle}>{labels.time}</Text>
+        <Text style={[styles.formSectionTitle, styles.timeTitleRowLabel]}>{labels.time}</Text>
         <View style={styles.selectedTimePill}>
           <Ionicons name="time-outline" size={14} color={palette.blue} />
           <Text style={styles.selectedTimeText}>
@@ -5005,25 +5372,72 @@ function AirportTransferForm({ language }: { language: Language }) {
           autoCapitalize="characters"
         />
       </View>
-      <SelectField
-        label={labels.london}
-        value={addressMode}
-        options={londonLocations}
-        onChange={setAddressMode}
-        hint={labels.addressHint}
-        formatOption={londonOptionLabel}
-      />
-      {addressMode === "Enter address manually" && (
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>{labels.manual}</Text>
+      <View style={styles.addressSearchWrap}>
+        <Text style={styles.fieldLabel}>{labels.london}</Text>
+        <View style={styles.addressSearchField}>
+          <Ionicons name="search-outline" size={18} color={palette.blue} />
           <TextInput
-            value={manualAddress}
-            onChangeText={setManualAddress}
-            placeholder={labels.manualPlaceholder}
+            accessibilityLabel={labels.london}
+            style={styles.addressSearchInput}
+            value={locationQuery}
+            onFocus={() => setLocationEditing(true)}
+            onChangeText={(value) => {
+              setLocationQuery(value);
+              setLocationEditing(true);
+            }}
+            placeholder={tr(language, "Search address or postcode", "搜索地址或邮编", "搜尋地址或郵編")}
             placeholderTextColor="#A1ADBE"
+            autoCorrect={false}
           />
+          {locationQuery.length > 0 && (
+            <Pressable
+              accessibilityLabel={tr(language, "Clear address", "清除地址", "清除地址")}
+              onPress={() => {
+                setLocationQuery("");
+                setLocationEditing(true);
+              }}
+            >
+              <Ionicons name="close-circle" size={19} color={palette.muted} />
+            </Pressable>
+          )}
         </View>
-      )}
+        <Text style={styles.fieldHint}>{labels.addressHint}</Text>
+        {locationEditing && (
+          <View style={styles.addressSuggestions}>
+            {locationSuggestions.map((suggestion) => (
+              <Pressable
+                key={suggestion}
+                style={styles.airportAddressSuggestion}
+                onPress={() => {
+                  setLocationQuery(suggestion);
+                  setLocationEditing(false);
+                }}
+              >
+                <Ionicons name="location-outline" size={16} color={palette.blue} />
+                <Text style={styles.addressSuggestionText} numberOfLines={2}>
+                  {londonOptionLabel(suggestion)}
+                </Text>
+              </Pressable>
+            ))}
+            {locationLoading && (
+              <Text style={styles.addressSearchMeta}>{tr(language, "Finding addresses…", "正在查找地址…", "正在搜尋地址…")}</Text>
+            )}
+            {locationError && (
+              <Text style={styles.addressSearchMeta}>{tr(language, "Suggestions unavailable. You can still enter the full address.", "暂时无法获取建议，仍可输入完整地址。", "暫時無法取得建議，仍可輸入完整地址。")}</Text>
+            )}
+            {locationQuery.trim().length >= 3 && (
+              <Pressable
+                style={styles.airportAddressSuggestion}
+                onPress={() => setLocationEditing(false)}
+              >
+                <Ionicons name="create-outline" size={16} color={palette.blue} />
+                <Text style={styles.addressSuggestionText}>{tr(language, "Use address as typed", "使用输入的地址", "使用輸入的地址")}</Text>
+              </Pressable>
+            )}
+            <Text style={styles.addressSearchMeta}>{tr(language, "Suggestions from OpenStreetMap · Search text is sent to Photon", "建议来自OpenStreetMap · 搜索文字会发送给Photon", "建議來自OpenStreetMap · 搜尋文字會傳送給Photon")}</Text>
+          </View>
+        )}
+      </View>
       <View
         style={[styles.formTwoColumns, compact && styles.formColumnsCompact]}
       >
@@ -5165,117 +5579,40 @@ function AirportTransferForm({ language }: { language: Language }) {
         </View>
         <View style={styles.depositRow}>
           <View>
-            <Text style={styles.depositLabel}>{fareLabels.deposit}</Text>
+            <Text style={styles.depositLabel}>{tr(language, "25% booking deposit", "25%预订订金", "25%預訂訂金")}</Text>
             <Text style={styles.balanceText}>
-              {fareLabels.balance}: {money(fare.total / 2)}
+              {fareLabels.balance}: {money(fare.total * 0.75)}
             </Text>
           </View>
-          <Text style={styles.depositValue}>{money(fare.total / 2)}</Text>
+          <Text style={styles.depositValue}>{money(fare.total * 0.25)}</Text>
         </View>
-      </View>
-      <Text style={styles.formSectionTitle}>{fareLabels.currency}</Text>
-      <View style={styles.currencyRow}>
-        {(["GBP", "RMB", "EUR"] as const).map((item) => (
-          <Pressable
-            key={item}
-            style={[
-              styles.currencyButton,
-              currency === item && styles.currencyButtonActive,
-            ]}
-            onPress={() => setCurrency(item)}
-          >
-            <Text
-              style={[
-                styles.currencyButtonText,
-                currency === item && styles.currencyButtonTextActive,
-              ]}
-            >
-              {item}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-      <Text style={styles.formSectionTitle}>{fareLabels.payment}</Text>
-      <View style={styles.paymentGrid}>
-        {(
-          [
-            { name: "WeChat Pay", icon: "chatbubble-ellipses" },
-            { name: "Apple Pay", icon: "logo-apple" },
-            { name: "Google Pay", icon: "logo-google" },
-            { name: "Card", icon: "card" },
-          ] as const
-        ).map((item) => (
-          <Pressable
-            key={item.name}
-            style={[
-              styles.paymentMethod,
-              payment === item.name && styles.paymentMethodActive,
-            ]}
-            onPress={() => setPayment(item.name)}
-          >
-            <Ionicons
-              name={item.icon}
-              size={20}
-              color={payment === item.name ? palette.blue : palette.muted}
-            />
-            <Text
-              style={[
-                styles.paymentMethodText,
-                payment === item.name && styles.paymentMethodTextActive,
-              ]}
-            >
-              {item.name === "Card"
-                ? tr(language, "Card", "银行卡", "銀行卡")
-                : item.name}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
-      {payment === "Card" && (
-        <View style={styles.cardFields}>
-          <View style={styles.field}>
-            <Text style={styles.fieldLabel}>{fareLabels.cardNumber}</Text>
-            <TextInput
-              placeholder="•••• •••• •••• 4242"
-              placeholderTextColor="#A1ADBE"
-              keyboardType="number-pad"
-            />
-          </View>
-          <View style={styles.formTwoColumns}>
-            <View style={styles.formHalf}>
-              <View style={styles.field}>
-                <Text style={styles.fieldLabel}>{fareLabels.expiry}</Text>
-                <TextInput placeholder="MM/YY" placeholderTextColor="#A1ADBE" />
-              </View>
-            </View>
-            <View style={styles.formHalf}>
-              <View style={styles.field}>
-                <Text style={styles.fieldLabel}>{fareLabels.cvc}</Text>
-                <TextInput
-                  placeholder="•••"
-                  placeholderTextColor="#A1ADBE"
-                  keyboardType="number-pad"
-                  secureTextEntry
-                />
-              </View>
-            </View>
-          </View>
-        </View>
-      )}
-      <View style={styles.secureNote}>
-        <Ionicons name="lock-closed-outline" size={17} color={palette.blue} />
-        <Text style={styles.secureNoteText}>{fareLabels.secure}</Text>
       </View>
       <Pressable
         style={styles.primaryButton}
-        onPress={() =>
-          Alert.alert(
-            labels.received,
-            `${labels.receivedBody}\n\n${fareLabels.deposit}: ${money(fare.total / 2)}`,
-          )
-        }
+        onPress={() => onCheckout({
+          service: "airport",
+          title: labels.title,
+          details: `${terminal} · ${locationQuery.trim() || tr(language, "London address needed", "需填写伦敦地址", "需填寫倫敦地址")}`,
+          when: `${formatBookingDate(selectedDay, language)} · ${hour}:${minute}`,
+          total: fare.total,
+          dueNow: Math.round(fare.total * 25) / 100,
+          note: tr(language, "25% booking deposit. Fare is illustrative; confirm the final route and cancellation terms before real payment.", "25%预订订金。车费仅供预览；实际付款前需确认路线和取消条款。", "25%預訂訂金。車費僅供預覽；實際付款前須確認路線及取消條款。"),
+          bookingDate: formatStaffBookingDate(selectedDay),
+          bookingTime: `${hour}:${minute}`,
+          bookingAddress: journey === "pickup" ? `${terminal} → ${locationQuery.trim()}` : `${locationQuery.trim()} → ${terminal}`,
+          intake: { fields: [
+            { label: "Journey", value: journey === "pickup" ? "Airport pickup" : "Airport drop-off" },
+            { label: "Airport / terminal", value: terminal },
+            { label: "London address", value: locationQuery.trim() || "Not provided" },
+            { label: "Passengers", value: passengers },
+            { label: "Small cases", value: smallCases },
+            { label: "Large cases", value: largeCases },
+            { label: "Meeting point", value: meeting === "greet" ? "Meet and greet" : "Car park" },
+            { label: "Luggage help", value: luggageHelp ? "Requested" : "Not requested" },
+          ], photos: [] },
+        })}
       >
-        <Text style={styles.primaryButtonText}>{fareLabels.payDeposit}</Text>
+        <Text style={styles.primaryButtonText}>{tr(language, "Continue to payment", "继续付款", "繼續付款")}</Text>
       </Pressable>
     </View>
   );
@@ -5359,14 +5696,18 @@ function AvailabilityCalendar({
   onSelect,
   language,
   compact = false,
+  bookingMonths = 0,
+  isUnavailable,
 }: {
   selected: string;
   onSelect: (day: string) => void;
   language: Language;
   compact?: boolean;
+  bookingMonths?: number;
+  isUnavailable?: (dayKey: string) => boolean;
 }) {
-  const unavailable = [2, 5, 9, 13, 18, 24, 29];
-  const limited = [7, 12, 21, 27];
+  const unavailable: number[] = [];
+  const limited: number[] = [];
   const weekdays =
     language === "EN"
       ? ["M", "T", "W", "T", "F", "S", "S"]
@@ -5377,10 +5718,14 @@ function AvailabilityCalendar({
     return date;
   }, []);
   const lastBookableDay = useMemo(() => {
+    if (bookingMonths > 0) {
+      const lastDayOfTargetMonth = new Date(today.getFullYear(), today.getMonth() + bookingMonths + 1, 0).getDate();
+      return new Date(today.getFullYear(), today.getMonth() + bookingMonths, Math.min(today.getDate(), lastDayOfTargetMonth));
+    }
     const date = new Date(today);
     date.setDate(date.getDate() + 28);
     return date;
-  }, [today]);
+  }, [today, bookingMonths]);
   const [visibleMonth, setVisibleMonth] = useState(() => {
     const date = dateFromKey(selected);
     return new Date(date.getFullYear(), date.getMonth(), 1);
@@ -5440,9 +5785,9 @@ function AvailabilityCalendar({
             <Text style={styles.calendarSub}>
               {tr(
                 language,
-                "Book from today up to 4 weeks ahead",
-                "可预约今天起未来4周",
-                "可預約今天起未來4週",
+                bookingMonths > 0 ? "Book up to 2 months ahead" : "Book from today up to 4 weeks ahead",
+                bookingMonths > 0 ? "可预约未来2个月" : "可预约今天起未来4周",
+                bookingMonths > 0 ? "可預約未來2個月" : "可預約今天起未來4週",
               )}
             </Text>
           )}
@@ -5491,7 +5836,7 @@ function AvailabilityCalendar({
           const key = dateKey(candidate);
           const outsideWindow =
             candidate < today || candidate > lastBookableDay;
-          const blocked = outsideWindow || unavailable.includes(day);
+          const blocked = outsideWindow || unavailable.includes(day) || !!isUnavailable?.(key);
           const isLimited = !outsideWindow && limited.includes(day);
           const isSelected = selected === key;
           return (
@@ -5740,35 +6085,41 @@ function VisitDateDropdown({
   );
 }
 
-function CleaningServiceForm({ language }: { language: Language }) {
+function CleaningServiceForm({ language, onCheckout, isUnavailable }: { language: Language; onCheckout: (order: ServiceCheckoutOrder) => void; isUnavailable?: (dayKey: string) => boolean }) {
   const isEnglish = language === "EN";
   const [cleanType, setCleanType] = useState<
-    "Regular" | "Deep" | "End of tenancy" | "Custom"
+    "Regular" | "Deep" | "End of tenancy" | "Shared areas"
   >("Regular");
   const [propertyType, setPropertyType] = useState("Student flat / apartment");
+  const [propertySize, setPropertySize] = useState("");
   const [bedrooms, setBedrooms] = useState(1);
   const [bathrooms, setBathrooms] = useState(1);
   const [kitchens, setKitchens] = useState(1);
   const [livingRooms, setLivingRooms] = useState(1);
   const [selectedDay, setSelectedDay] = useState(() => bookingDateFromToday(7));
+  const [address, setAddress] = useState("");
   const [timeSlot, setTimeSlot] = useState("09:00–12:00");
   const [parking, setParking] = useState("Free parking available");
   const [parkingFee, setParkingFee] = useState("£0");
   const [pets, setPets] = useState("No pets");
+  const [cleaningInstructions, setCleaningInstructions] = useState("");
   const [photos, setPhotos] = useState<string[]>([]);
   const cleanTypes = [
     { id: "Regular", icon: "calendar-outline" },
     { id: "Deep", icon: "water-outline" },
     { id: "End of tenancy", icon: "key-outline" },
-    { id: "Custom", icon: "options-outline" },
+    { id: "Shared areas", icon: "people-outline" },
   ] as const;
   const labels = isEnglish
     ? {
         title: "Cleaning Services",
         subtitle: "A cleaner space. A brighter student life.",
         service: "Choose your clean",
+        sharedScope:
+          "Shared kitchens, bathrooms and living areas only. Bedrooms are not included.",
         property: "Property type",
         layout: "Property layout",
+        sharedLayout: "Shared areas to clean",
         bedrooms: "Bedrooms",
         bathrooms: "Bathrooms",
         kitchens: "Kitchens",
@@ -5796,7 +6147,7 @@ function CleaningServiceForm({ language }: { language: Language }) {
         regular: "Regular",
         deep: "Deep clean",
         tenancy: "End of tenancy",
-        custom: "Custom clean",
+        shared: "Shared areas",
       }
     : {
         title: language === "简体" ? "保洁服务" : "清潔服務",
@@ -5805,8 +6156,13 @@ function CleaningServiceForm({ language }: { language: Language }) {
             ? "洁净空间，留学生活更美好。"
             : "潔淨空間，留學生活更美好。",
         service: language === "简体" ? "选择清洁类型" : "選擇清潔類型",
+        sharedScope:
+          language === "简体"
+            ? "仅清洁共用厨房、浴室和客厅，不包括卧室。"
+            : "僅清潔共用廚房、浴室和客廳，不包括睡房。",
         property: language === "简体" ? "房屋类型" : "房屋類型",
         layout: language === "简体" ? "房屋布局" : "房屋佈局",
+        sharedLayout: language === "简体" ? "需要清洁的共用区域" : "需要清潔的共用區域",
         bedrooms: language === "简体" ? "卧室" : "睡房",
         bathrooms: language === "简体" ? "浴室" : "浴室",
         kitchens: language === "简体" ? "厨房" : "廚房",
@@ -5843,7 +6199,7 @@ function CleaningServiceForm({ language }: { language: Language }) {
         regular: language === "简体" ? "日常清洁" : "日常清潔",
         deep: language === "简体" ? "深度清洁" : "深度清潔",
         tenancy: language === "简体" ? "退租清洁" : "退租清潔",
-        custom: language === "简体" ? "自定义" : "自訂",
+        shared: language === "简体" ? "共用区域" : "共用區域",
       };
   const propertyLabel = (value: string) =>
     ({
@@ -5906,7 +6262,10 @@ function CleaningServiceForm({ language }: { language: Language }) {
         ? labels.deep
         : cleanType === "End of tenancy"
           ? labels.tenancy
-          : labels.custom;
+          : labels.shared;
+  const cleaningEstimate = Math.round((cleanType === "Regular" ? 48 : cleanType === "Deep" ? 85 : cleanType === "End of tenancy" ? 125 : 52) +
+    (cleanType === "Shared areas" ? 0 : Math.max(0, bedrooms - 1) * 12) +
+    Math.max(0, bathrooms - 1) * 10 + Math.max(0, kitchens - 1) * 9 + Math.max(0, livingRooms - 1) * 8);
   return (
     <View style={styles.formCard}>
       <View style={styles.formHero}>
@@ -5928,7 +6287,7 @@ function CleaningServiceForm({ language }: { language: Language }) {
                 ? labels.deep
                 : item.id === "End of tenancy"
                   ? labels.tenancy
-                  : labels.custom;
+                : labels.shared;
           return (
             <Pressable
               key={item.id}
@@ -5955,6 +6314,9 @@ function CleaningServiceForm({ language }: { language: Language }) {
           );
         })}
       </View>
+      {cleanType === "Shared areas" && (
+        <Text style={styles.cleanScopeHint}>{labels.sharedScope}</Text>
+      )}
       <SelectField
         label={labels.property}
         value={propertyType}
@@ -5967,13 +6329,18 @@ function CleaningServiceForm({ language }: { language: Language }) {
         onChange={setPropertyType}
         formatOption={propertyLabel}
       />
-      <Text style={styles.formSectionTitle}>{labels.layout}</Text>
+      <View style={styles.field}><Text style={styles.fieldLabel}>{tr(language, "Approximate property size (m², optional)", "房屋面积（平方米，可选）", "單位面積（平方米，可選）")}</Text><TextInput value={propertySize} onChangeText={setPropertySize} keyboardType="numeric" placeholder={tr(language, "e.g. 45", "例如：45", "例如：45")} placeholderTextColor="#A1ADBE" /></View>
+      <Text style={styles.formSectionTitle}>
+        {cleanType === "Shared areas" ? labels.sharedLayout : labels.layout}
+      </Text>
       <View style={styles.counterCard}>
-        <CounterRow
-          label={labels.bedrooms}
-          value={bedrooms}
-          onChange={setBedrooms}
-        />
+        {cleanType !== "Shared areas" && (
+          <CounterRow
+            label={labels.bedrooms}
+            value={bedrooms}
+            onChange={setBedrooms}
+          />
+        )}
         <CounterRow
           label={labels.bathrooms}
           value={bathrooms}
@@ -5995,18 +6362,23 @@ function CleaningServiceForm({ language }: { language: Language }) {
         selected={selectedDay}
         onSelect={setSelectedDay}
         language={language}
+        bookingMonths={2}
+        isUnavailable={isUnavailable}
       />
       <SelectField
         label={labels.time}
         value={timeSlot}
-        options={["09:00–12:00", "12:00–15:00", "15:00–18:00"]}
+        options={cleaningArrivalWindows}
         onChange={setTimeSlot}
+        schedule
       />
       <View style={styles.field}>
         <Text style={styles.fieldLabel}>{labels.address}</Text>
         <TextInput
           placeholder={labels.addressHint}
           placeholderTextColor="#A1ADBE"
+          value={address}
+          onChangeText={setAddress}
         />
       </View>
       <SelectField
@@ -6044,6 +6416,8 @@ function CleaningServiceForm({ language }: { language: Language }) {
         <TextInput
           multiline
           numberOfLines={5}
+          value={cleaningInstructions}
+          onChangeText={setCleaningInstructions}
           placeholder={labels.instructionsHint}
           placeholderTextColor="#A1ADBE"
           style={styles.textAreaInput}
@@ -6082,7 +6456,9 @@ function CleaningServiceForm({ language }: { language: Language }) {
       <View style={styles.cleanSummary}>
         <Ionicons name="document-text-outline" size={20} color={palette.blue} />
         <Text style={styles.cleanSummaryText}>
-          {cleanName} · {bedrooms} {labels.bedrooms.toLowerCase()} · {bathrooms}{" "}
+          {cleanName} · {cleanType !== "Shared areas" && (
+            <>{bedrooms} {labels.bedrooms.toLowerCase()} · </>
+          )}{bathrooms}{" "}
           {labels.bathrooms.toLowerCase()} · {kitchens}{" "}
           {labels.kitchens.toLowerCase()} · {livingRooms}{" "}
           {labels.livingRooms.toLowerCase()} ·{" "}
@@ -6091,15 +6467,39 @@ function CleaningServiceForm({ language }: { language: Language }) {
       </View>
       <Pressable
         style={styles.primaryButton}
-        onPress={() => Alert.alert(labels.received, labels.receivedBody)}
+        onPress={() => onCheckout({
+          service: "cleaning",
+          title: labels.title,
+          details: `${cleanName} · ${address.trim() || tr(language, "Address to confirm", "地址待确认", "地址待確認")}`,
+          when: `${formatBookingDate(selectedDay, language)} · ${timeSlot}`,
+          total: cleaningEstimate,
+          dueNow: Math.round(cleaningEstimate * 25) / 100,
+          note: tr(language, "25% booking deposit. This estimate may change after the property details are confirmed. Cancellation deductions should reflect actual loss.", "25%预订订金。房屋详情确认后估价可能调整。取消扣款应反映实际损失。", "25%預訂訂金。物業詳情確認後估價可能調整。取消扣款應反映實際損失。"),
+          bookingDate: formatStaffBookingDate(selectedDay),
+          bookingTime: timeSlot,
+          bookingAddress: address.trim(),
+          intake: { fields: [
+            { label: "Cleaning type", value: cleanName },
+            { label: "Property type", value: propertyType },
+            { label: "Approximate size", value: propertySize.trim() ? `${propertySize.trim()} m²` : "Not provided" },
+            { label: "Bedrooms", value: cleanType === "Shared areas" ? "Not included" : String(bedrooms) },
+            { label: "Bathrooms", value: String(bathrooms) },
+            { label: "Kitchens", value: String(kitchens) },
+            { label: "Living rooms", value: String(livingRooms) },
+            { label: "Pets", value: pets },
+            { label: "Parking", value: parking },
+            { label: "Parking fee", value: parking === "Free parking available" ? "£0" : parkingFee },
+            { label: "Special instructions", value: cleaningInstructions.trim() || "None provided" },
+          ], photos: [...photos] },
+        })}
       >
-        <Text style={styles.primaryButtonText}>{labels.quote}</Text>
+        <Text style={styles.primaryButtonText}>{tr(language, "Review estimate & payment", "查看估价并付款", "查看估價並付款")}</Text>
       </Pressable>
     </View>
   );
 }
 
-function MovingServiceForm({ language }: { language: Language }) {
+function MovingServiceForm({ language, onCheckout, isUnavailable }: { language: Language; onCheckout: (order: ServiceCheckoutOrder) => void; isUnavailable?: (dayKey: string) => boolean }) {
   const [fromFloor, setFromFloor] = useState("Ground floor");
   const [toFloor, setToFloor] = useState("Ground floor");
   const [fromAccess, setFromAccess] = useState("Lift available");
@@ -6117,8 +6517,11 @@ function MovingServiceForm({ language }: { language: Language }) {
   const [customItems, setCustomItems] = useState(0);
   const [crew, setCrew] = useState<"one" | "two">("one");
   const [selectedDay, setSelectedDay] = useState(() => bookingDateFromToday(7));
+  const [fromAddress, setFromAddress] = useState("");
+  const [toAddress, setToAddress] = useState("");
   const [timeSlot, setTimeSlot] = useState("09:00–12:00");
   const [photos, setPhotos] = useState<string[]>([]);
+  const [movingInstructions, setMovingInstructions] = useState("");
   const floors = [
     "Ground floor",
     "1st floor",
@@ -6346,6 +6749,7 @@ function MovingServiceForm({ language }: { language: Language }) {
     });
     if (uris.length) setPhotos([...photos, ...uris].slice(0, 6));
   };
+  const movingEstimate = Math.round(75 + (crew === "two" ? 45 : 0) + smallBoxes * 4 + largeBoxes * 7 + suitcases * 6 + sofas * 28 + beds * 30 + wardrobes * 26 + tablesChairs * 15 + appliances * 24 + customItems * 12);
   return (
     <View style={styles.formCard}>
       <View style={styles.formHero}>
@@ -6367,6 +6771,8 @@ function MovingServiceForm({ language }: { language: Language }) {
         <TextInput
           placeholder={labels.addressHint}
           placeholderTextColor="#A1ADBE"
+          value={fromAddress}
+          onChangeText={setFromAddress}
         />
       </View>
       <View style={styles.formTwoColumns}>
@@ -6402,6 +6808,8 @@ function MovingServiceForm({ language }: { language: Language }) {
         <TextInput
           placeholder={labels.addressHint}
           placeholderTextColor="#A1ADBE"
+          value={toAddress}
+          onChangeText={setToAddress}
         />
       </View>
       <View style={styles.formTwoColumns}>
@@ -6640,12 +7048,15 @@ function MovingServiceForm({ language }: { language: Language }) {
         onSelect={setSelectedDay}
         language={language}
         compact
+        bookingMonths={2}
+        isUnavailable={isUnavailable}
       />
       <SelectField
         label={labels.time}
         value={timeSlot}
-        options={["09:00–12:00", "12:00–15:00", "15:00–18:00", "18:00–21:00"]}
+        options={movingPickupWindows}
         onChange={setTimeSlot}
+        schedule
       />
       <Text style={styles.formSectionTitle}>{labels.photos}</Text>
       <Text style={styles.photoHelp}>{labels.photoHint}</Text>
@@ -6681,6 +7092,8 @@ function MovingServiceForm({ language }: { language: Language }) {
         <TextInput
           multiline
           numberOfLines={5}
+          value={movingInstructions}
+          onChangeText={setMovingInstructions}
           placeholder={labels.detailsHint}
           placeholderTextColor="#A1ADBE"
           style={styles.textAreaInput}
@@ -6698,24 +7111,183 @@ function MovingServiceForm({ language }: { language: Language }) {
       </View>
       <Pressable
         style={styles.primaryButton}
-        onPress={() => Alert.alert(labels.received, labels.receivedBody)}
+        onPress={() => onCheckout({
+          service: "moving",
+          title: labels.title,
+          details: `${fromAddress.trim() || tr(language, "Pickup address to confirm", "搬出地址待确认", "搬出地址待確認")} → ${toAddress.trim() || tr(language, "Drop-off address to confirm", "搬入地址待确认", "搬入地址待確認")} · ${crew === "one" ? labels.one : labels.two}`,
+          when: `${formatBookingDate(selectedDay, language)} · ${timeSlot}`,
+          total: movingEstimate,
+          dueNow: Math.round(movingEstimate * 25) / 100,
+          note: tr(language, "25% booking deposit. This estimate may change after route, access and inventory are confirmed. Cancellation deductions should reflect actual loss.", "25%预订订金。路线、通行条件和物品确认后估价可能调整。取消扣款应反映实际损失。", "25%預訂訂金。路線、通行條件及物品確認後估價可能調整。取消扣款應反映實際損失。"),
+          bookingDate: formatStaffBookingDate(selectedDay),
+          bookingTime: timeSlot,
+          bookingAddress: `${fromAddress.trim()} → ${toAddress.trim()}`,
+          intake: { fields: [
+            { label: "Pickup address", value: fromAddress.trim() || "Not provided" },
+            { label: "Drop-off address", value: toAddress.trim() || "Not provided" },
+            { label: "Pickup floor & access", value: `${fromFloor} · ${fromAccess}` },
+            { label: "Drop-off floor & access", value: `${toFloor} · ${toAccess}` },
+            { label: "Pickup parking", value: fromParking },
+            { label: "Drop-off parking", value: toParking },
+            { label: "Inventory", value: `${smallBoxes} small boxes · ${largeBoxes} large boxes · ${suitcases} suitcases · ${sofas} sofas · ${beds} beds · ${wardrobes} wardrobes · ${tablesChairs} tables/chairs · ${appliances} appliances · ${customItems} other items` },
+            { label: "Crew", value: crew === "one" ? "1 mover" : "2 movers" },
+            { label: "Special instructions", value: movingInstructions.trim() || "None provided" },
+          ], photos: [...photos] },
+        })}
       >
-        <Text style={styles.primaryButtonText}>{labels.quote}</Text>
+        <Text style={styles.primaryButtonText}>{tr(language, "Review estimate & payment", "查看估价并付款", "查看估價並付款")}</Text>
       </Pressable>
     </View>
   );
 }
 
-function ServiceForm({ type, language }: { type: string; language: Language }) {
+function ServiceForm({ type, language, onCheckout, isUnavailable }: { type: string; language: Language; onCheckout: (order: ServiceCheckoutOrder) => void; isUnavailable?: (dayKey: string) => boolean }) {
   if (type === "Airport transfer")
-    return <AirportTransferForm language={language} />;
-  if (type === "Moving") return <MovingServiceForm language={language} />;
-  return <CleaningServiceForm language={language} />;
+    return <AirportTransferForm language={language} onCheckout={onCheckout} isUnavailable={isUnavailable} />;
+  if (type === "Moving") return <MovingServiceForm language={language} onCheckout={onCheckout} isUnavailable={isUnavailable} />;
+  return <CleaningServiceForm language={language} onCheckout={onCheckout} isUnavailable={isUnavailable} />;
 }
 
-function FoodForum({ language }: { language: Language }) {
+type PlaceReviewCriterion = "taste" | "atmosphere" | "price" | "service" | "overall";
+type PlaceReview = {
+  id: string;
+  author: string;
+  placeName: string;
+  ratings: Record<PlaceReviewCriterion, number>;
+  average: number;
+  text: string;
+  friendsOnly: boolean;
+};
+type RestaurantPublicProfile = { name: string; cuisine: string; address: string; hours: string; website: string; phone: string; priceLevel: string; introduction: string; coverUri: string | null; menuItems: string[]; menuFile: { name: string; uri: string; mimeType?: string } | null };
+const defaultRestaurantPublicProfile: RestaurantPublicProfile = { name: "Haidilao Hot Pot", cuisine: "Chinese · Hot pot", address: "Piccadilly Circus, London", hours: "", website: "", phone: "", priceLevel: "£££", introduction: "", coverUri: null, menuItems: ["Tomato hot pot", "Signature soup base", "Fresh vegetables"], menuFile: null };
+type VisitedPlace = { name: string; date: string };
+type ReviewPageEntry = { author: string; average: number; ratings: Record<PlaceReviewCriterion, number>; text: string; presetChinese?: string; presetEnglish?: string };
+
+const reviewTranslationCache = new Map<string, string>();
+
+function reviewTextLanguage(value: string): "en" | "zh-CN" | "zh-TW" {
+  if (!/[\u3400-\u9fff]/.test(value)) return "en";
+  return /[體臺學會說這麼來時裡們點後國聲關開氣價與們]/.test(value) ? "zh-TW" : "zh-CN";
+}
+
+async function translateReviewText(value: string, target: Language): Promise<string> {
+  const source = reviewTextLanguage(value);
+  const targetCode = target === "EN" ? "en" : target === "简体" ? "zh-CN" : "zh-TW";
+  if (source === targetCode) return value;
+  const key = `${source}|${targetCode}|${value}`;
+  const cached = reviewTranslationCache.get(key);
+  if (cached) return cached;
+  const characters = Array.from(value);
+  const chunks: string[] = [];
+  for (let index = 0; index < characters.length; index += 120) chunks.push(characters.slice(index, index + 120).join(""));
+  const translatedChunks: string[] = [];
+  for (const chunk of chunks) {
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(chunk)}&langpair=${encodeURIComponent(`${source}|${targetCode}`)}`;
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Translation request failed");
+    const payload = await response.json();
+    const translation = payload?.responseData?.translatedText;
+    if (payload?.responseStatus !== 200 || typeof translation !== "string" || !translation.trim()) throw new Error("Translation unavailable");
+    translatedChunks.push(translation);
+  }
+  const translated = translatedChunks.join("");
+  reviewTranslationCache.set(key, translated);
+  return translated;
+}
+
+function TranslatedReviewText({ original, language, presetChinese, presetEnglish }: { original: string; language: Language; presetChinese?: string; presetEnglish?: string }) {
+  const [translatedText, setTranslatedText] = useState<string | null>(null);
+  const [showTranslation, setShowTranslation] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+  const source = reviewTextLanguage(original);
+  const target = language === "EN" ? "en" : language === "简体" ? "zh-CN" : "zh-TW";
+  const translationNeeded = source !== target;
+  const onTranslate = async () => {
+    if (showTranslation) { setShowTranslation(false); return; }
+    if (presetChinese && language !== "EN") { setTranslatedText(presetChinese); setShowTranslation(true); return; }
+    if (presetEnglish && language === "EN") { setTranslatedText(presetEnglish); setShowTranslation(true); return; }
+    if (translatedText) { setShowTranslation(true); return; }
+    setLoading(true);
+    setError(false);
+    try {
+      const result = await translateReviewText(original, language);
+      setTranslatedText(result);
+      setShowTranslation(true);
+    } catch {
+      setError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+  return (
+    <View>
+      <Text style={styles.quote}>{showTranslation && translatedText ? translatedText : original}</Text>
+      {translationNeeded && (
+        <Pressable accessibilityRole="button" accessibilityLabel={showTranslation ? tr(language, "Show original", "显示原文", "顯示原文") : tr(language, "Translate", "翻译", "翻譯")} style={styles.translateButton} disabled={loading} onPress={onTranslate}>
+          <Ionicons name="language-outline" size={15} color={palette.blue} />
+          <Text style={styles.translateText}>{loading ? tr(language, "Translating…", "翻译中…", "翻譯中…") : showTranslation ? tr(language, "Show original", "显示原文", "顯示原文") : tr(language, "Translate", "翻译", "翻譯")}</Text>
+        </Pressable>
+      )}
+      {error && <Text style={styles.reviewTranslationError}>{tr(language, "Translation unavailable right now. Please try again.", "暂时无法翻译，请重试。", "暫時無法翻譯，請重試。")}</Text>}
+    </View>
+  );
+}
+
+function RestaurantBookingSheet({ place, language, onClose }: { place: (typeof restaurants)[number] | null; language: Language; onClose: () => void }) {
+  const [date, setDate] = useState(() => bookingDateFromToday(7));
+  const [time, setTime] = useState("19:00");
+  const [guests, setGuests] = useState(2);
+  const [name, setName] = useState("");
+  const [contact, setContact] = useState("");
+  const [notes, setNotes] = useState("");
+  const [previewed, setPreviewed] = useState(false);
+  return (
+    <Sheet visible={!!place} title={tr(language, "Book via UniMate", "通过UniMate预订", "透過UniMate預訂")} onClose={onClose}>
+      {place && <ScrollView contentContainerStyle={styles.foodReviewBody} showsVerticalScrollIndicator={false}>
+        {previewed ? (
+          <View style={styles.ticketCompletePage}>
+            <View style={styles.ticketCompleteIcon}><Ionicons name="calendar-outline" size={36} color="white" /></View>
+            <Text style={styles.ticketCompleteTitle}>{tr(language, "Booking request preview", "预订请求预览", "預訂請求預覽")}</Text>
+            <Text style={styles.ticketCompleteText}>{place.name} · {formatBookingDate(date, language)} · {time} · {guests} {tr(language, "guests", "位", "位")}</Text>
+            <Text style={styles.reviewPageDemoNote}>{tr(language, "No request was sent to the restaurant and no table is reserved. Live availability, confirmation and partner offers require a restaurant agreement and booking integration.", "请求未发送给餐厅，餐位未被预留。实时空位、确认和合作优惠需餐厅协议及预订系统对接。", "請求未傳送給餐廳，座位未被預留。即時空位、確認及合作優惠需餐廳協議及預訂系統對接。")}</Text>
+            <Pressable style={styles.primaryButton} onPress={onClose}><Text style={styles.primaryButtonText}>{tr(language, "Done", "完成", "完成")}</Text></Pressable>
+          </View>
+        ) : (
+          <>
+            <Text style={styles.foodDetailTitle}>{place.name}</Text>
+            <Text style={styles.foodDetailMeta}>{place.category} · {place.area}</Text>
+            <View style={styles.movingNotice}><Ionicons name="information-circle-outline" size={19} color={palette.blue} /><Text style={styles.movingNoticeText}>{tr(language, "Choose a preferred time. This prototype cannot check live tables or confirm a booking yet.", "请选择意向时间。此原型尚不能查询实时餐位或确认预订。", "請選擇意向時間。此原型尚不能查詢即時座位或確認預訂。")}</Text></View>
+            <EventDateField language={language} label={tr(language, "Preferred date", "意向日期", "意向日期")} value={date} onChange={setDate} />
+            <SelectField label={tr(language, "Preferred time", "意向时间", "意向時間")} value={time} options={["12:00", "12:30", "13:00", "13:30", "18:00", "18:30", "19:00", "19:30", "20:00", "20:30"]} onChange={setTime} schedule />
+            <View style={styles.counterCard}><CounterRow label={tr(language, "Guests", "人数", "人數")} value={guests} onChange={setGuests} /></View>
+            <View style={styles.field}><Text style={styles.fieldLabel}>{tr(language, "Your name", "姓名", "姓名")}</Text><TextInput value={name} onChangeText={setName} placeholder={tr(language, "Name for the table", "预订姓名", "預訂姓名")} placeholderTextColor="#A1ADBE" /></View>
+            <View style={styles.field}><Text style={styles.fieldLabel}>{tr(language, "Email or phone", "邮箱或电话", "電郵或電話")}</Text><TextInput value={contact} onChangeText={setContact} placeholder={tr(language, "Contact for confirmation", "用于确认的联系方式", "用於確認的聯絡方式")} placeholderTextColor="#A1ADBE" /></View>
+            <View style={[styles.field, styles.textAreaField]}><Text style={styles.fieldLabel}>{tr(language, "Requests (optional)", "特殊要求（可选）", "特別要求（可選）")}</Text><TextInput value={notes} onChangeText={setNotes} multiline style={styles.textAreaInput} placeholder={tr(language, "Accessibility, occasion or dietary needs", "无障碍、场合或饮食需求", "無障礙、場合或飲食需要")} placeholderTextColor="#A1ADBE" /></View>
+            <View style={styles.secureNote}><Ionicons name="pricetag-outline" size={18} color={palette.blue} /><Text style={styles.secureNoteText}>{tr(language, "Partner discounts will be shown only when a restaurant has confirmed an offer. No discount is currently available for this prototype listing.", "仅在餐厅确认合作优惠后才会显示折扣。此预览商家目前没有优惠。", "只有餐廳確認合作優惠後才會顯示折扣。此預覽商戶目前沒有優惠。")}</Text></View>
+            <Pressable style={[styles.primaryButton, (!name.trim() || !contact.trim()) && { opacity: 0.45 }]} disabled={!name.trim() || !contact.trim()} onPress={() => setPreviewed(true)}><Text style={styles.primaryButtonText}>{tr(language, "Preview booking request", "预览预订请求", "預覽預訂請求")}</Text></Pressable>
+          </>
+        )}
+      </ScrollView>}
+    </Sheet>
+  );
+}
+
+const placeReviewCriteria: PlaceReviewCriterion[] = ["taste", "atmosphere", "price", "service", "overall"];
+const emptyPlaceReviewRatings = (): Record<PlaceReviewCriterion, number> => ({ taste: 0, atmosphere: 0, price: 0, service: 0, overall: 0 });
+
+function FoodForum({ language, visitedPlaces, setVisitedPlaces, submittedReviews, setSubmittedReviews, reviewerName, reviewReplies, restaurantProfile }: {
+  language: Language;
+  visitedPlaces: VisitedPlace[];
+  setVisitedPlaces: React.Dispatch<React.SetStateAction<VisitedPlace[]>>;
+  submittedReviews: PlaceReview[];
+  setSubmittedReviews: React.Dispatch<React.SetStateAction<PlaceReview[]>>;
+  reviewerName: string;
+  reviewReplies: Record<string, string>;
+  restaurantProfile: RestaurantPublicProfile;
+}) {
   const [mode, setMode] = useState<
-    "discover" | "trending" | "friends" | "saved"
+    "discover" | "trending" | "friends" | "saved" | "visited"
   >("discover");
   const [filter, setFilter] = useState("All");
   const [query, setQuery] = useState("");
@@ -6726,7 +7298,11 @@ function FoodForum({ language }: { language: Language }) {
   const [reviewPlace, setReviewPlace] = useState<
     (typeof restaurants)[number] | null
   >(null);
-  const [rating, setRating] = useState(5);
+  const [reviewRatings, setReviewRatings] = useState(emptyPlaceReviewRatings);
+  const [reviewsPlace, setReviewsPlace] = useState<(typeof restaurants)[number] | null>(null);
+  const [bookingPlace, setBookingPlace] = useState<(typeof restaurants)[number] | null>(null);
+  const [reviewCategoryFilter, setReviewCategoryFilter] = useState<PlaceReviewCriterion | "all">("all");
+  const [reviewStarFilter, setReviewStarFilter] = useState(0);
   const [sentiment, setSentiment] = useState<
     "Loved it" | "It was fine" | "Not for me"
   >("Loved it");
@@ -6736,11 +7312,51 @@ function FoodForum({ language }: { language: Language }) {
   const [reviewPhotos, setReviewPhotos] = useState<string[]>([]);
   const [menuPhotos, setMenuPhotos] = useState<string[]>([]);
   const [friendsOnly, setFriendsOnly] = useState(false);
-  const [translated, setTranslated] = useState(false);
   const [showAllLists, setShowAllLists] = useState(false);
+  const reviewAverage = placeReviewCriteria.reduce((sum, criterion) => sum + reviewRatings[criterion], 0) / placeReviewCriteria.length;
+  const reviewReady = placeReviewCriteria.every((criterion) => reviewRatings[criterion] > 0);
+  const displayRestaurants = restaurants.map((item, index) => index === 0 ? { ...item, name: restaurantProfile.name, category: restaurantProfile.cuisine, area: restaurantProfile.address, price: restaurantProfile.priceLevel, image: restaurantProfile.coverUri || item.image } : item);
+  const placeKey = (item: (typeof restaurants)[number]) => item.name === restaurantProfile.name ? restaurants[0].name : item.name;
+  const placeRating = (item: (typeof restaurants)[number]) => {
+    const newReviews = submittedReviews.filter((review) => review.placeName === placeKey(item));
+    if (!newReviews.length) return item.rating;
+    const priorCount = Number(item.reviews);
+    const total = Number(item.rating) * priorCount + newReviews.reduce((sum, review) => sum + review.average, 0);
+    return (total / (priorCount + newReviews.length)).toFixed(2);
+  };
+  const placeReviewCount = (item: (typeof restaurants)[number]) =>
+    Number(item.reviews) + submittedReviews.filter((review) => review.placeName === placeKey(item)).length;
+  const sampleReviews = (item: (typeof restaurants)[number]) => [
+    { author: "@londonlatte", average: 5, ratings: { taste: 5, atmosphere: 5, price: 5, service: 5, overall: 5 }, text: item.quote, presetChinese: item.translation },
+    { author: "@danielp", average: 4.8, ratings: { taste: 5, atmosphere: 5, price: 4, service: 5, overall: 5 }, text: "Great for a relaxed evening with friends.", presetChinese: "很适合和朋友度过一个轻松的晚上。" },
+    { author: "@mei_in_london", average: 4.2, ratings: { taste: 5, atmosphere: 4, price: 4, service: 4, overall: 4 }, text: "味道不错，和朋友一起去很开心。", presetEnglish: "Tasty food and a lovely place to visit with friends." },
+    { author: "@aishaexplores", average: 4, ratings: { taste: 4, atmosphere: 4, price: 4, service: 4, overall: 4 }, text: "Friendly staff and a welcoming atmosphere.", presetChinese: "员工友好，氛围也很温馨。" },
+    { author: "@priyapicks", average: 3.4, ratings: { taste: 3, atmosphere: 4, price: 3, service: 4, overall: 3 }, text: "A nice visit, though I hoped for a little better value.", presetChinese: "体验还不错，但我希望性价比能更高一些。" },
+  ] as ReviewPageEntry[];
+  const openReviews = (item: (typeof restaurants)[number]) => {
+    setReviewCategoryFilter("all");
+    setReviewStarFilter(0);
+    setReviewsPlace(item);
+  };
+  const reviewPageEntries: ReviewPageEntry[] = reviewsPlace ? [
+    ...sampleReviews(reviewsPlace),
+    ...submittedReviews.filter((review) => review.placeName === placeKey(reviewsPlace)).map((review) => ({
+      author: tr(language, "You", "你", "你"),
+      average: review.average,
+      ratings: review.ratings,
+      text: review.text || tr(language, "Rated across five categories", "已按五项标准评分", "已按五項標準評分"),
+    })),
+  ] : [];
+  const reviewPageScore = (review: (typeof reviewPageEntries)[number]) => reviewCategoryFilter === "all" ? review.average : review.ratings[reviewCategoryFilter];
+  const filteredReviewEntries = reviewPageEntries.filter((review) => reviewStarFilter === 0 || Math.round(reviewPageScore(review)) === reviewStarFilter);
+  const visibleReviewAverage = reviewPageEntries.length ? reviewPageEntries.reduce((sum, review) => sum + reviewPageScore(review), 0) / reviewPageEntries.length : 0;
   const filters = [
     "All",
     "Top rated",
+    "£",
+    "££",
+    "£££",
+    "Activities",
     "Italian",
     "Chinese",
     "Thai",
@@ -6754,21 +7370,22 @@ function FoodForum({ language }: { language: Language }) {
     "Birthday",
     "Family",
     "Date night",
-    "Activities",
   ];
-  const filtered = restaurants.filter((item) => {
+  const filtered = displayRestaurants.filter((item) => {
     const searchMatch =
       `${item.name} ${item.area} ${item.category} ${item.occasion} ${item.dish}`
         .toLowerCase()
         .includes(query.toLowerCase());
     const filterMatch =
       filter === "All" ||
-      (filter === "Top rated" && Number(item.rating) >= 4.7) ||
+      (filter === "Top rated" && Number(placeRating(item)) >= 4.7) ||
       (filter === "Under £20" && item.price === "£") ||
+      (["£", "££", "£££"].includes(filter) && item.price === filter) ||
       (filter === "Activities" && item.category === "Activity") ||
       item.category === filter ||
       item.occasion === filter;
-    const modeMatch = mode !== "saved" || saved.includes(item.name);
+    const modeMatch = (mode !== "saved" || saved.includes(item.name)) &&
+      (mode !== "visited" || visitedPlaces.some((visit) => visit.name === item.name));
     return searchMatch && filterMatch && modeMatch;
   });
   const toggleSaved = (name: string) =>
@@ -6777,6 +7394,8 @@ function FoodForum({ language }: { language: Language }) {
         ? saved.filter((item) => item !== name)
         : [...saved, name],
     );
+  const recordVisit = (name: string, date: string) =>
+    setVisitedPlaces((current) => [{ name, date }, ...current.filter((visit) => visit.name !== name)]);
   const pickReviewPhotos = async (
     type: "review" | "menu",
     source?: PhotoSource,
@@ -6799,11 +7418,13 @@ function FoodForum({ language }: { language: Language }) {
     }
   };
   const openReview = (place = selected || restaurants[0]) => {
+    setReviewRatings(emptyPlaceReviewRatings());
     setReviewPlace(place);
     setSelected(null);
   };
   const closeReview = () => {
     setReviewPlace(null);
+    setReviewRatings(emptyPlaceReviewRatings());
     setReviewText("");
     setFavouriteDish("");
     setReviewPhotos([]);
@@ -6829,6 +7450,11 @@ function FoodForum({ language }: { language: Language }) {
       id: "saved",
       icon: "bookmark-outline",
       label: tr(language, "Saved", "已收藏", "已收藏"),
+    },
+    {
+      id: "visited",
+      icon: "time-outline",
+      label: tr(language, "Visited", "去过", "去過"),
     },
   ] as const;
   const featuredLists = [
@@ -6869,6 +7495,24 @@ function FoodForum({ language }: { language: Language }) {
       filter: "Top rated",
     },
   ];
+  const renderFeaturedList = (item: (typeof featuredLists)[number], expanded: boolean) => (
+    <Pressable
+      key={item.title}
+      style={[styles.featuredListCard, expanded && styles.featuredListCardExpanded]}
+      onPress={() => {
+        setFilter(item.filter);
+        setMode("discover");
+      }}
+    >
+      <Image source={{ uri: item.image }} style={styles.featuredListImage} />
+      <LinearGradient colors={["transparent", "rgba(3,20,50,.9)"]} style={styles.featuredListShade}>
+        <Text style={styles.featuredListTitle}>{item.title}</Text>
+        <Text style={styles.featuredListMeta}>
+          {tr(language, `You've tried ${item.progress}`, `你已体验 ${item.progress}`, `你已體驗 ${item.progress}`)}
+        </Text>
+      </LinearGradient>
+    </Pressable>
+  );
   return (
     <>
       <ScrollView
@@ -6916,11 +7560,7 @@ function FoodForum({ language }: { language: Language }) {
             placeholderTextColor="#8B98AD"
           />
         </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.foodModeRow}
-        >
+        <SlidableCategories language={language} rowStyle={styles.foodModeRow}>
           {modeOptions.map((item) => (
             <Pressable
               key={item.id}
@@ -6945,13 +7585,8 @@ function FoodForum({ language }: { language: Language }) {
               </Text>
             </Pressable>
           ))}
-        </ScrollView>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.categoryScroller}
-          contentContainerStyle={styles.foodFilterRow}
-        >
+        </SlidableCategories>
+        <SlidableCategories language={language} containerStyle={styles.categoryScroller} rowStyle={styles.foodFilterRow}>
           {filters.map((item) => (
             <Pressable
               key={item}
@@ -6967,11 +7602,15 @@ function FoodForum({ language }: { language: Language }) {
                   filter === item && styles.categoryChipTextActive,
                 ]}
               >
-                {item === "All" ? tr(language, "All", "全部", "全部") : item}
+                {item === "All"
+                  ? tr(language, "All", "全部", "全部")
+                  : item === "Activities"
+                    ? tr(language, "Activities", "活动", "活動")
+                    : item}
               </Text>
             </Pressable>
           ))}
-        </ScrollView>
+        </SlidableCategories>
         <View style={styles.sectionHead}>
           <View>
             <Text style={styles.sectionTitle}>
@@ -7002,43 +7641,15 @@ function FoodForum({ language }: { language: Language }) {
             </Text>
           </Pressable>
         </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.featuredListRow}
-        >
-          {featuredLists
-            .slice(0, showAllLists ? featuredLists.length : 3)
-            .map((item) => (
-              <Pressable
-                key={item.title}
-                style={styles.featuredListCard}
-                onPress={() => {
-                  setFilter(item.filter);
-                  setMode("discover");
-                }}
-              >
-                <Image
-                  source={{ uri: item.image }}
-                  style={styles.featuredListImage}
-                />
-                <LinearGradient
-                  colors={["transparent", "rgba(3,20,50,.9)"]}
-                  style={styles.featuredListShade}
-                >
-                  <Text style={styles.featuredListTitle}>{item.title}</Text>
-                  <Text style={styles.featuredListMeta}>
-                    {tr(
-                      language,
-                      `You've tried ${item.progress}`,
-                      `你已体验 ${item.progress}`,
-                      `你已體驗 ${item.progress}`,
-                    )}
-                  </Text>
-                </LinearGradient>
-              </Pressable>
-            ))}
-        </ScrollView>
+        {showAllLists ? (
+          <View style={styles.featuredListExpanded}>
+            {featuredLists.map((item) => renderFeaturedList(item, true))}
+          </View>
+        ) : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.featuredListRow}>
+            {featuredLists.slice(0, 3).map((item) => renderFeaturedList(item, false))}
+          </ScrollView>
+        )}
         <View style={styles.sectionHead}>
           <View>
             <Text style={styles.sectionTitle}>
@@ -7049,6 +7660,8 @@ function FoodForum({ language }: { language: Language }) {
                     "好友喜欢的地方",
                     "好友喜歡的地方",
                   )
+                : mode === "visited"
+                  ? tr(language, "Your visit history", "你的到访记录", "你的到訪紀錄")
                 : mode === "saved"
                   ? tr(
                       language,
@@ -7066,7 +7679,9 @@ function FoodForum({ language }: { language: Language }) {
                     : tr(language, "Explore places", "探索地点", "探索地點")}
             </Text>
             <Text style={styles.foodSectionHint}>
-              {filtered.length} {tr(language, "matches", "个结果", "個結果")}
+              {mode === "visited"
+                ? tr(language, "Only places you record in UniMate appear here.", "仅显示你在优你伴记录的地点。", "只顯示你在優你伴記錄的地點。")
+                : `${filtered.length} ${tr(language, "matches", "个结果", "個結果")}`}
             </Text>
           </View>
         </View>
@@ -7076,14 +7691,13 @@ function FoodForum({ language }: { language: Language }) {
               style={styles.foodCard}
               key={item.name}
               onPress={() => {
-                setTranslated(false);
                 setSelected(item);
               }}
             >
               <Image source={{ uri: item.image }} style={styles.foodImage} />
               <View style={styles.rating}>
                 <Ionicons name="star" size={12} color="white" />
-                <Text style={styles.ratingText}>{item.rating}</Text>
+                <Text style={styles.ratingText}>{placeRating(item)}</Text>
               </View>
               <Pressable
                 accessibilityLabel={
@@ -7116,11 +7730,12 @@ function FoodForum({ language }: { language: Language }) {
                       {item.price}
                     </Text>
                   </View>
-                  <Text style={styles.reviewCount}>
-                    {item.reviews} {tr(language, "reviews", "条点评", "則點評")}
-                  </Text>
+                  <Pressable accessibilityRole="button" accessibilityLabel={`${placeReviewCount(item)} ${tr(language, "reviews", "条点评", "則點評")}`} onPress={(event) => { event.stopPropagation(); openReviews(item); }}>
+                    <Text style={styles.reviewCount}>{placeReviewCount(item)} {tr(language, "reviews", "条点评", "則點評")}</Text>
+                  </Pressable>
                 </View>
                 <Text style={styles.dish}>{item.dish}</Text>
+                {mode === "visited" && <Text style={styles.foodSectionHint}>{tr(language, "Visited", "到访", "到訪")} · {visitedPlaces.find((visit) => visit.name === item.name)?.date}</Text>}
                 <Text style={styles.quote}>
                   “{language === "EN" ? item.quote : item.translation}”
                 </Text>
@@ -7155,15 +7770,16 @@ function FoodForum({ language }: { language: Language }) {
           ))
         ) : (
           <View style={styles.marketEmpty}>
-            <Ionicons name="search-outline" size={36} color={palette.blue} />
+            <Ionicons name={mode === "visited" ? "time-outline" : "search-outline"} size={36} color={palette.blue} />
             <Text style={styles.marketEmptyTitle}>
-              {tr(
+              {mode === "visited" ? tr(language, "No visits recorded yet", "还没有到访记录", "還沒有到訪紀錄") : tr(
                 language,
                 "No matching places yet",
                 "暂无匹配地点",
                 "暫無匹配地點",
               )}
             </Text>
+            {mode === "visited" && <Text style={styles.formDesc}>{tr(language, "Open a place and add it to your history after visiting, or publish a review.", "到访后打开地点添加记录，或发布评价。", "到訪後打開地點加入紀錄，或發佈評價。")}</Text>}
           </View>
         )}
       </ScrollView>
@@ -7204,10 +7820,12 @@ function FoodForum({ language }: { language: Language }) {
               {selected.category} · {selected.area} · {selected.distance} ·{" "}
               {selected.price}
             </Text>
+            {selected.name === restaurantProfile.name && !!restaurantProfile.introduction.trim() && <Text style={[styles.publicBio, { marginTop: 10 }]}>{restaurantProfile.introduction}</Text>}
+            {selected.name === restaurantProfile.name && !!restaurantProfile.hours.trim() && <View style={[styles.workspaceNotice, { marginTop: 12 }]}><Ionicons name="time-outline" size={17} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{restaurantProfile.hours}</Text></View>}
             <View style={styles.placeActions}>
               <Pressable
                 style={styles.placeAction}
-                onPress={() => Linking.openURL("https://example.com")}
+                onPress={() => restaurantProfile.website && selected.name === restaurantProfile.name ? Linking.openURL(restaurantProfile.website).catch(() => Alert.alert(tr(language, "Could not open website", "无法打开网站", "無法開啟網站"))) : Alert.alert(tr(language, "Website unavailable", "网站暂不可用", "網站暫不可用"), tr(language, "No website has been added to this preview page.", "此预览主页尚未添加网站。", "此預覽主頁尚未加入網站。"))}
               >
                 <Ionicons name="globe-outline" size={18} color={palette.blue} />
                 <Text style={styles.placeActionText}>
@@ -7216,7 +7834,7 @@ function FoodForum({ language }: { language: Language }) {
               </Pressable>
               <Pressable
                 style={styles.placeAction}
-                onPress={() => Linking.openURL("tel:+442079460000")}
+                onPress={() => restaurantProfile.phone && selected.name === restaurantProfile.name ? Linking.openURL(`tel:${restaurantProfile.phone}`).catch(() => Alert.alert(tr(language, "Could not open phone", "无法拨打电话", "無法撥打電話"))) : Alert.alert(tr(language, "Phone unavailable", "电话暂不可用", "電話暫不可用"), tr(language, "No public phone has been added to this preview page.", "此预览主页尚未添加公开电话。", "此預覽主頁尚未加入公開電話。"))}
               >
                 <Ionicons name="call-outline" size={18} color={palette.blue} />
                 <Text style={styles.placeActionText}>
@@ -7227,7 +7845,7 @@ function FoodForum({ language }: { language: Language }) {
                 style={styles.placeAction}
                 onPress={() =>
                   Linking.openURL(
-                    `https://maps.apple.com/?q=${encodeURIComponent(`${selected.name}, ${selected.area}, London`)}`,
+                    `https://maps.apple.com/?q=${encodeURIComponent(`${selected.name}, ${selected.area}`)}`,
                   )
                 }
               >
@@ -7241,10 +7859,23 @@ function FoodForum({ language }: { language: Language }) {
                 </Text>
               </Pressable>
             </View>
+            <Pressable style={[styles.primaryButton, { marginTop: 15 }]} accessibilityRole="button" onPress={() => setBookingPlace(selected)}>
+              <Text style={styles.primaryButtonText}>{tr(language, "Book via UniMate", "通过UniMate预订", "透過UniMate預訂")}</Text>
+            </Pressable>
+            <Pressable style={styles.reviewCountAction} accessibilityRole="button" onPress={() => {
+              if (visitedPlaces.some((visit) => visit.name === selected.name)) {
+                setVisitedPlaces((current) => current.filter((visit) => visit.name !== selected.name));
+              } else recordVisit(selected.name, dateKey(new Date()));
+            }}>
+              <Ionicons name={visitedPlaces.some((visit) => visit.name === selected.name) ? "checkmark-circle" : "time-outline"} size={18} color={palette.blue} />
+              <Text style={[styles.reviewCountActionText, { flex: 1 }]}>{visitedPlaces.some((visit) => visit.name === selected.name)
+                ? tr(language, "In your visit history · Remove", "已在到访记录中 · 移除", "已在到訪紀錄中 · 移除")
+                : tr(language, "Add to my visit history", "添加到我的到访记录", "加入我的到訪紀錄")}</Text>
+            </Pressable>
             <View style={styles.scoreGrid}>
               <View style={styles.scoreCard}>
                 <Ionicons name="star" size={20} color="#F2A91B" />
-                <Text style={styles.scoreValue}>{selected.rating}</Text>
+                <Text style={styles.scoreValue}>{placeRating(selected)}</Text>
                 <Text style={styles.scoreLabel}>
                   {tr(language, "Student rating", "学生评分", "學生評分")}
                 </Text>
@@ -7264,6 +7895,10 @@ function FoodForum({ language }: { language: Language }) {
                 </Text>
               </View>
             </View>
+            <Pressable style={styles.reviewCountAction} accessibilityRole="button" onPress={() => openReviews(selected)}>
+              <Text style={styles.reviewCountActionText}>{placeReviewCount(selected)} {tr(language, "student reviews", "条学生点评", "則學生點評")}</Text>
+              <Ionicons name="chevron-forward" size={17} color={palette.blue} />
+            </Pressable>
             <Text style={styles.friendSectionTitle}>
               {tr(
                 language,
@@ -7284,7 +7919,7 @@ function FoodForum({ language }: { language: Language }) {
               <Image
                 source={{
                   uri: restaurants[
-                    (restaurants.indexOf(selected) + 1) % restaurants.length
+                    (displayRestaurants.findIndex((item) => item.name === selected.name) + 1) % restaurants.length
                   ].image,
                 }}
                 style={styles.foodDetailPhoto}
@@ -7308,6 +7943,7 @@ function FoodForum({ language }: { language: Language }) {
                 </Text>
               </Pressable>
             </ScrollView>
+            {selected.name === restaurantProfile.name && <View style={[styles.workspaceCard, { marginTop: 12 }]}><Text style={styles.workspaceCardTitle}>{tr(language, "Official restaurant menu", "餐厅官方菜单", "餐廳官方餐單")}</Text><Text style={styles.workspaceCardText}>{restaurantProfile.menuItems.join(" · ")}</Text>{restaurantProfile.menuFile && <Text style={styles.workspaceCardLink}>{restaurantProfile.menuFile.name}</Text>}</View>}
             <View style={styles.studentReviewCard}>
               <View style={styles.studentReviewHead}>
                 <View style={[styles.avatar, { backgroundColor: "#FFDCD0" }]}>
@@ -7326,40 +7962,22 @@ function FoodForum({ language }: { language: Language }) {
                 </View>
                 <Text style={styles.reviewStars}>★★★★★</Text>
               </View>
-              <Text style={styles.quote}>
-                “
-                {translated
-                  ? language === "EN"
-                    ? selected.translation
-                    : selected.quote
-                  : language === "EN"
-                    ? selected.quote
-                    : selected.translation}
-                ”
-              </Text>
-              <Pressable
-                style={styles.translateButton}
-                onPress={() => setTranslated(!translated)}
-              >
-                <Ionicons
-                  name="language-outline"
-                  size={16}
-                  color={palette.blue}
-                />
-                <Text style={styles.translateText}>
-                  {translated
-                    ? tr(language, "Show original", "显示原文", "顯示原文")
-                    : tr(
-                        language,
-                        language === "EN"
-                          ? "Translate to Chinese"
-                          : "Translate to English",
-                        "翻译成英文",
-                        "翻譯成英文",
-                      )}
-                </Text>
-              </Pressable>
+              <TranslatedReviewText original={selected.quote} language={language} presetChinese={selected.translation} />
             </View>
+            {submittedReviews.filter((review) => review.placeName === placeKey(selected)).map((review, index) => (
+              <View style={styles.studentReviewCard} key={`${selected.name}-${index}`}>
+                <View style={styles.studentReviewHead}>
+                  <View style={[styles.avatar, { backgroundColor: palette.sky }]}><Text style={styles.avatarText}>YOU</Text></View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.friendName}>{tr(language, "Your review", "你的评价", "你的評價")}</Text>
+                    <Text style={styles.metaText}>{review.friendsOnly ? tr(language, "Visible to friends", "仅好友可见", "只限好友可見") : tr(language, "Visible to students", "学生可见", "學生可見")}</Text>
+                  </View>
+                  <Text style={styles.reviewStars}>★ {review.average.toFixed(1)}</Text>
+                </View>
+                {review.text ? <TranslatedReviewText original={review.text} language={language} /> : <Text style={styles.quote}>{tr(language, "Rated across five categories", "已按五项标准评分", "已按五項標準評分")}</Text>}
+                {reviewReplies[review.id] && <View style={styles.workspaceOwnerReply}><Text style={styles.workspaceCardTitle}>{tr(language, "Owner response", "商家回复", "商戶回覆")}</Text><Text style={styles.workspaceCardText}>{reviewReplies[review.id]}</Text></View>}
+              </View>
+            ))}
             <Text style={styles.friendSectionTitle}>
               {tr(
                 language,
@@ -7400,6 +8018,47 @@ function FoodForum({ language }: { language: Language }) {
           </ScrollView>
         )}
       </Sheet>
+      <RestaurantBookingSheet key={bookingPlace?.name || "closed"} place={bookingPlace} language={language} onClose={() => setBookingPlace(null)} />
+      <Sheet
+        visible={!!reviewsPlace}
+        title={reviewsPlace ? `${placeReviewCount(reviewsPlace)} ${tr(language, "reviews", "条点评", "則點評")}` : ""}
+        onClose={() => setReviewsPlace(null)}
+      >
+        {reviewsPlace && (
+          <ScrollView contentContainerStyle={styles.foodDetailBody} showsVerticalScrollIndicator={false}>
+            <Text style={styles.foodDetailTitle}>{reviewsPlace.name}</Text>
+            <View style={styles.reviewPageSummary}>
+              <Ionicons name="star" size={23} color="#F2A91B" />
+              <Text style={styles.reviewPageRating}>{placeRating(reviewsPlace)}</Text>
+              <Text style={styles.reviewPageMeta}>{tr(language, `from ${placeReviewCount(reviewsPlace)} student ratings`, `来自${placeReviewCount(reviewsPlace)}条学生评分`, `來自${placeReviewCount(reviewsPlace)}則學生評分`)}</Text>
+            </View>
+            <Text style={styles.reviewPageDemoNote}>{tr(language, `Showing ${reviewPageEntries.length} available sample reviews in this prototype. The full rating history needs a reviews database.`, `此原型展示${reviewPageEntries.length}条示例点评；完整评分历史需连接点评数据库。`, `此原型展示${reviewPageEntries.length}則示例點評；完整評分歷史需連接點評資料庫。`)}</Text>
+            <Text style={styles.formSectionTitle}>{tr(language, "Rating category", "评分项目", "評分項目")}</Text>
+            <SlidableCategories language={language} rowStyle={styles.categoryRow}>
+              {(["all", ...placeReviewCriteria] as Array<"all" | PlaceReviewCriterion>).map((criterion) => {
+                const label = ({ all: tr(language, "All", "全部", "全部"), taste: reviewsPlace.category === "Activity" ? tr(language, "Experience", "体验", "體驗") : tr(language, "Taste", "口味", "口味"), atmosphere: tr(language, "Atmosphere", "氛围", "氣氛"), price: tr(language, "Value", "性价比", "性價比"), service: tr(language, "Service", "服务", "服務"), overall: tr(language, "Overall", "总体", "整體") } as Record<"all" | PlaceReviewCriterion, string>)[criterion];
+                return <Pressable key={criterion} style={[styles.categoryChip, reviewCategoryFilter === criterion && styles.categoryChipActive]} onPress={() => setReviewCategoryFilter(criterion)}><Text style={[styles.categoryChipText, reviewCategoryFilter === criterion && styles.categoryChipTextActive]}>{label}</Text></Pressable>;
+              })}
+            </SlidableCategories>
+            <Text style={styles.reviewPageVisibleAverage}>{tr(language, "Average of shown reviews", "已展示点评的平均分", "已展示點評的平均分")}: ★ {visibleReviewAverage.toFixed(1)} / 5</Text>
+            <Text style={styles.formSectionTitle}>{tr(language, "Filter by stars", "按星级筛选", "按星級篩選")}</Text>
+            <SlidableCategories language={language} rowStyle={styles.categoryRow}>
+              {[0, 5, 4, 3, 2, 1].map((stars) => <Pressable key={stars} style={[styles.categoryChip, reviewStarFilter === stars && styles.categoryChipActive]} onPress={() => setReviewStarFilter(stars)}><Text style={[styles.categoryChipText, reviewStarFilter === stars && styles.categoryChipTextActive]}>{stars === 0 ? tr(language, "All stars", "全部星级", "全部星級") : `${stars} ★`}</Text></Pressable>)}
+            </SlidableCategories>
+            {filteredReviewEntries.length ? filteredReviewEntries.map((review, index) => (
+              <View style={styles.studentReviewCard} key={`${review.author}-${index}`}>
+                <View style={styles.studentReviewHead}>
+                  <View style={[styles.avatar, { backgroundColor: index % 2 ? "#DCEBFF" : "#FFDCD0" }]}><Text style={styles.avatarText}>{review.author === tr(language, "You", "你", "你") ? "YOU" : review.author.slice(1, 3).toUpperCase()}</Text></View>
+                  <View style={{ flex: 1 }}><Text style={styles.friendName}>{review.author}</Text><Text style={styles.metaText}>{tr(language, "Student review", "学生点评", "學生點評")}</Text></View>
+                  <Text style={styles.reviewStars}>★ {reviewPageScore(review).toFixed(1)}</Text>
+                </View>
+                <TranslatedReviewText original={review.text} language={language} presetChinese={review.presetChinese} presetEnglish={review.presetEnglish} />
+              </View>
+            )) : <View style={styles.marketEmpty}><Text style={styles.marketEmptyTitle}>{tr(language, "No reviews match these filters", "没有符合筛选条件的点评", "沒有符合篩選條件的點評")}</Text></View>}
+            <Text style={styles.reviewPageDemoNote}>{tr(language, "Tapping Translate sends review text to MyMemory. Machine translations may be imperfect.", "点击翻译会将点评文字发送给MyMemory。机器翻译可能不准确。", "點擊翻譯會將點評文字傳送給MyMemory。機器翻譯可能不準確。")}</Text>
+          </ScrollView>
+        )}
+      </Sheet>
       <Sheet
         visible={!!reviewPlace}
         title={tr(
@@ -7432,9 +8091,9 @@ function FoodForum({ language }: { language: Language }) {
             </Text>
             <View style={styles.sentimentRow}>
               {[
-                { label: "Loved it", icon: "heart", color: "#D9F4E6" },
-                { label: "It was fine", icon: "remove", color: "#FFF1C8" },
-                { label: "Not for me", icon: "close", color: "#FFE0E2" },
+                { label: "Loved it", face: "🙂", color: "#D9F4E6" },
+                { label: "It was fine", face: "😐", color: "#FFF1C8" },
+                { label: "Not for me", face: "🙁", color: "#FFE0E2" },
               ].map((item) => (
                 <Pressable
                   key={item.label}
@@ -7445,11 +8104,7 @@ function FoodForum({ language }: { language: Language }) {
                   ]}
                   onPress={() => setSentiment(item.label as typeof sentiment)}
                 >
-                  <Ionicons
-                    name={item.icon as any}
-                    size={22}
-                    color={palette.navy}
-                  />
+                  <Text style={{ fontSize: 25, lineHeight: 30 }}>{item.face}</Text>
                   <Text style={styles.sentimentText}>
                     {tr(
                       language,
@@ -7470,26 +8125,47 @@ function FoodForum({ language }: { language: Language }) {
               ))}
             </View>
             <Text style={styles.friendSectionTitle}>
-              {tr(language, "Your rating", "你的评分", "你的評分")}
+              {tr(language, "Rate your experience", "评价你的体验", "評價你的體驗")}
             </Text>
-            <View style={styles.foodStarRow}>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <Pressable key={star} onPress={() => setRating(star)}>
-                  <Ionicons
-                    name={star <= rating ? "star" : "star-outline"}
-                    size={31}
-                    color="#F2A91B"
-                  />
-                </Pressable>
-              ))}
+            {placeReviewCriteria.map((criterion) => {
+              const criterionLabel = criterion === "taste" && reviewPlace.category === "Activity"
+                ? tr(language, "Activity quality", "活动体验", "活動體驗")
+                : ({
+                    taste: tr(language, "Taste", "口味", "口味"),
+                    atmosphere: tr(language, "Atmosphere", "氛围", "氣氛"),
+                    price: tr(language, "Value for money", "性价比", "性價比"),
+                    service: tr(language, "Service", "服务", "服務"),
+                    overall: tr(language, "Overall", "总体", "整體"),
+                  } as Record<PlaceReviewCriterion, string>)[criterion];
+              return (
+                <View style={styles.reviewCriterionRow} key={criterion}>
+                  <Text style={styles.reviewCriterionLabel}>{criterionLabel}</Text>
+                  <View style={styles.reviewCriterionStars}>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <Pressable
+                        key={star}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${criterionLabel}: ${star} ${tr(language, "stars", "星", "星")}`}
+                        onPress={() => setReviewRatings((current) => ({ ...current, [criterion]: star }))}
+                      >
+                        <Ionicons name={star <= reviewRatings[criterion] ? "star" : "star-outline"} size={25} color="#F2A91B" />
+                      </Pressable>
+                    ))}
+                  </View>
+                </View>
+              );
+            })}
+            <View style={styles.reviewAverageCard}>
+              <Text style={styles.reviewAverageLabel}>{tr(language, "Your average rating", "你的平均评分", "你的平均評分")}</Text>
+              <Text style={styles.reviewAverageValue}>{reviewReady ? reviewAverage.toFixed(1) : "—"} / 5</Text>
             </View>
             <View style={[styles.field, styles.textAreaField]}>
               <Text style={styles.fieldLabel}>
                 {tr(
                   language,
-                  "Review in English or Chinese",
-                  "用中文或英文写评价",
-                  "用中文或英文撰寫評價",
+                  "Write a review",
+                  "写点评",
+                  "撰寫點評",
                 )}
               </Text>
               <TextInput
@@ -7612,17 +8288,20 @@ function FoodForum({ language }: { language: Language }) {
               />
             </Pressable>
             <Pressable
-              style={styles.primaryButton}
+              style={[styles.primaryButton, !reviewReady && { opacity: 0.45 }]}
+              disabled={!reviewReady}
               onPress={() => {
-                Alert.alert(
-                  tr(language, "Review submitted", "评价已提交", "評價已提交"),
-                  tr(
-                    language,
-                    "Your review will appear on the place page and your profile using your chosen visibility.",
-                    "评价将按你选择的可见范围显示在地点页面和你的资料中。",
-                    "評價將按你選擇的可見範圍顯示在地點頁面及你的資料中。",
-                  ),
-                );
+                setSubmittedReviews((current) => [...current, {
+                  id: `PR-${Date.now()}`,
+                  author: reviewerName,
+                  placeName: placeKey(reviewPlace),
+                  ratings: { ...reviewRatings },
+                  average: reviewAverage,
+                  text: reviewText.trim(),
+                  friendsOnly,
+                }]);
+                recordVisit(reviewPlace.name, visitDate);
+                setSelected(reviewPlace);
                 closeReview();
               }}
             >
@@ -7637,17 +8316,70 @@ function FoodForum({ language }: { language: Language }) {
   );
 }
 
+type PendingMarketListing = { id: string; name: string; price: string; quantity: number; sold: number; status: "pending" | "live" };
+
+const sampleSellerProfiles: Record<string, { sold: { name: string; price: string }[]; rating: string; reviewCount: number; reviews: { buyer: string; stars: number; text: string }[] }> = {
+  "@unimate_staff": { sold: [{ name: "Notebook bundle", price: "£7" }, { name: "USB desk fan", price: "£9" }], rating: "4.9", reviewCount: 4, reviews: [{ buyer: "Sophie C.", stars: 5, text: "Clear description and an easy collection." }, { buyer: "Daniel W.", stars: 5, text: "Item matched the photos and was ready on time." }] },
+  "@loopandloom": { sold: [{ name: "Crochet mini pouch", price: "£16" }, { name: "Handmade keyring", price: "£8" }], rating: "4.8", reviewCount: 12, reviews: [{ buyer: "Emma C.", stars: 5, text: "Lovely quality and exactly as pictured." }, { buyer: "Maya P.", stars: 4, text: "Carefully packed and a smooth handover." }] },
+  "@littleorbitstudio": { sold: [{ name: "Beaded bracelet", price: "£14" }], rating: "4.8", reviewCount: 12, reviews: [{ buyer: "Lily Z.", stars: 5, text: "Thoughtful design and neat finishing." }, { buyer: "Sophie C.", stars: 5, text: "The piece looked just like the listing." }] },
+  "@campuslabel": { sold: [{ name: "Canvas tote", price: "£18" }, { name: "Student hoodie", price: "£30" }], rating: "4.8", reviewCount: 12, reviews: [{ buyer: "Daniel W.", stars: 5, text: "Good fit and clear sizing information." }, { buyer: "Emma C.", stars: 4, text: "Friendly updates throughout the order." }] },
+  "@bloomnotes": { sold: [{ name: "Fragrance gift set", price: "£24" }], rating: "4.8", reviewCount: 12, reviews: [{ buyer: "Maya P.", stars: 5, text: "Well presented and securely packaged." }, { buyer: "Lily Z.", stars: 4, text: "Helpful seller and straightforward collection." }] },
+  "@movingout_mia": { sold: [{ name: "Kitchen utensils set", price: "£6" }], rating: "5.0", reviewCount: 2, reviews: [{ buyer: "Sophie C.", stars: 5, text: "Quick reply and the condition was accurate." }] },
+};
+
+type MarketSellerIdentity = { name: string; label: string; badge: "seller" | "staff" | "student" | "unverified"; initial: string };
+
+function SellerPublicProfile({ seller, displayName, listingIndices, listingNames, language, onOpenListing }: { seller: MarketSellerIdentity; displayName?: string; listingIndices: number[]; listingNames?: string[]; language: Language; onOpenListing?: (index: number) => void }) {
+  const history = sampleSellerProfiles[seller.name];
+  const t = (en: string, simplified: string, traditional = simplified) => tr(language, en, simplified, traditional);
+  const introduction = seller.badge === "seller" ? t("An approved independent shop sharing carefully selected products with the UniMate community.", "已获批准的独立小店，为优你伴社区提供精心挑选的商品。", "已獲批准的獨立小店，為優你伴社群提供精心挑選的商品。") : seller.badge === "student" ? t("A verified student sharing useful second-hand finds with other students.", "已认证学生卖家，与其他学生分享实用二手好物。", "已認證學生賣家，與其他學生分享實用二手好物。") : seller.badge === "staff" ? t("A verified UniMate staff member selling personal second-hand items.", "已认证优你伴员工，出售个人二手物品。", "已認證優你伴員工，出售個人二手物品。") : t("Marketplace seller. Check the item details and seller status before buying.", "市场卖家。购买前请查看商品详情和卖家身份。", "市場賣家。購買前請查看商品詳情及賣家身分。");
+  return <ScrollView contentContainerStyle={[styles.modalBody, { paddingTop: 0, paddingBottom: 42 }]} showsVerticalScrollIndicator={false}>
+    <View style={styles.sellerPublicHero}>
+      <Image source={{ uri: products[listingIndices[0] ?? 0].image }} style={styles.sellerPublicCover} resizeMode="cover" />
+      <View style={styles.sellerPublicAvatar}><Text style={styles.sellerPublicAvatarText}>{seller.initial}</Text></View>
+      <View style={{ alignItems: "center", gap: 5, paddingHorizontal: 18 }}><View style={{ flexDirection: "row", alignItems: "center", gap: 7 }}><Text style={styles.sellerPublicName}>{displayName || seller.name}</Text><VerificationBadge kind={seller.badge} language={language} /></View>{displayName && displayName !== seller.name && <Text style={styles.workspaceHint}>{seller.name}</Text>}<Text style={styles.workspaceCardText}>{seller.label}</Text><Text style={[styles.workspaceHint, { textAlign: "center", marginTop: 3 }]}>{introduction}</Text></View>
+    </View>
+    <View style={[styles.workspaceMetricRow, { marginTop: 17 }]}><WorkspaceMetric value={listingIndices.length} label={t("Listings", "在售商品", "在售商品")} /><WorkspaceMetric value={history?.sold.length || 0} label={t("Sold · sample", "已售 · 示例", "已售 · 示例")} /><WorkspaceMetric value={history ? `★ ${history.rating}` : "—"} label={t("Seller rating", "卖家评分", "賣家評分")} /></View>
+    <View style={[styles.workspaceNotice, { marginTop: 14 }]}><Ionicons name="information-circle-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("Demo public profile. Sales and reviews are illustrative examples, not verified transactions or live feedback.", "演示公开主页。销售及评价均为示例，并非已核实交易或实时反馈。", "示範公開主頁。銷售及評價均為示例，並非已核實交易或即時回饋。")}</Text></View>
+    <Text style={[styles.workspaceSectionTitle, { marginTop: 20 }]}>{t("Current listings", "当前商品", "目前商品")}</Text>
+    <View style={styles.sellerPublicListings}>{listingIndices.map((index) => <Pressable key={products[index].name} accessibilityRole="button" disabled={!onOpenListing} style={styles.sellerPublicListing} onPress={() => onOpenListing?.(index)}><Image source={{ uri: products[index].image }} style={styles.sellerPublicListingImage} resizeMode="cover" /><View style={{ padding: 10, gap: 4 }}><Text style={styles.workspaceCardTitle} numberOfLines={2}>{listingNames?.[index] || products[index].name}</Text><Text style={styles.productPrice}>{products[index].price}</Text></View></Pressable>)}</View>
+    <Text style={[styles.workspaceSectionTitle, { marginTop: 22 }]}>{t("Products sold", "已售商品", "已售商品")}</Text>
+    {history?.sold.length ? history.sold.map((item) => <View key={item.name} style={[styles.workspaceCard, { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 }]}><Ionicons name="checkmark-circle-outline" size={21} color={palette.green} /><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{item.name}</Text><Text style={styles.workspaceHint}>{t("Completed sale · sample", "已完成销售 · 示例", "已完成銷售 · 示例")}</Text></View><Text style={styles.workspaceCardText}>{item.price}</Text></View>) : <View style={styles.workspaceCard}><Text style={styles.workspaceHint}>{t("No completed sales recorded in this demo.", "此演示中尚无已完成销售记录。", "此示範中尚無已完成銷售記錄。")}</Text></View>}
+    <Text style={[styles.workspaceSectionTitle, { marginTop: 18 }]}>{t("Buyer reviews", "买家评价", "買家評價")}</Text>
+    {history?.reviews.length ? <><Text style={[styles.workspaceHint, { marginBottom: 10 }]}>{history.reviewCount} {t("sample reviews · showing recent examples", "条示例评价 · 显示近期例子", "則示例評價 · 顯示近期例子")}</Text>{history.reviews.map((review) => <View key={`${review.buyer}-${review.text}`} style={[styles.workspaceCard, { gap: 6, marginBottom: 9 }]}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{review.buyer}</Text><Text style={{ color: "#B87500", fontWeight: "900" }}>{"★".repeat(review.stars)}{"☆".repeat(5 - review.stars)}</Text></View><Text style={styles.workspaceCardText}>{review.text}</Text><Text style={styles.workspaceHint}>{t("Example review · purchase not verified in this preview", "示例评价 · 此预览未核实购买记录", "示例評價 · 此預覽未核實購買記錄")}</Text></View>)}</> : <View style={styles.workspaceCard}><Text style={styles.workspaceHint}>{t("No purchase-linked reviews recorded in this demo.", "此演示中尚无关联购买记录的评价。", "此示範中尚無關聯購買記錄的評價。")}</Text></View>}
+  </ScrollView>;
+}
+
+function PendingListings({ listings, language, onUpdate, heading = true }: { listings: PendingMarketListing[]; language: Language; onUpdate?: (listing: PendingMarketListing) => void; heading?: boolean }) {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [additionalStock, setAdditionalStock] = useState("1");
+  if (!listings.length) return <View style={[styles.workspaceCard, { alignItems: "center", gap: 8, paddingVertical: 24, marginTop: 14 }]}><Ionicons name="cube-outline" size={26} color={palette.blue} /><Text style={styles.workspaceCardTitle}>{tr(language, "No inventory yet", "尚无库存", "尚無庫存")}</Text><Text style={[styles.workspaceHint, { textAlign: "center" }]}>{tr(language, "Post an item to start tracking its quantity here.", "发布商品后即可在此追踪数量。", "發佈商品後即可在此追蹤數量。")}</Text></View>;
+  return <View style={{ marginTop: 18 }}>
+    {heading && <><Text style={styles.workspaceSectionTitle}>{tr(language, "Inventory & listings", "库存与商品", "庫存與商品")}</Text><Text style={[styles.workspaceHint, { marginBottom: 12 }]}>{tr(language, "Remaining stock updates when a sale is recorded. All changes stay in this preview.", "记录销售后剩余库存会更新。所有更改仅保存在此预览。", "記錄銷售後剩餘庫存會更新。所有更改只保存在此預覽。")}</Text></>}
+    {listings.map((listing) => { const remaining = Math.max(0, listing.quantity - listing.sold); return <View key={listing.id} style={[styles.workspaceCard, { marginBottom: 10, gap: 9 }]}><View style={styles.workspaceCardTop}><Text style={[styles.workspaceCardTitle, { flex: 1 }]}>{listing.name}</Text><Text style={[styles.workspaceStatus, listing.status === "live" ? { color: "#16824A", backgroundColor: "#E3F7EB" } : { color: palette.blue, backgroundColor: "#EAF4FF" }]}>{listing.status === "live" ? tr(language, "Live", "已上架", "已上架") : tr(language, "In review", "审核中", "審核中")}</Text></View><Text style={styles.workspaceCardText}>{listing.price} · {listing.id}</Text><View style={[styles.workspaceMetricRow, { marginTop: 3 }]}><WorkspaceMetric value={listing.quantity} label={tr(language, "Total stock", "总库存", "總庫存")} /><WorkspaceMetric value={listing.sold} label={tr(language, "Sold", "已售", "已售")} /><WorkspaceMetric value={remaining} label={tr(language, "Remaining", "剩余", "剩餘")} /></View>
+      {onUpdate && <>{editingId === listing.id ? <View style={{ gap: 8 }}><Text style={styles.workspaceHint}>{tr(language, "How many more units are available?", "还有多少件可售？", "還有多少件可售？")}</Text><TextInput accessibilityLabel={tr(language, "Additional stock", "新增库存", "新增庫存")} style={styles.workspaceInput} value={additionalStock} onChangeText={(value) => setAdditionalStock(value.replace(/\D/g, ""))} keyboardType="number-pad" /><View style={{ flexDirection: "row", gap: 8 }}><Pressable accessibilityRole="button" style={[styles.primaryButton, { flex: 1, marginTop: 0 }]} disabled={!Number(additionalStock)} onPress={() => { const extra = Math.min(9999, Number(additionalStock)); if (extra > 0) onUpdate({ ...listing, quantity: listing.quantity + extra }); setEditingId(null); setAdditionalStock("1"); }}><Text style={styles.primaryButtonText}>{tr(language, "Save stock", "保存库存", "儲存庫存")}</Text></Pressable><Pressable accessibilityRole="button" style={[styles.secondaryButton, { flex: 1, marginTop: 0 }]} onPress={() => setEditingId(null)}><Text style={styles.secondaryButtonText}>{tr(language, "Cancel", "取消", "取消")}</Text></Pressable></View></View> : <View style={{ flexDirection: "row", gap: 8 }}><Pressable accessibilityRole="button" style={[styles.secondaryButton, { flex: 1, marginTop: 0 }]} onPress={() => { setEditingId(listing.id); setAdditionalStock("1"); }}><Ionicons name="add" size={17} color={palette.blue} /><Text style={styles.secondaryButtonText}>{tr(language, "Add stock", "添加库存", "加入庫存")}</Text></Pressable>{listing.status === "live" && <Pressable accessibilityRole="button" disabled={!remaining} style={[styles.secondaryButton, { flex: 1, marginTop: 0, opacity: remaining ? 1 : 0.45 }]} onPress={() => onUpdate({ ...listing, sold: listing.sold + 1 })}><Ionicons name="bag-check-outline" size={17} color={palette.blue} /><Text style={styles.secondaryButtonText}>{tr(language, "Preview sale", "预览销售", "預覽銷售")}</Text></Pressable>}</View>}<Text style={styles.workspaceHint}>{listing.status === "pending" ? tr(language, "Awaiting listing review. Stock edits here do not publish the item.", "商品等待审核。此处修改库存不会发布商品。", "商品等待審核。此處修改庫存不會發佈商品。") : tr(language, "Sample inventory · no real order or payment is created.", "示例库存 · 不会创建真实订单或付款。", "示例庫存 · 不會建立真實訂單或付款。")}</Text></>}
+    </View>; })}
+  </View>;
+}
+
 function Marketplace({
   language,
   onSell,
+  onMessageSeller,
+  pendingListings = [],
 }: {
   language: Language;
   onSell: () => void;
+  onMessageSeller?: (product: (typeof products)[number], sellerHandle: string) => void;
+  pendingListings?: PendingMarketListing[];
 }) {
   const [category, setCategory] = useState("All products");
+  const [marketLane, setMarketLane] = useState<"verified" | "student" | "unverified" | "all">("all");
+  const [marketSearch, setMarketSearch] = useState("");
   const [selected, setSelected] = useState<(typeof products)[number] | null>(
     null,
   );
+  const [sellerProfileIndex, setSellerProfileIndex] = useState<number | null>(null);
   const names =
     language === "EN"
       ? products.map((item) => item.name)
@@ -7665,6 +8397,10 @@ function Marketplace({
             "发夹套装",
             "课程教材套装",
             "折叠晾衣架",
+            "手工钩织手提袋",
+            "定制串珠项链",
+            "学生设计卫衣",
+            "全新密封手工香水",
           ]
         : [
             "空氣炸鍋",
@@ -7679,6 +8415,10 @@ function Marketplace({
             "髮夾套裝",
             "課程教材套裝",
             "折疊晾衣架",
+            "手工鉤織手提袋",
+            "訂製串珠頸鏈",
+            "學生設計衛衣",
+            "全新密封手工香水",
           ];
   const categories = [
     "All products",
@@ -7692,6 +8432,9 @@ function Marketplace({
     "Accessories",
     "Sports & leisure",
     "Daily needs",
+    "Handmade",
+    "Jewellery",
+    "Fragrance",
   ];
   const categoryLabel = (value: string) =>
     ({
@@ -7706,6 +8449,9 @@ function Marketplace({
       Accessories: tr(language, value, "配饰", "飾物"),
       "Sports & leisure": tr(language, value, "运动与休闲", "運動及休閒"),
       "Daily needs": tr(language, value, "日常用品", "日常用品"),
+      Handmade: tr(language, value, "手工艺品", "手工藝品"),
+      Jewellery: tr(language, value, "首饰", "首飾"),
+      Fragrance: tr(language, value, "香水", "香水"),
     })[value] || value;
   const conditionLabel = (value: string) =>
     ({
@@ -7720,10 +8466,6 @@ function Marketplace({
       "Like new": tr(language, value, "近乎全新", "近乎全新"),
       "Minor damage": tr(language, value, "轻微损坏", "輕微損壞"),
     })[value] || value;
-  const shownProducts =
-    category === "All products"
-      ? products
-      : products.filter((item) => item.category === category);
   const selectedIndex = selected ? products.indexOf(selected) : -1;
   const selectedName = selectedIndex >= 0 ? names[selectedIndex] : "";
   const roughLocations = [
@@ -7755,9 +8497,32 @@ function Marketplace({
           "UNIMATE配送或自取",
           "UNIMATE配送或自取",
         );
+  const sellerFor = (index: number) => {
+    const smallShops = [
+      { name: "@loopandloom", label: tr(language, "UniMate approved maker", "优你伴已批准手作店", "優你伴已批准手作店"), badge: "seller" as const, initial: "L" },
+      { name: "@littleorbitstudio", label: tr(language, "UniMate approved maker", "优你伴已批准手作店", "優你伴已批准手作店"), badge: "seller" as const, initial: "L" },
+      { name: "@campuslabel", label: tr(language, "Approved student brand", "已批准学生品牌", "已批准學生品牌"), badge: "seller" as const, initial: "C" },
+      { name: "@bloomnotes", label: tr(language, "Approved niche shop · product review required", "已批准小店 · 商品需审核", "已批准小店 · 商品需審核"), badge: "seller" as const, initial: "B" },
+    ];
+    if (index >= 12) return smallShops[index - 12];
+    const sellers = [
+      { name: "@movingout_mia", label: tr(language, "Verified student seller", "已认证学生卖家", "已認證學生賣家"), badge: "student" as const, initial: "M" },
+      { name: "@unimate_staff", label: tr(language, "Staff seller", "员工卖家", "員工賣家"), badge: "staff" as const, initial: "U" },
+      { name: "@marketplace_seller", label: tr(language, "Marketplace seller · unverified", "二手市场卖家 · 未认证", "二手市場賣家 · 未認證"), badge: "unverified" as const, initial: "M" },
+    ];
+    return sellers[index % sellers.length];
+  };
+  const profileSeller = sellerProfileIndex === null ? null : sellerFor(sellerProfileIndex);
+  const profileListingIndices = profileSeller ? products.map((_, index) => index).filter((index) => sellerFor(index).name === profileSeller.name) : [];
+  const shownProducts = products.filter((item, index) => {
+    const sellerBadge = sellerFor(index).badge;
+    return (category === "All products" || item.category === category) &&
+      (!marketSearch.trim() || `${item.name} ${names[index]} ${item.category} ${sellerFor(index).name}`.toLowerCase().includes(marketSearch.trim().toLowerCase())) &&
+      (marketLane === "all" || marketLane === "verified" && (sellerBadge === "seller" || sellerBadge === "staff") || marketLane === "student" && sellerBadge === "student" || marketLane === "unverified" && sellerBadge === "unverified");
+  });
   return (
     <>
-      <ScrollView contentContainerStyle={styles.modalBody}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.modalBody}>
         <View style={styles.marketHero}>
           <View style={{ flex: 1 }}>
             <Text style={styles.pageTitle}>{words[language].market}</Text>
@@ -7775,40 +8540,39 @@ function Marketplace({
             <Text style={styles.sellButtonText}>{words[language].sell}</Text>
           </Pressable>
         </View>
-        <Search
-          placeholder={tr(
-            language,
-            "Search products…",
-            "搜索商品…",
-            "搜尋商品…",
-          )}
-        />
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.marketCategoryScroller}
-          contentContainerStyle={styles.marketCategoryRow}
-        >
-          {categories.map((item) => (
-            <Pressable
-              key={item}
-              style={[
-                styles.marketCategory,
-                category === item && styles.marketCategoryActive,
-              ]}
-              onPress={() => setCategory(item)}
-            >
-              <Text
+        <View style={[styles.search, { marginTop: 4, marginBottom: 20 }]}><Ionicons name="search" size={18} color={palette.muted} /><TextInput accessibilityLabel={tr(language, "Search marketplace listings", "搜索市场商品", "搜尋市場商品")} style={styles.searchInput} value={marketSearch} onChangeText={setMarketSearch} placeholder={tr(language, "Search products or sellers…", "搜索商品或卖家…", "搜尋商品或賣家…")} placeholderTextColor="#8B98AD" />{!!marketSearch && <Pressable accessibilityRole="button" accessibilityLabel={tr(language, "Clear search", "清除搜索", "清除搜尋")} onPress={() => setMarketSearch("")}><Ionicons name="close-circle" size={19} color={palette.muted} /></Pressable>}</View>
+        {!!pendingListings.length && <PendingListings listings={pendingListings} language={language} />}
+        <Text style={styles.marketFilterTitle}>{tr(language, "Shop by seller", "按卖家浏览", "按賣家瀏覽")}</Text>
+        <SlidableCategories language={language} rowStyle={styles.marketSellerFilters}>{([
+          ["all", tr(language, "All sellers", "全部卖家", "全部賣家"), "people-outline"],
+          ["verified", tr(language, "Verified", "已认证", "已認證"), "shield-checkmark-outline"],
+          ["student", tr(language, "Students", "学生", "學生"), "school-outline"],
+          ["unverified", tr(language, "Unverified", "未认证", "未認證"), "help-circle-outline"],
+        ] as const).map(([value, label, icon]) => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: marketLane === value }} onPress={() => { setMarketLane(value); setCategory("All products"); }} style={[styles.marketCategory, styles.marketSellerFilter, marketLane === value && styles.marketCategoryActive]}><Ionicons name={icon} size={15} color={marketLane === value ? "#FFFFFF" : palette.blue} /><Text style={[styles.marketCategoryText, styles.marketSellerFilterText, marketLane === value && styles.marketCategoryTextActive]}>{label}</Text></Pressable>)}</SlidableCategories>
+        <Text style={styles.marketFilterHint}>{tr(language, "Seller badges show account status. Listings are examples and still require individual review.", "卖家标记显示账号身份。商品均为示例，仍须逐件审核。", "賣家標記顯示帳戶身分。商品均為示例，仍須逐件審核。")}</Text>
+        <Text style={styles.marketFilterTitle}>{tr(language, "Categories", "商品分类", "商品分類")}</Text>
+        <SlidableCategories language={language} containerStyle={styles.marketCategoryNav} rowStyle={styles.marketCategoryRow}>
+            {categories.map((item) => (
+              <Pressable
+                key={item}
                 style={[
-                  styles.marketCategoryText,
-                  category === item && styles.marketCategoryTextActive,
+                  styles.marketCategory,
+                  category === item && styles.marketCategoryActive,
                 ]}
+                onPress={() => setCategory(item)}
               >
-                {categoryLabel(item)}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
+                <Text
+                  style={[
+                    styles.marketCategoryText,
+                    category === item && styles.marketCategoryTextActive,
+                  ]}
+                >
+                  {categoryLabel(item)}
+                </Text>
+              </Pressable>
+            ))}
+        </SlidableCategories>
+        <View style={styles.marketResultsHead}><Text style={styles.marketResultsTitle}>{tr(language, "Listings", "商品", "商品")}</Text><Text style={styles.marketResultsCount}>{shownProducts.length} {tr(language, "shown", "件", "件")}</Text></View>
         {shownProducts.length > 0 ? (
           <View style={styles.productGrid}>
             {shownProducts.map((item) => {
@@ -7826,18 +8590,16 @@ function Marketplace({
                   key={item.name}
                   onPress={() => setSelected(item)}
                 >
-                  <Image
-                    source={{ uri: item.image }}
-                    style={styles.productImage}
-                  />
+                  <Image source={{ uri: item.image }} style={styles.productImage} resizeMode="cover" />
                   <View style={styles.productBody}>
-                    <Text style={styles.productName}>{names[index]}</Text>
+                    <Text style={styles.productName} numberOfLines={2}>{names[index]}</Text>
                     <View style={styles.productConditionPill}>
                       <Text style={styles.productCondition}>
                         {conditionLabel(item.condition)}
                       </Text>
                     </View>
                     <Text style={styles.productPrice}>{item.price}</Text>
+                    <View style={styles.marketProductSeller}><VerificationBadge kind={sellerFor(index).badge} language={language} /><Text style={[styles.formDesc, { flex: 1, fontSize: 10 }]} numberOfLines={1}>{sellerFor(index).name}</Text></View>
                   </View>
                 </Pressable>
               );
@@ -7951,35 +8713,25 @@ function Marketplace({
                 </Text>
               </View>
             </View>
-            <View style={styles.productSeller}>
+            <Pressable accessibilityRole="button" accessibilityLabel={tr(language, `View ${sellerFor(selectedIndex).name} seller profile`, `查看 ${sellerFor(selectedIndex).name} 卖家主页`, `查看 ${sellerFor(selectedIndex).name} 賣家主頁`)} style={styles.productSeller} onPress={() => { setSellerProfileIndex(selectedIndex); setSelected(null); }}>
               <View style={styles.productSellerAvatar}>
-                <Text style={styles.productSellerInitial}>M</Text>
+                <Text style={styles.productSellerInitial}>{sellerFor(selectedIndex).initial}</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.productSellerName}>@movingout_mia</Text>
+                <Text style={styles.productSellerName}>{sellerFor(selectedIndex).name}</Text>
                 <Text style={styles.formDesc}>
-                  {tr(
-                    language,
-                    "Verified student seller · member since 2025",
-                    "已验证学生卖家 · 2025年加入",
-                    "已驗證學生賣家 · 2025年加入",
-                  )}
+                  {sellerFor(selectedIndex).label}
                 </Text>
+                <Text style={[styles.workspaceCardLink, { marginTop: 4 }]}>{tr(language, "View seller profile", "查看卖家主页", "查看賣家主頁")}</Text>
               </View>
-              <Ionicons
-                name="shield-checkmark"
-                size={20}
-                color={palette.green}
-              />
-            </View>
+              <VerificationBadge kind={sellerFor(selectedIndex).badge} language={language} />
+              <Ionicons name="chevron-forward" size={17} color={palette.blue} />
+            </Pressable>
+            {sellerFor(selectedIndex).badge === "seller" && <View style={[styles.workspaceCard, { marginTop: 17, marginBottom: 8 }]}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{tr(language, "Product reviews", "商品评价", "商品評價")}</Text><Text style={{ color: "#B87500", fontWeight: "900" }}>★ 4.8 / 5</Text></View><Text style={styles.workspaceHint}>{tr(language, "Illustrative rating · 12 sample reviews for this product", "示例评分 · 此商品有 12 条示例评价", "示例評分 · 此商品有 12 條示例評價")}</Text><View style={{ borderTopWidth: 1, borderTopColor: palette.line, paddingTop: 10, marginTop: 6 }}><Text style={styles.workspaceCardText}>★★★★★ · {tr(language, "Lovely quality and exactly as pictured.", "质量很好，与图片一致。", "品質很好，與圖片一致。")}</Text></View><View style={{ borderTopWidth: 1, borderTopColor: palette.line, paddingTop: 10, marginTop: 6 }}><Text style={styles.workspaceCardText}>★★★★☆ · {tr(language, "Carefully packed and a smooth handover.", "包装仔细，交付顺利。", "包裝仔細，交收順利。")}</Text></View><Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 10 }]} onPress={() => Alert.alert(tr(language, "Verified purchase required", "需要已核实的购买记录", "需要已核實的購買記錄"), tr(language, "Product reviews will be available after a completed UniMate order. No purchase or review is created in this preview.", "完成优你伴订单后才能评价商品。此预览不会创建真实订单或评价。", "完成優你伴訂單後才能評價商品。此預覽不會建立真實訂單或評價。"))}><Text style={styles.secondaryButtonText}>{tr(language, "Review this product", "评价此商品", "評價此商品")}</Text></Pressable></View>}
             <View style={styles.productDetailActions}>
-              <Pressable
+              {onMessageSeller && <Pressable
                 style={styles.productMessageButton}
-                onPress={() =>
-                  Alert.alert(
-                    tr(language, "Message seller", "联系卖家", "聯絡賣家"),
-                  )
-                }
+                onPress={() => onMessageSeller(selected, sellerFor(selectedIndex).name)}
               >
                 <Ionicons
                   name="chatbubble-outline"
@@ -7989,7 +8741,7 @@ function Marketplace({
                 <Text style={styles.productMessageText}>
                   {tr(language, "Message", "消息", "訊息")}
                 </Text>
-              </Pressable>
+              </Pressable>}
               <Pressable
                 style={[styles.primaryButton, styles.productBuyButton]}
                 onPress={() =>
@@ -8011,6 +8763,9 @@ function Marketplace({
             </View>
           </ScrollView>
         )}
+      </Sheet>
+      <Sheet visible={sellerProfileIndex !== null} title={profileSeller?.name || tr(language, "Seller profile", "卖家主页", "賣家主頁")} onClose={() => { if (sellerProfileIndex !== null) setSelected(products[sellerProfileIndex]); setSellerProfileIndex(null); }}>
+        {profileSeller && <SellerPublicProfile seller={profileSeller} displayName={profileSeller.name === "@loopandloom" ? "Loop & Loom" : profileSeller.name === "@littleorbitstudio" ? "Little Orbit Studio" : profileSeller.name === "@campuslabel" ? "Campus Label" : profileSeller.name === "@bloomnotes" ? "Bloom Notes" : undefined} listingIndices={profileListingIndices} listingNames={names} language={language} onOpenListing={(index) => { setSellerProfileIndex(null); setSelected(products[index]); }} />}
       </Sheet>
     </>
   );
@@ -8048,14 +8803,58 @@ function Sheet({
   );
 }
 
+function OrganisationProfileSheet({ organisation, language, following, onToggleFollow, onClose }: {
+  organisation: OrganisationProfile | null;
+  language: Language;
+  following: boolean;
+  onToggleFollow: (id: string) => void;
+  onClose: () => void;
+}) {
+  return <Sheet visible={!!organisation} title={organisation?.name || ""} onClose={onClose}>
+    {organisation && <ScrollView contentContainerStyle={styles.modalBody}>
+      <View style={{ alignItems: "center", gap: 8, paddingVertical: 14 }}>
+        <View style={[styles.avatar, { width: 76, height: 76, borderRadius: 38, backgroundColor: organisation.color }]}><Text style={[styles.avatarText, { fontSize: 27 }]}>{organisation.initials}</Text></View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}><Text style={styles.publicProfileName}>{organisation.name}</Text><VerificationBadge kind={organisation.verifiedOnUniMate ? "organisation" : "unverified"} language={language} /></View>
+        <Text style={styles.friendUsername}>{organisation.handle} · {organisation.category}</Text>
+        <Text style={[styles.formDesc, { textAlign: "center" }]}>{organisation.verifiedOnUniMate
+          ? tr(language, "Official UniMate page", "优你伴官方主页", "優你伴官方主頁")
+          : tr(language, "Example listing · Not verified by UniMate", "示例主页 · 未经优你伴认证", "示例主頁 · 未經優你伴認證")}</Text>
+      </View>
+      <Text style={styles.publicBio}>{organisation.description}</Text>
+      <Pressable style={styles.primaryButton} onPress={() => onToggleFollow(organisation.id)}><Text style={styles.primaryButtonText}>{following ? tr(language, "Following · Tap to unfollow", "已关注 · 点击取消", "已追蹤 · 點擊取消") : tr(language, "Follow organisation", "关注机构", "追蹤機構")}</Text></Pressable>
+      <Text style={styles.friendSectionTitle}>{tr(language, "Official links", "官方链接", "官方連結")}</Text>
+      {organisation.links.length ? organisation.links.map((link) => <Pressable key={link.label} style={styles.reviewCountAction} onPress={() => Linking.openURL(link.url).catch(() => Alert.alert(tr(language, "Could not open link", "无法打开链接", "無法開啟連結")))}>
+        <Ionicons name={link.icon as any} size={19} color={palette.blue} />
+        <Text style={[styles.reviewCountActionText, { flex: 1 }]}>{link.label}</Text>
+        <Ionicons name="open-outline" size={17} color={palette.blue} />
+      </Pressable>) : <Text style={styles.formDesc}>{tr(language, "Website and social links will appear when UniMate adds verified accounts.", "优你伴添加已验证账号后，网站和社交链接会显示在这里。", "優你伴加入已驗證帳號後，網站及社交連結會顯示在這裡。")}</Text>}
+    </ScrollView>}
+  </Sheet>;
+}
+
+function VerificationBadge({ kind, language }: { kind: "student" | "staff" | "organisation" | "seller" | "unverified"; language: Language }) {
+  const darkMode = useContext(DarkModeContext);
+  if (kind === "staff") return <NativeView accessibilityLabel={tr(language, "Verified staff", "已认证员工", "已認證員工")} style={{ width: 19, height: 19, alignItems: "center", justifyContent: "center" }}><NativeIonicons name="shield" size={19} color={darkMode ? "#429FFF" : "#0C70D8"} /><NativeIonicons name="checkmark" size={10} color="#FFFFFF" style={{ position: "absolute", top: 4, left: 4.5 }} /></NativeView>;
+  if (kind === "seller") return <NativeView accessibilityLabel={tr(language, "UniMate approved seller", "优你伴已批准卖家", "優你伴已批准賣家")} style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: darkMode ? "#B794F4" : "#7944C2", alignItems: "center", justifyContent: "center" }}><NativeIonicons name="checkmark" size={12} color="#FFFFFF" /></NativeView>;
+  if (kind === "unverified") return <NativeView accessibilityLabel={tr(language, "Unverified account", "未认证账号", "未認證帳戶")} style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1, borderColor: darkMode ? "#A6B1C1" : "#CBD3DD", backgroundColor: darkMode ? "#596579" : "#E5E9EF", alignItems: "center", justifyContent: "center" }}><NativeIonicons name="help" size={12} color={darkMode ? "#FFFFFF" : "#5D6879"} /></NativeView>;
+  const badge = kind === "student"
+    ? { icon: "checkmark" as const, background: darkMode ? "#2FC982" : "#20A765", foreground: "#FFFFFF", label: tr(language, "Verified student", "已认证学生", "已認證學生") }
+    : { icon: "star" as const, background: darkMode ? "#FFD567" : "#F3C44F", foreground: "#17213A", label: tr(language, "Official organisation", "官方机构", "官方機構") };
+  return <NativeView accessibilityLabel={badge.label} style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: badge.background, alignItems: "center", justifyContent: "center" }}><NativeIonicons name={badge.icon} size={kind === "organisation" ? 11 : 13} color={badge.foreground} /></NativeView>;
+}
+
 function SellItemForm({
   visible,
   language,
   onClose,
+  onSubmitted,
+  allowSmallShop = false,
 }: {
   visible: boolean;
   language: Language;
   onClose: () => void;
+  onSubmitted?: (listing: PendingMarketListing) => void;
+  allowSmallShop?: boolean;
 }) {
   const [category, setCategory] = useState("Daily needs");
   const [condition, setCondition] = useState("Like new");
@@ -8083,6 +8882,9 @@ function SellItemForm({
       Accessories: tr(language, value, "配饰", "飾物"),
       "Sports & leisure": tr(language, value, "运动与休闲", "運動及休閒"),
       "Daily needs": tr(language, value, "日常用品", "日常用品"),
+      Handmade: tr(language, value, "手工艺品", "手工藝品"),
+      Jewellery: tr(language, value, "首饰", "首飾"),
+      Fragrance: tr(language, value, "香水", "香水"),
     })[value] || value;
   const conditionLabel = (value: string) =>
     ({
@@ -8139,7 +8941,8 @@ function SellItemForm({
     original > 0 &&
     selling > 0 &&
     address.trim() &&
-    (condition !== "Minor damage" || damage.trim());
+    (condition !== "Minor damage" || damage.trim()) &&
+    (category !== "Fragrance" || (allowSmallShop && condition === "New" && delivery === "collection" && brand.trim()));
   const pickPhotos = async (source?: PhotoSource) => {
     if (!source) {
       askPhotoSource(language, pickPhotos);
@@ -8167,9 +8970,9 @@ function SellItemForm({
           <Text style={styles.marketRulesText}>
             {tr(
               language,
-              "For affordable second-hand student essentials only. Beauty, makeup, opened hygiene products, luxury, unsafe or unusually high-value items are not accepted; listings over £250 require review.",
-              "仅限平价学生二手用品。不接受美妆、开封的个人卫生用品、奢侈品、不安全或价格过高的物品；超过£250的商品需审核。",
-              "只限平價學生二手用品。不接受美妝、已開封的個人衛生用品、奢侈品、不安全或價格過高的物品；超過£250的商品需審核。",
+              allowSmallShop ? "Small-shop products remain unpublished until reviewed. Fragrance must be sealed, labelled, collection-only and supported by product-safety and sourcing evidence. Opened cosmetics are not accepted." : "For affordable second-hand student essentials only. Beauty, makeup, opened hygiene products, luxury, unsafe or unusually high-value items are not accepted; listings over £250 require review.",
+              allowSmallShop ? "小店商品审核前不会发布。香水必须密封、标签齐全、仅限自取，并提供产品安全及来源证明。不接受已开封化妆品。" : "仅限平价学生二手用品。不接受美妆、开封的个人卫生用品、奢侈品、不安全或价格过高的物品；超过£250的商品需审核。",
+              allowSmallShop ? "小店商品審核前不會發佈。香水必須密封、標籤齊全、只限自取，並提供產品安全及來源證明。不接受已開封化妝品。" : "只限平價學生二手用品。不接受美妝、已開封的個人衛生用品、奢侈品、不安全或價格過高的物品；超過£250的商品需審核。",
             )}
           </Text>
         </View>
@@ -8187,6 +8990,7 @@ function SellItemForm({
             "Accessories",
             "Sports & leisure",
             "Daily needs",
+            ...(allowSmallShop ? ["Handmade", "Jewellery", "Fragrance"] : []),
           ]}
           onChange={setCategory}
           formatOption={categoryLabel}
@@ -8617,7 +9421,8 @@ function SellItemForm({
         <Pressable
           disabled={!valid}
           style={[styles.primaryButton, !valid && { opacity: 0.45 }]}
-          onPress={() =>
+          onPress={() => {
+            onSubmitted?.({ id: `P-${Date.now()}`, name: itemName.trim(), price: `£${selling.toFixed(2)}`, quantity, sold: 0, status: "pending" });
             Alert.alert(
               tr(
                 language,
@@ -8631,8 +9436,9 @@ function SellItemForm({
                 "商品尚未公开。管理员将审核物品状况、价格及安全信息，批准后才会发布。",
                 "商品尚未公開。管理員將審核物品狀況、價格及安全資料，批准後才會發佈。",
               ),
-            )
-          }
+            );
+            onClose();
+          }}
         >
           <Text style={styles.primaryButtonText}>
             {tr(
@@ -9072,9 +9878,9 @@ function TicketPass({
             <Text style={styles.ticketDemo}>
               {tr(
                 language,
-                "DEMO TICKET · NOT VALID FOR ENTRY",
-                "演示电子票 · 不可用于入场",
-                "示範電子票 · 不可用於入場",
+                "SAMPLE TICKET · NOT VALID FOR ENTRY",
+                "预览电子票 · 不可用于入场",
+                "預覽電子票 · 不可用於入場",
               )}
             </Text>
             <View style={styles.ticketDivider} />
@@ -9512,10 +10318,30 @@ function BookingsPage({
   language,
   onOpenMessages,
   onOpenEvent,
+  completedJobs,
+  previewBookings,
+  serviceChatCases,
+  statusUpdates,
+  onOpenServiceChatCase,
+  serviceReviews,
+  onSubmitServiceReview,
+  staffTips,
+  onAddStaffTip,
+  reviewerName,
 }: {
   language: Language;
-  onOpenMessages: (thread: "support" | "lost") => void;
+  onOpenMessages: (thread: string) => void;
   onOpenEvent: (eventTitle: string) => void;
+  completedJobs: StaffCompletedJob[];
+  previewBookings: (StaffBooking & { service: StaffService })[];
+  serviceChatCases: ServiceChatCase[];
+  statusUpdates: ServiceStatusUpdate[];
+  onOpenServiceChatCase: (job: StaffCompletedJob, reason: ServiceCaseReason, openedBy: "customer" | "staff", details: string) => void;
+  serviceReviews: StaffServiceReview[];
+  onSubmitServiceReview: (review: StaffServiceReview) => void;
+  staffTips: StaffTip[];
+  onAddStaffTip: (tip: StaffTip) => void;
+  reviewerName: string;
 }) {
   const [filter, setFilter] = useState<"all" | "upcoming" | "completed">("all");
   const [supportBooking, setSupportBooking] =
@@ -9523,8 +10349,19 @@ function BookingsPage({
   const [supportFlow, setSupportFlow] = useState<
     "change" | "complaint" | "refund" | null
   >(null);
-  const [rating, setRating] = useState(0);
-  const [satisfaction, setSatisfaction] = useState("");
+  const [reviewJob, setReviewJob] = useState<StaffCompletedJob | null>(null);
+  const [caseJob, setCaseJob] = useState<StaffCompletedJob | null>(null);
+  const [caseReason, setCaseReason] = useState<ServiceCaseReason | null>(null);
+  const [caseDetails, setCaseDetails] = useState("");
+  const [serviceRatings, setServiceRatings] = useState<Record<ReviewCategory, number>>({ quality: 0, communication: 0, punctuality: 0, professionalism: 0 });
+  const [serviceComment, setServiceComment] = useState("");
+  const [tipJob, setTipJob] = useState<StaffCompletedJob | null>(null);
+  const [tipAmount, setTipAmount] = useState(0);
+  const [customTip, setCustomTip] = useState("");
+  const overallServiceRating = serviceReviewCriteria.reduce((total, criterion) => total + serviceRatings[criterion.id], 0) / serviceReviewCriteria.length;
+  const reviewReady = serviceReviewCriteria.every((criterion) => serviceRatings[criterion.id] > 0);
+  const reviewableJobs = completedJobs.filter((job) => job.booking.student === (reviewerName.trim() || "Sophie Chen") || job.booking.student === "Student preview");
+  const activePreviewBookings = previewBookings.filter((booking) => (booking.student === (reviewerName.trim() || "Sophie Chen") || booking.student === "Student preview") && !completedJobs.some((job) => job.booking.id === booking.id));
   const labels = {
     title: tr(language, "Purchases & Bookings", "购买与预订", "購買與預訂"),
     search: tr(
@@ -9759,6 +10596,21 @@ function BookingsPage({
             </Pressable>
           ))}
         </View>
+        {filter !== "completed" && activePreviewBookings.map((booking) => <View key={booking.id} style={styles.bookingCard}><View style={styles.bookingHead}><View style={[styles.bookingIcon, { backgroundColor: "#EAF4FF" }]}><Ionicons name={booking.service === "cleaning" ? "sparkles" : booking.service === "moving" ? "cube" : "car-sport"} size={21} color={palette.blue} /></View><Text style={styles.bookingType}>{tr(language, "Service booking preview", "服务预订预览", "服務預訂預覽")}</Text><Text style={[styles.bookingStatus, { color: palette.blue }]}>{tr(language, "Local only", "仅保存在本机", "只儲存在本機")}</Text></View><Text style={styles.bookingTitle}>{booking.title}</Text><Text style={styles.bookingDetail}>{booking.date} · {booking.time}</Text><Text style={styles.bookingDetail}>{booking.place}</Text><Text style={styles.bookingDetail}>{booking.id} · {tr(language, "No real payment or booking was made", "未实际付款或创建真实预订", "未實際付款或建立真實預訂")}</Text></View>)}
+        {filter !== "upcoming" && reviewableJobs.map((job) => {
+          const existingReview = serviceReviews.find((review) => review.bookingId === job.booking.id);
+          const existingCase = serviceChatCases.find((item) => item.bookingId === job.booking.id);
+          return <View key={job.booking.id} style={styles.bookingCard}>
+            <View style={styles.bookingHead}><View style={[styles.bookingIcon, { backgroundColor: "#E9F8F0" }]}><Ionicons name="checkmark-circle" size={21} color={palette.green} /></View><Text style={styles.bookingType}>{tr(language, "Completed service", "已完成服务", "已完成服務")}</Text><Text style={[styles.bookingStatus, { color: palette.green }]}>{tr(language, "Completed", "已完成", "已完成")}</Text></View>
+            <Text style={styles.bookingTitle}>{job.booking.title}</Text><Text style={styles.bookingDetail}>{job.booking.date} · {job.booking.time}</Text><Text style={styles.bookingDetail}>{staffWorkspaceData[job.service].name} · {job.booking.id}</Text>
+            {job.beforePhotos.length > 0 && <><Text style={[styles.bookingDetail, { marginTop: 8 }]}>{tr(language, "Before-service photos", "服务前照片", "服務前相片")}</Text><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 6 }}>{job.beforePhotos.map((uri, index) => <Image key={`${uri}-${index}`} source={{ uri }} style={{ width: 68, height: 68, borderRadius: 8 }} />)}</View></>}
+            {job.photos.length > 0 && <><Text style={[styles.bookingDetail, { marginTop: 8 }]}>{tr(language, "Completion photos", "完工照片", "完工相片")}</Text><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 6 }}>{job.photos.map((uri, index) => <Image key={`${uri}-${index}`} source={{ uri }} style={{ width: 68, height: 68, borderRadius: 8 }} />)}</View></>}
+            <View style={[styles.workspaceNotice, { marginTop: 11 }]}><Ionicons name="lock-closed-outline" size={16} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{existingCase ? tr(language, "Support case open · UniMate is included in the conversation.", "支持个案已开启 · 优你伴参与对话。", "支援個案已開啟 · 優你伴參與對話。") : tr(language, "Customer–staff chat closed when the job was completed.", "服务完成后，客户与员工聊天已关闭。", "服務完成後，客戶與員工聊天已關閉。")}</Text></View>
+            {existingReview ? <Text style={[styles.bookingDetail, { marginTop: 10 }]}>{tr(language, "Your overall rating", "您的综合评分", "您的綜合評分")} · ★ {existingReview.rating.toFixed(2)} / 5</Text> : <Pressable accessibilityRole="button" style={[styles.bookingPrimaryAction, { alignSelf: "flex-start", marginTop: 12 }]} onPress={() => { setReviewJob(job); setServiceRatings({ quality: 0, communication: 0, punctuality: 0, professionalism: 0 }); setServiceComment(""); }}><Text style={styles.bookingPrimaryActionLabel}>{tr(language, "Review this service", "评价此服务", "評價此服務")}</Text></Pressable>}
+            {staffTips.some((tip) => tip.bookingId === job.booking.id) ? <Text style={[styles.bookingDetail, { marginTop: 9 }]}>{tr(language, "Tip preview recorded", "已记录小费预览", "已記錄貼士預覽")} · £{staffTips.find((tip) => tip.bookingId === job.booking.id)?.amount.toFixed(2)}</Text> : <Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 10 }]} onPress={() => { setTipJob(job); setTipAmount(0); setCustomTip(""); }}><Ionicons name="heart-outline" size={17} color={palette.blue} /><Text style={styles.secondaryButtonText}>{tr(language, `Add a tip for ${staffWorkspaceData[job.service].name}`, `给${staffWorkspaceData[job.service].name}小费`, `給${staffWorkspaceData[job.service].name}貼士`)}</Text></Pressable>}
+            <Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 10 }]} onPress={() => existingCase ? onOpenMessages(`case-${job.booking.id}`) : (setCaseJob(job), setCaseReason(null), setCaseDetails(""))}><Ionicons name={existingCase ? "chatbubbles-outline" : "alert-circle-outline"} size={17} color={palette.blue} /><Text style={styles.secondaryButtonText}>{existingCase ? tr(language, "Open support conversation", "打开支持对话", "開啟支援對話") : tr(language, "Report lost property or a safety issue", "报告失物或安全问题", "報告失物或安全問題")}</Text></Pressable>
+          </View>;
+        })}
         {visible.map((item) => (
           <View key={item.id} style={styles.bookingCard}>
             <View style={styles.bookingHead}>
@@ -9791,8 +10643,6 @@ function BookingsPage({
                 style={styles.bookingTextAction}
                 onPress={() => {
                   setSupportBooking(item);
-                  setRating(0);
-                  setSatisfaction("");
                 }}
               >
                 <Text style={styles.bookingTextActionLabel}>
@@ -9811,6 +10661,16 @@ function BookingsPage({
           </View>
         ))}
       </ScrollView>
+      <Sheet visible={reviewJob !== null} title={tr(language, "Review completed service", "评价已完成服务", "評價已完成服務")} onClose={() => setReviewJob(null)}><ScrollView contentContainerStyle={[styles.modalBody, { gap: 15 }]}><View><Text style={styles.workspaceSectionTitle}>{reviewJob?.booking.title}</Text><Text style={styles.workspaceHint}>{tr(language, "Rate the staff member who completed this booking. All four scores are required; your overall rating is their average. Reviews stay in this preview.", "请评价完成此订单的员工。四项评分均为必填；综合评分为平均值。评价仅保存在此预览。", "請評價完成此訂單的員工。四項評分均為必填；綜合評分為平均值。評價只儲存在此預覽。")}</Text></View>{serviceReviewCriteria.map((criterion) => <View key={criterion.id} style={styles.workspaceCard}><Text style={styles.workspaceCardTitle}>{tr(language, criterion.en, criterion.simplified, criterion.traditional)}</Text><View style={{ flexDirection: "row", gap: 9, paddingVertical: 6 }}>{[1, 2, 3, 4, 5].map((star) => <Pressable key={star} accessibilityRole="button" accessibilityLabel={`${criterion.en}: ${star} stars`} onPress={() => setServiceRatings((current) => ({ ...current, [criterion.id]: star }))}><Ionicons name={star <= serviceRatings[criterion.id] ? "star" : "star-outline"} size={30} color="#ECA31A" /></Pressable>)}</View></View>)}<View style={[styles.workspaceCard, { backgroundColor: "#F3F8FF" }]}><Text style={styles.workspaceCardTitle}>{tr(language, "Overall rating", "综合评分", "綜合評分")}</Text><Text style={[styles.workspaceSectionTitle, { color: palette.blue }]}>{reviewReady ? `${overallServiceRating.toFixed(2)} / 5` : tr(language, "Rate all four areas", "请完成四项评分", "請完成四項評分")}</Text></View><Text style={styles.authFieldLabel}>{tr(language, "Your review (optional)", "您的评价（选填）", "您的評價（選填）")}</Text><TextInput style={[styles.authInput, { minHeight: 96 }]} multiline value={serviceComment} onChangeText={setServiceComment} placeholder={tr(language, "What went well? What could improve?", "哪些方面做得好？哪里可改进？", "哪些方面做得好？哪裡可改善？")} /><Pressable accessibilityRole="button" disabled={!reviewReady || !reviewJob} style={[styles.primaryButton, !reviewReady && { opacity: 0.45 }]} onPress={() => { if (!reviewJob || !reviewReady) return; onSubmitServiceReview({ bookingId: reviewJob.booking.id, service: reviewJob.service, rating: Math.round(overallServiceRating * 100) / 100, categories: { ...serviceRatings }, comment: serviceComment.trim() }); setReviewJob(null); }}><Text style={styles.primaryButtonText}>{tr(language, "Submit review", "提交评价", "提交評價")}</Text></Pressable></ScrollView></Sheet>
+      <Sheet visible={tipJob !== null} title={tr(language, "Add a tip", "添加小费", "加入貼士")} onClose={() => setTipJob(null)}><ScrollView contentContainerStyle={[styles.modalBody, { gap: 16 }]}><View><Text style={styles.workspaceSectionTitle}>{tipJob ? staffWorkspaceData[tipJob.service].name : ""}</Text><Text style={styles.workspaceHint}>{tipJob?.booking.title} · {tipJob?.booking.id}</Text></View><Text style={styles.workspaceCardText}>{tr(language, "Optional. UniMate takes no platform cut from tips; the full tip amount is intended for the staff member responsible for this job. No real payment is taken in this preview.", "小费自愿。优你伴不收取小费平台佣金；小费全额拟归完成此工作的员工。此预览不会实际付款。", "貼士自願。優你伴不收取貼士平台佣金；貼士全額擬歸完成此工作的員工。此預覽不會實際付款。")}</Text><View style={{ flexDirection: "row", gap: 9 }}>{[1, 2, 5].map((amount) => <Pressable key={amount} accessibilityRole="button" accessibilityState={{ selected: tipAmount === amount }} style={[styles.marketCategory, { flex: 1, alignItems: "center" }, tipAmount === amount && styles.marketCategoryActive]} onPress={() => { setTipAmount(amount); setCustomTip(""); }}><Text style={[styles.marketCategoryText, tipAmount === amount && styles.marketCategoryTextActive]}>£{amount}</Text></Pressable>)}</View><Text style={styles.authFieldLabel}>{tr(language, "Custom amount (optional)", "自定义金额（选填）", "自訂金額（選填）")}</Text><TextInput style={styles.authInput} value={customTip} onChangeText={(value) => { setCustomTip(value.replace(/[^\d.]/g, "")); setTipAmount(0); }} keyboardType="decimal-pad" placeholder="£" /><Pressable accessibilityRole="button" disabled={!tipJob || !Number.isFinite(customTip ? Number(customTip) : tipAmount) || (customTip ? Number(customTip) : tipAmount) <= 0 || (customTip ? Number(customTip) : tipAmount) > 100} style={[styles.primaryButton, (!tipJob || (customTip ? Number(customTip) : tipAmount) <= 0) && { opacity: 0.45 }]} onPress={() => { const amount = customTip ? Number(customTip) : tipAmount; if (!tipJob || !Number.isFinite(amount) || amount <= 0 || amount > 100) return; onAddStaffTip({ bookingId: tipJob.booking.id, service: tipJob.service, staffName: staffWorkspaceData[tipJob.service].name, amount: Math.round(amount * 100) / 100 }); setTipJob(null); }}><Text style={styles.primaryButtonText}>{tr(language, "Save tip preview", "保存小费预览", "儲存貼士預覽")}</Text></Pressable><Text style={styles.workspaceHint}>{tr(language, "Real tips require a verified payout account and payment provider before launch.", "真实小费功能上线前需接入已认证的收款账户及支付服务商。", "真實貼士功能推出前需連接已認證收款帳戶及支付服務商。")}</Text></ScrollView></Sheet>
+      <Sheet visible={caseJob !== null} title={tr(language, "Reopen through UniMate support", "通过优你伴支持重新开启对话", "透過優你伴支援重新開啟對話")} onClose={() => setCaseJob(null)}><ScrollView contentContainerStyle={styles.modalBody}>
+        <Text style={styles.workspaceCardTitle}>{caseJob?.booking.title} · {caseJob?.booking.id}</Text>
+        <Text style={[styles.workspaceHint, { marginTop: 8, marginBottom: 15 }]}>{tr(language, "The direct customer–staff chat stays closed. A qualifying issue opens a separate conversation including UniMate support, the customer and the assigned staff member. This preview does not contact anyone.", "客户与员工的直接聊天仍保持关闭。符合条件的问题会开启包含优你伴支持、客户及相关员工的独立对话。此预览不会联系任何人。", "客戶與員工的直接聊天仍保持關閉。符合條件的問題會開啟包含優你伴支援、客戶及相關員工的獨立對話。此預覽不會聯絡任何人。")}</Text>
+        <Text style={styles.authFieldLabel}>{tr(language, "Why do you need help?", "您需要哪方面的帮助？", "您需要哪方面的協助？")}</Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>{(["lost-property", "harassment", "safety", "property-damage"] as ServiceCaseReason[]).map((reason) => <Pressable key={reason} accessibilityRole="button" accessibilityState={{ selected: caseReason === reason }} style={[styles.marketCategory, caseReason === reason && styles.marketCategoryActive]} onPress={() => setCaseReason(reason)}><Text style={[styles.marketCategoryText, caseReason === reason && styles.marketCategoryTextActive]}>{serviceCaseReasonLabel(language, reason)}</Text></Pressable>)}</View>
+        <Text style={styles.authFieldLabel}>{tr(language, "What happened?", "发生了什么？", "發生了甚麼事？")}</Text><TextInput style={[styles.authInput, { minHeight: 96 }]} multiline value={caseDetails} onChangeText={setCaseDetails} placeholder={tr(language, "Add the details UniMate needs to review", "填写优你伴审核所需详情", "填寫優你伴審核所需詳情")} />
+        <Pressable accessibilityRole="button" disabled={!caseJob || !caseReason || !caseDetails.trim()} style={[styles.primaryButton, (!caseReason || !caseDetails.trim()) && { opacity: 0.45 }]} onPress={() => { if (!caseJob || !caseReason || !caseDetails.trim()) return; const id = caseJob.booking.id; onOpenServiceChatCase(caseJob, caseReason, "customer", caseDetails); setCaseJob(null); onOpenMessages(`case-${id}`); }}><Text style={styles.primaryButtonText}>{tr(language, "Open supported conversation", "开启支持对话", "開啟支援對話")}</Text></Pressable>
+      </ScrollView></Sheet>
       <Sheet visible={detailBooking !== null} title={tr(language, "Booking details", "预订详情", "預訂詳情")} onClose={() => setDetailBooking(null)}>{detailBooking && <ScrollView contentContainerStyle={styles.bookingDetailSheet} showsVerticalScrollIndicator={false}><View style={styles.bookingDetailHero}><View style={[styles.bookingDetailHeroIcon, { backgroundColor: detailBooking.color + "18" }]}><Ionicons name={detailBooking.icon as any} size={28} color={detailBooking.color} /></View><View style={{ flex: 1 }}><Text style={styles.bookingDetailType}>{detailBooking.type}</Text><Text style={styles.bookingDetailTitle}>{detailBooking.title}</Text><Text style={styles.bookingDetailStatus}>{detailBooking.statusLabel}</Text></View><Text style={styles.bookingDetailPrice}>{detailBooking.price}</Text></View><View style={styles.bookingDetailFacts}><View style={styles.bookingDetailFact}><Ionicons name="calendar-outline" size={18} color={palette.blue} /><View><Text style={styles.detailLabel}>{tr(language, "Schedule", "日期与时间", "日期及時間")}</Text><Text style={styles.detailValue}>{detailBooking.detail}</Text></View></View>{detailBooking.id === "airport" && <><View style={styles.bookingDetailFact}><Ionicons name="airplane-outline" size={18} color={palette.green} /><View><Text style={styles.detailLabel}>{tr(language, "Flight", "航班", "航班")}</Text><Text style={styles.detailValue}>BA 2836 · Terminal 2</Text></View></View><View style={styles.bookingDetailFact}><Ionicons name="location-outline" size={18} color={palette.coral} /><View><Text style={styles.detailLabel}>{tr(language, "Destination", "目的地", "目的地")}</Text><Text style={styles.detailValue}>UCL, Bloomsbury, London</Text></View></View></>}{detailBooking.id === "clean" && <><View style={styles.bookingDetailFact}><Ionicons name="home-outline" size={18} color="#F28A18" /><View><Text style={styles.detailLabel}>{tr(language, "Property", "房屋", "房屋")}</Text><Text style={styles.detailValue}>{tr(language, "1-bedroom student flat · End-of-tenancy clean", "一居室学生公寓 · 退租清洁", "一房學生公寓 · 退租清潔")}</Text></View></View><View style={styles.bookingDetailFact}><Ionicons name="person-circle-outline" size={18} color={palette.green} /><View><Text style={styles.detailLabel}>{tr(language, "Assigned professional", "已安排人员", "已安排人員")}</Text><Text style={styles.detailValue}>Maya Patel · UNIMATE approved</Text></View></View></>}{detailBooking.id === "move" && <><View style={styles.bookingDetailFact}><Ionicons name="navigate-outline" size={18} color="#00A1A7" /><View><Text style={styles.detailLabel}>{tr(language, "Route", "搬运路线", "搬運路線")}</Text><Text style={styles.detailValue}>Bloomsbury → Canary Wharf</Text></View></View><View style={styles.bookingDetailFact}><Ionicons name="cube-outline" size={18} color={palette.blue} /><View><Text style={styles.detailLabel}>{tr(language, "Inventory", "物品清单", "物品清單")}</Text><Text style={styles.detailValue}>{tr(language, "4 boxes · 1 suitcase · 1 mover", "4个箱子 · 1个行李箱 · 1名搬运人员", "4個箱 · 1個行李箱 · 1名搬運人員")}</Text></View></View></>}{detailBooking.id === "market" && <><View style={styles.bookingDetailFact}><Ionicons name="receipt-outline" size={18} color="#713CE0" /><View><Text style={styles.detailLabel}>{tr(language, "Order reference", "订单编号", "訂單編號")}</Text><Text style={styles.detailValue}>UM-1048</Text></View></View><View style={styles.bookingDetailFact}><Ionicons name="checkmark-circle-outline" size={18} color={palette.green} /><View><Text style={styles.detailLabel}>{tr(language, "Handover", "交付", "交收")}</Text><Text style={styles.detailValue}>{tr(language, "Collected from the seller", "已从卖家处取货", "已從賣家處取貨")}</Text></View></View></>}</View><View style={styles.bookingReferenceCard}><Ionicons name="shield-checkmark" size={20} color={palette.green} /><Text style={styles.bookingReferenceText}>{tr(language, "This booking is protected by UNIMATE support. Your reference is included automatically if you need help.", "此预订受UNIMATE客服保障。如需帮助，系统会自动附上预订编号。", "此預訂受UNIMATE客服保障。如需協助，系統會自動附上預訂編號。")}</Text></View><Pressable style={styles.primaryButton} onPress={() => { const selected = detailBooking; setDetailBooking(null); setSupportBooking(selected); }}><Text style={styles.primaryButtonText}>{tr(language, "Get help with this booking", "获取此预订的帮助", "取得此預訂的協助")}</Text></Pressable></ScrollView>}</Sheet>
       <Sheet
         visible={supportBooking !== null}
@@ -9921,98 +10781,7 @@ function BookingsPage({
                   />
                 </Pressable>
               ))}
-              <View style={styles.ratingCard}>
-                <Text style={styles.supportOptionTitle}>
-                  {supportBooking.id === "airport"
-                    ? tr(
-                        language,
-                        "Rate your driver",
-                        "为司机评分",
-                        "為司機評分",
-                      )
-                    : supportBooking.id === "clean"
-                      ? tr(
-                          language,
-                          "Rate your cleaner",
-                          "为清洁人员评分",
-                          "為清潔人員評分",
-                        )
-                      : tr(
-                          language,
-                          "Rate your experience",
-                          "为服务体验评分",
-                          "為服務體驗評分",
-                        )}
-                </Text>
-                <Text style={styles.supportOptionText}>
-                  {tr(
-                    language,
-                    "Verified reviews contribute to the provider or event host profile and help us monitor service quality.",
-                    "已验证评价会计入服务人员或活动主办方资料，并帮助我们监督服务质量。",
-                    "已驗證評價會計入服務人員或活動主辦方資料，並協助我們監察服務質素。",
-                  )}
-                </Text>
-                <View style={styles.ratingStars}>
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <Pressable
-                      key={star}
-                      accessibilityLabel={`${star} ${tr(language, "stars", "星", "星")}`}
-                      onPress={() => setRating(star)}
-                    >
-                      <Ionicons
-                        name={star <= rating ? "star" : "star-outline"}
-                        size={31}
-                        color="#F2A91B"
-                      />
-                    </Pressable>
-                  ))}
-                </View>
-                <View style={styles.satisfactionRow}>
-                  {[
-                    tr(language, "Excellent", "非常满意", "非常滿意"),
-                    tr(language, "Okay", "一般", "一般"),
-                    tr(language, "Poor", "不满意", "不滿意"),
-                  ].map((item) => (
-                    <Pressable
-                      key={item}
-                      style={[
-                        styles.satisfactionChip,
-                        satisfaction === item && styles.satisfactionChipActive,
-                      ]}
-                      onPress={() => setSatisfaction(item)}
-                    >
-                      <Text
-                        style={[
-                          styles.satisfactionText,
-                          satisfaction === item &&
-                            styles.satisfactionTextActive,
-                        ]}
-                      >
-                        {item}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-                <Pressable
-                  disabled={!rating}
-                  style={[styles.primaryButton, !rating && { opacity: 0.45 }]}
-                  onPress={() =>
-                    Alert.alert(
-                      tr(language, "Thank you", "谢谢反馈", "多謝你的意見"),
-                      tr(
-                        language,
-                        "Your verified rating has been submitted and will contribute to the provider or event host profile.",
-                        "你的已验证评分已提交，并将计入服务人员或活动主办方资料。",
-                        "你的已驗證評分已提交，並將計入服務人員或活動主辦方資料。",
-                      ),
-                    )
-                  }
-                >
-                  <Text style={styles.primaryButtonText}>
-                    {tr(language, "Submit feedback", "提交反馈", "提交意見")}
-                  </Text>
-                </Pressable>
-              </View>
+              {(supportBooking.id === "clean" || supportBooking.id === "moving" || supportBooking.id === "airport") && <View style={styles.workspaceNotice}><Ionicons name="star-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{tr(language, "After the staff member completes this job, you can rate quality of work, communication, punctuality and professionalism in Completed bookings.", "员工完成工作后，你可以在已完成预订中评价服务质量、沟通、守时及专业礼貌。", "員工完成工作後，你可以在已完成預訂中評價服務品質、溝通、守時及專業禮貌。")}</Text></View>}
             </ScrollView>
           ))}
       </Sheet>
@@ -10025,11 +10794,43 @@ function MessagesPage({
   initialThread,
   onClearInitialThread,
   eventAnnouncements,
+  previewBookings = [],
+  statusUpdates = [],
+  ownPhoto,
+  canAccessEventGroup = true,
+  onRequestVerification,
+  supportContext = "general",
+  completedJobs = [],
+  serviceChatCases = [],
+  onAddServiceCaseMessage,
+  viewerName = "Sophie Chen",
+  marketplaceConversations = [],
+  onSendMarketplaceMessage,
+  onConfirmMarketplaceReceipt,
+  onOpenMarketplaceIssue,
+  demoRequestStatus,
+  onDemoRequestDecision,
 }: {
   language: Language;
-  initialThread?: "support" | "lost" | "group" | null;
+  initialThread?: string | null;
   onClearInitialThread?: () => void;
   eventAnnouncements: string[];
+  previewBookings?: (StaffBooking & { service: StaffService })[];
+  statusUpdates?: ServiceStatusUpdate[];
+  ownPhoto?: string;
+  canAccessEventGroup?: boolean;
+  onRequestVerification?: () => void;
+  supportContext?: "general" | "auth";
+  completedJobs?: StaffCompletedJob[];
+  serviceChatCases?: ServiceChatCase[];
+  onAddServiceCaseMessage?: (bookingId: string, author: "customer" | "staff", message: string) => void;
+  viewerName?: string;
+  marketplaceConversations?: MarketplaceConversation[];
+  onSendMarketplaceMessage?: (id: string, text: string, attachment?: ChatAttachment) => void;
+  onConfirmMarketplaceReceipt?: (id: string) => void;
+  onOpenMarketplaceIssue?: (id: string, reason: MarketplaceIssueReason, details: string) => void;
+  demoRequestStatus: DemoRequestStatus;
+  onDemoRequestDecision: (status: DemoRequestStatus) => void;
 }) {
   const [selected, setSelected] = useState<string | null>(
     initialThread || null,
@@ -10047,12 +10848,12 @@ function MessagesPage({
   const [lostReference, setLostReference] = useState("");
   const [lostPhotos, setLostPhotos] = useState<string[]>([]);
   const [messageDraft, setMessageDraft] = useState("");
-  const [emojiOpen, setEmojiOpen] = useState(false);
   const [messageAttachments, setMessageAttachments] = useState<
     { name: string; uri: string; type: "image" | "file" }[]
   >([]);
   const [sentMessages, setSentMessages] = useState<
     {
+      threadId: string;
       text: string;
       attachments: { name: string; uri: string; type: "image" | "file" }[];
     }[]
@@ -10233,6 +11034,16 @@ function MessagesPage({
       ),
     },
     {
+      id: "host",
+      title: "UniMate Events",
+      preview: tr(language, "Message the Thames Cruise host privately about event details.", "私信泰晤士河游船主办方咨询活动详情。", "私訊泰晤士河遊船主辦方查詢活動詳情。"),
+      time: tr(language, "Event host", "活动主办方", "活動主辦方"),
+      icon: "star",
+      color: "#D8A734",
+      badge: 0,
+      type: tr(language, "Official event host · Private chat", "官方活动主办方 · 私人对话", "官方活動主辦方 · 私人對話"),
+    },
+    {
       id: "support",
       title: tr(language, "UNIMATE Support", "UNIMATE 客服", "UNIMATE 客服"),
       preview: tr(
@@ -10272,9 +11083,34 @@ function MessagesPage({
       badge: 0,
       type: tr(language, "UNIMATE support", "UNIMATE客服", "UNIMATE客服"),
     },
+    ...previewBookings.filter((booking) => booking.student === viewerName || booking.student === "Student preview").map((booking) => ({ id: `booking-${booking.id}`, title: staffWorkspaceData[booking.service].name, preview: statusUpdates.filter((update) => update.bookingId === booking.id).at(-1)?.text || `${booking.title} · ${booking.id}`, time: tr(language, "Booking", "预订", "預訂"), icon: booking.service === "cleaning" ? "sparkles" : booking.service === "moving" ? "cube" : "car-sport", color: palette.blue, badge: 0, type: `${tr(language, "Approved staff", "已批准员工", "已批准員工")} · ${booking.id}` })),
+    ...serviceChatCases.filter((item) => item.booking.student === viewerName || item.booking.student === "Student preview").map((item) => ({
+      id: `case-${item.bookingId}`,
+      title: tr(language, "Supported service conversation", "服务支持对话", "服務支援對話"),
+      preview: `${item.booking.id} · ${serviceCaseReasonLabel(language, item.reason)}`,
+      time: tr(language, "Case open", "个案已开启", "個案已開啟"),
+      icon: "shield-checkmark",
+      color: palette.blue,
+      badge: 0,
+      type: tr(language, "Customer · assigned staff · UniMate support", "客户 · 相关员工 · 优你伴支持", "客戶 · 相關員工 · 優你伴支援"),
+    })),
+    ...marketplaceConversations.filter((item) => item.buyerName === viewerName).map((item) => ({ id: `market:${item.id}`, title: item.sellerHandle, preview: item.messages.at(-1)?.text || `${item.productName} · ${item.productPrice}`, time: item.issue ? tr(language, "Support case", "支持个案", "支援個案") : item.status === "received" ? tr(language, "Closed", "已关闭", "已關閉") : tr(language, "Marketplace", "市场", "市場"), icon: "bag-handle", color: palette.blue, badge: 0, type: `${item.productName} · ${item.id}` })),
   ];
   const groupMembers = [friends[0], friends[1], friends[2], friends[3]];
   const active = chats.find((chat) => chat.id === selected);
+  const activeMarketplaceConversation = marketplaceConversations.find((item) => selected === `market:${item.id}` && item.buyerName === viewerName);
+  const previewChatBooking = selected?.startsWith("booking-") ? previewBookings.find((booking) => booking.id === selected.slice("booking-".length)) : null;
+  const activeStaffPhoto = active && staffProfiles[active.id]?.image || (previewChatBooking ? staffProfiles[previewChatBooking.service === "cleaning" ? "cleaner" : previewChatBooking.service === "moving" ? "mover" : "driver"].image : undefined);
+  const activeServiceCase = serviceChatCases.find((item) => selected === `case-${item.bookingId}` && (item.booking.student === viewerName || item.booking.student === "Student preview"));
+  const directServiceBookingId = selected?.startsWith("booking-") ? selected.slice("booking-".length) : selected === "driver" ? "AT-401" : selected === "cleaner" ? "CL-201" : selected === "mover" ? "MV-303" : null;
+  const directServiceChatClosed = !!directServiceBookingId && completedJobs.some((item) => item.booking.id === directServiceBookingId);
+  const mentionMatch = active?.id === "group" ? messageDraft.match(/(?:^|\s)@([a-z0-9_]*)$/i) : null;
+  const mentionOptions = mentionMatch ? [
+    { handle: "all", detail: tr(language, "All group members", "所有群成员", "所有群組成員") },
+    { handle: "host", detail: tr(language, "Event host", "活动主办方", "活動主辦方") },
+    ...groupMembers.map((member) => ({ handle: member.username.slice(1), detail: member.uni })),
+  ].filter((option) => option.handle.toLowerCase().startsWith(mentionMatch[1].toLowerCase())) : [];
+  const chooseMention = (handle: string) => setMessageDraft((current) => current.replace(/@([a-z0-9_]*)$/i, `@${handle} `));
   const shownStaff = profileStaff ? staffProfiles[profileStaff] : null;
   const addChatPhotos = async (source: PhotoSource) => {
     const uris = await selectPhotoUris(language, source, {
@@ -10338,29 +11174,22 @@ function MessagesPage({
       ],
     );
   const sendChatMessage = () => {
+    if (directServiceChatClosed) return;
     if (!messageDraft.trim() && !messageAttachments.length) return;
+    if (activeServiceCase) {
+      if (!messageDraft.trim()) return;
+      onAddServiceCaseMessage?.(activeServiceCase.bookingId, "customer", messageDraft.trim());
+      setMessageDraft("");
+      setMessageAttachments([]);
+      return;
+    }
     setSentMessages([
       ...sentMessages,
-      { text: messageDraft.trim(), attachments: messageAttachments },
+      { threadId: active?.id || "", text: messageDraft.trim(), attachments: messageAttachments },
     ]);
     setMessageDraft("");
     setMessageAttachments([]);
-    setEmojiOpen(false);
   };
-  const chatEmojis = [
-    "😊",
-    "😂",
-    "❤️",
-    "👍",
-    "🙏",
-    "🎉",
-    "😢",
-    "😮",
-    "✅",
-    "📍",
-    "📎",
-    "✨",
-  ];
   const staffSheet = (
     <Sheet
       visible={shownStaff !== null}
@@ -10374,14 +11203,19 @@ function MessagesPage({
     >
       {shownStaff && (
         <ScrollView contentContainerStyle={styles.staffProfileBody}>
-          <Image
-            source={{ uri: shownStaff.image }}
-            style={styles.staffProfilePhoto}
-          />
+          <View style={styles.staffProfilePhotoWrap}>
+            <Image
+              source={{ uri: shownStaff.image }}
+              style={styles.staffProfilePhoto}
+            />
+            <View style={styles.staffProfilePhotoBadge}>
+              <VerificationBadge kind="staff" language={language} />
+            </View>
+          </View>
           <View style={styles.approvedPill}>
-            <Ionicons name="shield-checkmark" size={17} color="white" />
+            <NativeIonicons name="checkmark" size={14} color="#FFFFFF" />
             <Text style={styles.approvedPillText}>
-              {tr(language, "UNIMATE APPROVED", "UNIMATE认证", "UNIMATE認證")}
+              {tr(language, "UniMate approved", "UniMate 已认证", "UniMate 已認證")}
             </Text>
           </View>
           <Text style={styles.staffProfileName}>{shownStaff.name}</Text>
@@ -10490,6 +11324,11 @@ function MessagesPage({
             )}
           </Text>
         </View>
+        <Pressable style={styles.groupMemberRow} onPress={() => { setMembersOpen(false); setSelected("host"); setMessageDraft(""); }}>
+          <View style={[styles.avatar, styles.groupMemberAvatar, { backgroundColor: "#DCEBFF" }]}><Text style={styles.avatarText}>U</Text></View>
+          <View style={{ flex: 1 }}><View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}><Text style={styles.friendName}>UniMate Events</Text><VerificationBadge kind="organisation" language={language} /></View><Text style={styles.friendUni}>{tr(language, "Event host", "活动主办方", "活動主辦方")}</Text><Text style={styles.friendInterests}>{tr(language, "Message privately about this event", "私信咨询此活动", "私訊查詢此活動")}</Text></View>
+          <Ionicons name="chatbubble-ellipses-outline" size={21} color={palette.blue} />
+        </Pressable>
         {groupMembers.map((member) => (
           <View key={member.username} style={styles.groupMemberRow}>
             <View
@@ -10533,6 +11372,7 @@ function MessagesPage({
       </ScrollView>
     </Sheet>
   );
+  if (activeMarketplaceConversation) return <MarketplaceConversationView language={language} conversation={activeMarketplaceConversation} viewer="buyer" buyerPhoto={ownPhoto} onBack={() => { setSelected(null); onClearInitialThread?.(); }} onSend={(text, attachment) => onSendMarketplaceMessage?.(activeMarketplaceConversation.id, text, attachment)} onMarkSold={() => {}} onConfirmReceived={() => onConfirmMarketplaceReceipt?.(activeMarketplaceConversation.id)} onOpenIssue={(reason, details) => onOpenMarketplaceIssue?.(activeMarketplaceConversation.id, reason, details)} />;
   if (active)
     return (
       <>
@@ -10550,24 +11390,13 @@ function MessagesPage({
               disabled={!staffProfiles[active.id]}
               onPress={() => setProfileStaff(active.id)}
             >
-              {staffProfiles[active.id] ? (
+              {activeStaffPhoto ? (
                 <Image
-                  source={{ uri: staffProfiles[active.id].image }}
+                  source={{ uri: activeStaffPhoto }}
                   style={styles.chatStaffPhoto}
                 />
               ) : (
-                <View
-                  style={[
-                    styles.chatAvatar,
-                    { backgroundColor: active.color + "16" },
-                  ]}
-                >
-                  <Ionicons
-                    name={active.icon as any}
-                    size={19}
-                    color={active.color}
-                  />
-                </View>
+                <ChatPersonAvatar name={active.title} size={38} />
               )}
             </Pressable>
             <View style={{ flex: 1 }}>
@@ -10579,11 +11408,7 @@ function MessagesPage({
                 style={styles.chatHeadAction}
                 onPress={() => setProfileStaff(active.id)}
               >
-                <Ionicons
-                  name="shield-checkmark"
-                  size={20}
-                  color={palette.green}
-                />
+                <VerificationBadge kind="staff" language={language} />
               </Pressable>
             )}
             {active.id === "group" && (
@@ -10595,17 +11420,24 @@ function MessagesPage({
               </Pressable>
             )}
           </View>
+          {active.id === "group" && <Pressable accessibilityRole="button" style={styles.groupHostCard} onPress={() => { setSelected("host"); setMessageDraft(""); }}>
+            <View style={styles.groupHostAvatar}><Text style={styles.groupHostInitial}>U</Text></View>
+            <View style={{ flex: 1 }}><Text style={styles.groupHostEyebrow}>{tr(language, "EVENT HOST", "活动主办方", "活動主辦方")}</Text><View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}><Text style={styles.groupHostName}>UniMate Events</Text><VerificationBadge kind="organisation" language={language} /></View><Text style={styles.groupHostHint}>{tr(language, "Contact privately about event details", "私信咨询活动详情", "私訊查詢活動詳情")}</Text></View>
+            <View style={styles.groupHostMessage}><Ionicons name="chatbubble-ellipses-outline" size={19} color={palette.blue} /></View>
+          </Pressable>}
           <View style={styles.chatSafety}>
             <Ionicons name="shield-checkmark" size={18} color={palette.green} />
             <Text style={styles.chatSafetyText}>
               {tr(
                 language,
-                "Chats are monitored by UNIMATE admins for safety. Report anything that makes you uncomfortable.",
-                "为保障安全，UNIMATE 管理员会监督对话。如遇不适内容，请立即举报。",
-                "為保障安全，UNIMATE 管理員會監察對話。如遇不適內容，請立即舉報。",
+                "Preview conversation · messages stay on this device. Report anything that makes you uncomfortable.",
+                "预览对话 · 消息仅保存在本机。如遇不适内容，请举报。",
+                "預覽對話 · 訊息只保存在本機。如遇不適內容，請舉報。",
               )}
             </Text>
           </View>
+          {directServiceChatClosed && <View style={[styles.workspaceNotice, { marginHorizontal: 16, marginTop: 10 }]}><Ionicons name="lock-closed-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{tr(language, "This customer–staff chat closed automatically when the job was completed. Report lost property or a safety issue from the completed booking to open a separate UniMate-supported case.", "服务完成后，此客户与员工聊天已自动关闭。如需报告失物或安全问题，请从已完成预订开启独立的优你伴支持个案。", "服務完成後，此客戶與員工聊天已自動關閉。如需報告失物或安全問題，請從已完成預訂開啟獨立的優你伴支援個案。")}</Text></View>}
+          {activeServiceCase && <View style={[styles.workspaceNotice, { marginHorizontal: 16, marginTop: 10 }]}><Ionicons name="people-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{tr(language, "Case conversation: customer, assigned staff and UniMate support. This is a local preview; no real support agent is connected.", "个案对话：客户、相关员工及优你伴支持。这是本机预览；尚无真实支持人员接入。", "個案對話：客戶、相關員工及優你伴支援。這是本機預覽；尚無真實支援人員接入。")}</Text></View>}
           {active.id === "group" && (
             <Pressable
               style={styles.groupChatBanner}
@@ -10666,7 +11498,12 @@ function MessagesPage({
                 ))}
               </>
             )}
-            {active.id === "support" ? (
+            {activeServiceCase ? (
+              <>
+                <View style={[styles.workspaceCard, { marginBottom: 14 }]}><Text style={styles.workspaceCardTitle}>{activeServiceCase.booking.title} · {activeServiceCase.bookingId}</Text><Text style={styles.workspaceCardText}>{serviceCaseReasonLabel(language, activeServiceCase.reason)}</Text><Text style={styles.workspaceHint}>{tr(language, "UniMate coordination is required before live messages are delivered.", "真实消息发送前须由优你伴协调。", "真實訊息傳送前須由優你伴協調。")}</Text></View>
+                {activeServiceCase.messages.map((message, index) => <View key={`${index}-${message.author}`} style={{ marginBottom: 10, alignItems: message.author === "customer" ? "flex-end" : "flex-start" }}><Text style={styles.workspaceHint}>{message.author === "customer" ? tr(language, "You", "您", "您") : message.author === "staff" ? staffWorkspaceData[activeServiceCase.service].name : tr(language, "UniMate support", "优你伴支持", "優你伴支援")}</Text><View style={message.author === "customer" ? styles.outgoingBubble : styles.incomingBubble}><Text style={message.author === "customer" ? styles.outgoingText : styles.incomingText}>{message.text}</Text></View></View>)}
+              </>
+            ) : active.id === "support" ? (
               <>
                 <View style={styles.botIdentity}>
                   <View style={styles.botIcon}>
@@ -10686,7 +11523,7 @@ function MessagesPage({
                 </View>
                 <View style={styles.incomingBubble}>
                   <Text style={styles.incomingText}>
-                    {tr(
+                    {supportContext === "auth" ? tr(language, "Need help with sign-up or sign-in? Describe the issue or ask for the tech team. This chat is local only; no message is sent to UniMate.", "注册或登录遇到问题？请描述问题或联系技术团队。此预览聊天仅保存在本地，不会发送给 UniMate。", "註冊或登入遇到問題？請描述問題或聯絡技術團隊。此預覽聊天只保存在本機，不會傳送給 UniMate。") : tr(
                       language,
                       "Hi! I can answer common questions about bookings, payments and services. Choose a topic or ask to speak with a real technician.",
                       "你好！我可以回答有关预订、付款和服务的常见问题。请选择主题，或要求联系真人技术人员。",
@@ -10694,7 +11531,7 @@ function MessagesPage({
                     )}
                   </Text>
                 </View>
-                <View style={styles.faqGrid}>
+                {supportContext !== "auth" && <View style={styles.faqGrid}>
                   {[
                     tr(language, "Change a booking", "更改预订", "更改預訂"),
                     tr(language, "Refund timing", "退款时间", "退款時間"),
@@ -10737,7 +11574,7 @@ function MessagesPage({
                       />
                     </Pressable>
                   ))}
-                </View>
+                </View>}
                 {technicianRequested ? (
                   <>
                     <View style={styles.technicianJoinedNotice}>
@@ -11017,10 +11854,10 @@ function MessagesPage({
               </>
             ) : (
               <>
-                <View style={styles.incomingBubble}>
+                <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 7 }}><ChatPersonAvatar name={active.title} photo={activeStaffPhoto} /><View style={styles.incomingBubble}>
                   <Text style={styles.incomingText}>{active.preview}</Text>
-                </View>
-                <View style={styles.outgoingBubble}>
+                </View></View>
+                {active.id !== "host" && <View style={{ flexDirection: "row", alignSelf: "flex-end", alignItems: "flex-end", gap: 7 }}><View style={styles.outgoingBubble}>
                   <Text style={styles.outgoingText}>
                     {tr(
                       language,
@@ -11029,10 +11866,11 @@ function MessagesPage({
                       "好的，謝謝。",
                     )}
                   </Text>
-                </View>
+                </View><ChatPersonAvatar name={viewerName} photo={ownPhoto} own /></View>}
               </>
             )}
-            {sentMessages.map((message, index) => (
+            {directServiceBookingId && statusUpdates.filter((update) => update.bookingId === directServiceBookingId).map((update, index) => <View key={`job-status-${index}`} style={{ flexDirection: "row", alignItems: "flex-end", gap: 7 }}><ChatPersonAvatar name={active.title} photo={activeStaffPhoto} /><View style={styles.incomingBubble}><Text style={styles.incomingText}>{update.text}</Text></View></View>)}
+            {sentMessages.filter((message) => message.threadId === active.id).map((message, index) => (
               <View key={`sent-${index}`} style={styles.sentMessageGroup}>
                 {message.attachments.length > 0 && (
                   <View style={styles.sentAttachmentGrid}>
@@ -11062,14 +11900,17 @@ function MessagesPage({
                   </View>
                 )}
                 {!!message.text && (
-                  <View style={styles.outgoingBubble}>
+                  <View style={{ flexDirection: "row", alignSelf: "flex-end", alignItems: "flex-end", gap: 7 }}><View style={styles.outgoingBubble}>
                     <Text style={styles.outgoingText}>{message.text}</Text>
-                  </View>
+                  </View><ChatPersonAvatar name={viewerName} photo={ownPhoto} own /></View>
                 )}
               </View>
             ))}
           </ScrollView>
-          <View style={styles.chatComposerArea}>
+          {directServiceChatClosed ? <View style={[styles.workspaceNotice, { margin: 16 }]}><Ionicons name="lock-closed" size={17} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{tr(language, "Messaging is closed for this completed job.", "此已完成服务的聊天已关闭。", "此已完成服務的聊天已關閉。")}</Text></View> : <View style={{ backgroundColor: "#FFFFFF" }}>
+            {mentionOptions.length > 0 && <View style={styles.mentionMenu}>
+              {mentionOptions.map((option) => <Pressable key={option.handle} accessibilityRole="button" style={styles.mentionOption} onPress={() => chooseMention(option.handle)}><Text style={styles.mentionHandle}>@{option.handle}</Text><Text style={styles.mentionDetail}>{option.detail}</Text></Pressable>)}
+            </View>}
             {messageAttachments.length > 0 && (
               <ScrollView
                 horizontal
@@ -11121,79 +11962,8 @@ function MessagesPage({
                 ))}
               </ScrollView>
             )}
-            {emojiOpen && (
-              <View style={styles.emojiTray}>
-                {chatEmojis.map((emoji) => (
-                  <Pressable
-                    key={emoji}
-                    style={styles.emojiOption}
-                    onPress={() => setMessageDraft(messageDraft + emoji)}
-                  >
-                    <Text style={styles.emojiText}>{emoji}</Text>
-                  </Pressable>
-                ))}
-              </View>
-            )}
-            <View style={styles.chatComposer}>
-              <Pressable
-                accessibilityLabel={tr(
-                  language,
-                  "Attach a file",
-                  "添加附件",
-                  "加入附件",
-                )}
-                style={styles.chatToolButton}
-                onPress={openAttachmentMenu}
-              >
-                <Ionicons name="add" size={23} color={palette.blue} />
-              </Pressable>
-              <Pressable
-                accessibilityLabel={tr(
-                  language,
-                  "Choose an emoji",
-                  "选择表情",
-                  "選擇表情",
-                )}
-                style={[
-                  styles.chatToolButton,
-                  emojiOpen && styles.chatToolButtonActive,
-                ]}
-                onPress={() => setEmojiOpen(!emojiOpen)}
-              >
-                <Ionicons name="happy-outline" size={21} color={palette.blue} />
-              </Pressable>
-              <TextInput
-                style={styles.chatInput}
-                value={messageDraft}
-                onChangeText={setMessageDraft}
-                placeholder={tr(
-                  language,
-                  "Write a message…",
-                  "输入消息…",
-                  "輸入訊息…",
-                )}
-                placeholderTextColor="#8B98AD"
-              />
-              <Pressable
-                accessibilityLabel={tr(
-                  language,
-                  "Send message",
-                  "发送消息",
-                  "傳送訊息",
-                )}
-                disabled={!messageDraft.trim() && !messageAttachments.length}
-                style={[
-                  styles.chatSend,
-                  !messageDraft.trim() &&
-                    !messageAttachments.length &&
-                    styles.chatSendDisabled,
-                ]}
-                onPress={sendChatMessage}
-              >
-                <Ionicons name="send" size={18} color="white" />
-              </Pressable>
-            </View>
-          </View>
+            <SharedChatComposer language={language} value={messageDraft} onChange={setMessageDraft} onSend={sendChatMessage} onAttach={openAttachmentMenu} attachDisabled={!!activeServiceCase} canSend={!!messageDraft.trim() || messageAttachments.length > 0} onMention={active.id === "group" ? () => setMessageDraft((current) => `${current}${current && !current.endsWith(" ") ? " " : ""}@`) : undefined} />
+          </View>}
         </View>
         {staffSheet}
         {membersSheet}
@@ -11228,27 +11998,34 @@ function MessagesPage({
             <Text style={styles.messageSafetyText}>
               {tr(
                 language,
-                "Private service chats, friend messages and event groups are monitored by admins to help keep students safe.",
-                "司机、保洁人员、好友和活动群聊均由管理员监督，以协助保障学生安全。",
-                "司機、清潔人員、好友和活動群聊均由管理員監察，以協助保障學生安全。",
+                "Service, friend and event conversations appear here. This preview does not deliver messages or connect to live support.",
+                "服务、好友和活动对话显示在此。此预览不会发送消息，也未连接真人客服。",
+                "服務、好友及活動對話顯示在此。此預覽不會傳送訊息，也未連接真人客服。",
               )}
             </Text>
           </View>
         </View>
-        {chats.map((chat) => {
+        <DemoMessageRequests language={language} sender="Jamie Lee" context={tr(language, "Student introduction", "学生介绍", "學生介紹")} message={tr(language, "Hi! I saw your profile and wondered if you're going to the campus meetup?", "你好！我看到了你的资料，想问问你会去校园聚会吗？", "你好！我看到了你的資料，想問問你會去校園聚會嗎？")} status={demoRequestStatus} onDecision={onDemoRequestDecision} />
+        {chats.filter((chat) => canAccessEventGroup || (chat.id !== "friend" && chat.id !== "host")).map((chat) => {
           const staff = staffProfiles[chat.id];
+          const bookingForChat = chat.id.startsWith("booking-") ? previewBookings.find((booking) => booking.id === chat.id.slice("booking-".length)) : undefined;
+          const chatPhoto = staff?.image || (bookingForChat ? staffProfiles[bookingForChat.service === "cleaning" ? "cleaner" : bookingForChat.service === "moving" ? "mover" : "driver"].image : undefined);
+          const linkedBookingId = chat.id === "driver" ? "AT-401" : chat.id === "cleaner" ? "CL-201" : chat.id === "mover" ? "MV-303" : null;
+          const chatClosed = !!linkedBookingId && completedJobs.some((item) => item.booking.id === linkedBookingId);
           return (
             <Pressable
               key={chat.id}
               style={styles.messageRow}
-              onPress={() => setSelected(chat.id)}
+              onPress={() => chat.id === "group" && !canAccessEventGroup ? onRequestVerification?.() : setSelected(chat.id)}
             >
               <View style={styles.messageAvatarWrap}>
-                {staff ? (
+                {chatPhoto ? (
                   <Image
-                    source={{ uri: staff.image }}
+                    source={{ uri: chatPhoto }}
                     style={styles.messageAvatarPhoto}
                   />
+                ) : chat.id === "friend" ? (
+                  <ChatPersonAvatar name={chat.title} size={48} />
                 ) : (
                   <View
                     style={[
@@ -11263,7 +12040,7 @@ function MessagesPage({
                     />
                   </View>
                 )}
-                {staff && (
+                {chatPhoto && (
                   <View style={styles.staffVerifiedMini}>
                     <Ionicons name="checkmark" size={9} color="white" />
                   </View>
@@ -11279,11 +12056,12 @@ function MessagesPage({
                   <Text style={styles.messageTitle}>{chat.title}</Text>
                   <Text style={styles.messageTime}>{chat.time}</Text>
                 </View>
-                <Text style={styles.messageType}>{chat.type}</Text>
+                <Text style={styles.messageType}>{chatClosed ? tr(language, "Closed · completed job", "已关闭 · 服务完成", "已關閉 · 服務完成") : chat.id === "group" && !canAccessEventGroup ? tr(language, "Student verification required", "需要学生认证", "需要學生認證") : chat.type}</Text>
                 <Text style={styles.messagePreview} numberOfLines={1}>
-                  {chat.preview}
+                  {chatClosed ? tr(language, "This conversation is read-only. Open a support case from the booking if needed.", "此对话只供查看。如有需要，请从预订开启支持个案。", "此對話只供查看。如有需要，請從預訂開啟支援個案。") : chat.id === "group" && !canAccessEventGroup ? tr(language, "Verify your account to join this event chat.", "认证账号后可加入此活动群聊。", "認證帳戶後可加入此活動群組。") : chat.preview}
                 </Text>
               </View>
+              {chat.id === "group" && !canAccessEventGroup && <Ionicons name="lock-closed-outline" size={17} color={palette.muted} />}
             </Pressable>
           );
         })}
@@ -11498,12 +12276,46 @@ function Profile({
   onNavigate,
   darkMode,
   onToggleDarkMode,
+  paymentMethods,
+  defaultPaymentId,
+  onAddPaymentMethod,
+  onSetDefaultPaymentMethod,
+  onRemovePaymentMethod,
+  marketListings,
+  onUpdateMarketListing,
+  acceptedFriends,
+  followedOrganisations,
+  onToggleOrganisationFollow,
+  accountRole,
+  studentVerified = true,
+  studentStatus = "verified",
+  accountName,
+  onLogout,
+  profilePhoto,
+  onProfilePhotoChange,
 }: {
   language: Language;
   onLanguage: (language: Language) => void;
   onNavigate: (tab: Tab) => void;
   darkMode: boolean;
   onToggleDarkMode: () => void;
+  paymentMethods: SavedPaymentMethod[];
+  defaultPaymentId: string | null;
+  onAddPaymentMethod: (brand: SavedPaymentMethod["brand"], last4: string, makeDefault: boolean) => void;
+  onSetDefaultPaymentMethod: (id: string) => void;
+  onRemovePaymentMethod: (id: string) => void;
+  marketListings: PendingMarketListing[];
+  onUpdateMarketListing: (listing: PendingMarketListing) => void;
+  acceptedFriends: string[];
+  followedOrganisations: string[];
+  onToggleOrganisationFollow: (id: string) => void;
+  accountRole: AccountRole;
+  studentVerified?: boolean;
+  studentStatus?: StudentVerificationStatus;
+  accountName?: string;
+  onLogout: () => void;
+  profilePhoto: string;
+  onProfilePhotoChange: (photo: string) => void;
 }) {
   const networks = [
     { name: "WeChat", icon: "chatbubbles", color: "#19B45B" },
@@ -11530,30 +12342,42 @@ function Profile({
     Douyin: false,
   });
   const [profilePrivate, setProfilePrivate] = useState(false);
+  const [publicSections, setPublicSections] = useState({ bio: true, interests: true, activity: true, reviews: true });
   const [privacyOpen, setPrivacyOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [listingsOpen, setListingsOpen] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [paymentOpen, setPaymentOpen] = useState(false);
+  const [studentMarketplaceOpen, setStudentMarketplaceOpen] = useState(false);
+  const [studentMarketplaceTab, setStudentMarketplaceTab] = useState<"listings" | "invoices">("listings");
+  const [studentListingFilter, setStudentListingFilter] = useState<"all" | "live" | "review">("all");
+  const [studentInvoiceSearch, setStudentInvoiceSearch] = useState("");
+  const [studentPayoutOpen, setStudentPayoutOpen] = useState(false);
+  const [studentPayoutHolder, setStudentPayoutHolder] = useState("");
+  const [studentPayoutSortCode, setStudentPayoutSortCode] = useState("");
+  const [studentPayoutAccountNumber, setStudentPayoutAccountNumber] = useState("");
+  const [studentPayoutAccount, setStudentPayoutAccount] = useState<{ holder: string; lastFour: string } | null>(null);
+  const [studentPayoutError, setStudentPayoutError] = useState("");
+  const [studentBillingMethod, setStudentBillingMethod] = useState<"invoice" | "card">("invoice");
   const [blockedOpen, setBlockedOpen] = useState(false);
   const [blockedProfiles, setBlockedProfiles] = useState([friends[2].username]);
   const [activityNotifications, setActivityNotifications] = useState(true);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [connectionsOpen, setConnectionsOpen] = useState(false);
+  const [connectionsTab, setConnectionsTab] = useState<"friends" | "mutual" | "following" | "followers">("friends");
+  const [connectionOrganisation, setConnectionOrganisation] = useState<OrganisationProfile | null>(null);
   const [previewAudience, setPreviewAudience] = useState<"public" | "friend">(
     "public",
   );
   const [editOpen, setEditOpen] = useState(false);
-  const [profilePhoto, setProfilePhoto] = useState("");
-  const [displayName, setDisplayName] = useState("Sophie Chen");
-  const [username, setUsername] = useState("@studybuddy_uk");
-  const [savedUsername, setSavedUsername] = useState("@studybuddy_uk");
+  const initialHandle = accountName && accountRole === "student" ? "@new_student_demo" : accountRole === "student" ? "@studybuddy_uk" : accountRole === "staff" ? "@unimate_staff_demo" : "@organisation_demo";
+  const [displayName, setDisplayName] = useState(accountName || (accountRole === "student" ? "Sophie Chen" : accountRole === "staff" ? "Staff account preview" : "Organisation account preview"));
+  const [username, setUsername] = useState(initialHandle);
+  const [savedUsername, setSavedUsername] = useState(initialHandle);
   const [lastUsernameChange, setLastUsernameChange] = useState<Date | null>(
     null,
   );
-  const [bio, setBio] = useState(
-    "UCL student exploring London one great meal, event and new friendship at a time.",
-  );
-  const [interests, setInterests] = useState(
-    "Travel, Food, Photography, Music",
-  );
+  const [bio, setBio] = useState(accountName && accountRole === "student" ? "" : accountRole === "student" ? "UCL student exploring London one great meal, event and new friendship at a time." : accountRole === "staff" ? "Employment verification is required before this account receives a staff badge." : "This page needs review before it can display an official badge.");
+  const [interests, setInterests] = useState(accountName && accountRole === "student" ? "" : accountRole === "student" ? "Travel, Food, Photography, Music" : "");
   const [interestDraft, setInterestDraft] = useState("");
   const tags = interests
     .split(",")
@@ -11632,6 +12456,13 @@ function Profile({
     }
     setEditOpen(false);
   };
+  const saveStudentPayoutPreview = () => {
+    const sortCode = studentPayoutSortCode.replace(/\D/g, "");
+    const accountNumber = studentPayoutAccountNumber.replace(/\D/g, "");
+    if (!studentPayoutHolder.trim() || sortCode.length !== 6 || accountNumber.length !== 8) { setStudentPayoutError(tr(language, "Enter an account holder, 6-digit sort code and 8-digit account number for this preview.", "请输入账户持有人、6位银行代码和8位账号用于此预览。", "請輸入帳戶持有人、6位銀行代碼及8位帳號用於此預覽。")); return; }
+    setStudentPayoutAccount({ holder: studentPayoutHolder.trim(), lastFour: accountNumber.slice(-4) });
+    setStudentPayoutSortCode(""); setStudentPayoutAccountNumber(""); setStudentPayoutError("");
+  };
   const menus =
     language === "EN"
       ? [
@@ -11639,7 +12470,8 @@ function Profile({
           "Friend requests and my friends",
           "My events",
           "My bookings",
-          "My marketplace listings",
+          "Payment methods",
+          "My marketplace",
           "Settings",
         ]
       : language === "简体"
@@ -11648,7 +12480,8 @@ function Profile({
             "好友请求与我的好友",
             "我的活动",
             "我的预订",
-            "我的二手商品",
+            "付款方式",
+            "我的市场",
             "设置",
           ]
         : [
@@ -11656,7 +12489,8 @@ function Profile({
             "好友請求及我的好友",
             "我的活動",
             "我的預訂",
-            "我的二手商品",
+            "付款方式",
+            "我的市場",
             "設定",
           ];
   const menuIcons = [
@@ -11664,6 +12498,7 @@ function Profile({
     "people-outline",
     "calendar-outline",
     "receipt-outline",
+    "card-outline",
     "bag-outline",
     "settings-outline",
   ];
@@ -11672,8 +12507,9 @@ function Profile({
     if (index === 1) onNavigate("friends");
     if (index === 2) onNavigate("events");
     if (index === 3) onNavigate("bookings");
-    if (index === 4) setListingsOpen(true);
-    if (index === 5) setSettingsOpen(true);
+    if (index === 4) setPaymentOpen(true);
+    if (index === 5) { setStudentMarketplaceTab("listings"); setStudentMarketplaceOpen(true); }
+    if (index === 6) setSettingsOpen(true);
   };
   const pickProfilePhoto = async (source?: PhotoSource) => {
     if (!source) {
@@ -11685,7 +12521,7 @@ function Profile({
       aspect: [1, 1],
       quality: 0.8,
     });
-    if (uris[0]) setProfilePhoto(uris[0]);
+    if (uris[0]) onProfilePhotoChange(uris[0]);
   };
   return (
     <>
@@ -11702,16 +12538,12 @@ function Profile({
                 <Text style={styles.profileInitial}>S</Text>
               </View>
             )}
+            <View style={styles.profileAvatarBadge}><VerificationBadge kind={accountRole === "student" && studentVerified ? "student" : "unverified"} language={language} /></View>
           </View>
           <Text style={styles.profileDisplayName}>{displayName}</Text>
           <Text style={styles.profileName}>{username}</Text>
           <Text style={styles.profileUni}>
-            {tr(
-              language,
-              "University College London",
-              "伦敦大学学院",
-              "倫敦大學學院",
-            )}
+            {accountRole === "student" ? studentVerified ? tr(language, "University College London", "伦敦大学学院", "倫敦大學學院") : studentStatus === "pending" ? tr(language, "Student · Verification pending", "学生 · 待审核", "學生 · 待審核") : tr(language, "Student · Verification needed", "学生 · 尚未认证", "學生 · 尚未認證") : accountRole === "staff" ? tr(language, "Staff · Verification pending", "员工 · 待认证", "員工 · 待認證") : tr(language, "Organisation · Verification pending", "机构 · 待认证", "機構 · 待認證")}
           </Text>
           <View style={styles.profileTags}>
             {tags.map((item) => (
@@ -11768,6 +12600,7 @@ function Profile({
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.publicProfileHero}>
+            <View style={styles.publicProfilePhotoWrap}>
             {profilePhoto ? (
               <Image
                 source={{ uri: profilePhoto }}
@@ -11784,16 +12617,16 @@ function Profile({
                 <Text style={styles.profileInitial}>S</Text>
               </View>
             )}
+              <View style={styles.profileAvatarBadge}><VerificationBadge kind={accountRole === "student" && studentVerified ? "student" : "unverified"} language={language} /></View>
+            </View>
             <Text style={styles.publicProfileName}>{displayName}</Text>
             <Text style={styles.friendUsername}>{username}</Text>
             <Text style={styles.profileUni}>
-              {tr(
-                language,
-                "University College London · Verified student",
-                "伦敦大学学院 · 已认证学生",
-                "倫敦大學學院 · 已認證學生",
-              )}
+              {accountRole === "student" ? studentVerified ? tr(language, "University College London · Verified student", "伦敦大学学院 · 已认证学生", "倫敦大學學院 · 已認證學生") : studentStatus === "pending" ? tr(language, "Student · Verification pending", "学生 · 待审核", "學生 · 待審核") : tr(language, "Student · Verification needed", "学生 · 尚未认证", "學生 · 尚未認證") : accountRole === "staff" ? tr(language, "Staff account · Verification pending", "员工账号 · 待认证", "員工帳戶 · 待認證") : tr(language, "Organisation account · Verification pending", "机构账号 · 待认证", "機構帳戶 · 待認證")}
             </Text>
+          </View>
+          <View style={styles.profileSocialStats}>
+            {([{ key: "followers", value: 0, label: tr(language, "Followers", "粉丝", "追蹤者") }, { key: "following", value: followedOrganisations.length + 2, label: tr(language, "Following", "关注中", "追蹤中") }, { key: "friends", value: acceptedFriends.length, label: tr(language, "Friends", "好友", "好友") }, { key: "mutual", value: acceptedFriends.length, label: tr(language, "Mutual", "共同好友", "共同好友") }] as const).map((stat) => <Pressable key={stat.key} accessibilityRole="button" accessibilityLabel={`${stat.label}: ${stat.value}`} accessibilityState={{ disabled: previewAudience !== "friend" }} disabled={previewAudience !== "friend"} style={styles.profileSocialStat} onPress={() => { if (previewAudience !== "friend") return; setConnectionsTab(stat.key); setPreviewOpen(false); setConnectionsOpen(true); }}><Text style={styles.profileSocialStatValue}>{stat.value}</Text><Text style={styles.profileSocialStatLabel}>{stat.label}</Text></Pressable>)}
           </View>
           <View style={styles.profileAudienceTabs}>
             <Pressable
@@ -11817,33 +12650,25 @@ function Profile({
               <Text style={[styles.profileAudienceText, previewAudience === "friend" && styles.profileAudienceTextActive]}>{tr(language, "Friend view", "好友视角", "好友視角")}</Text>
             </Pressable>
           </View>
-          <View style={styles.profileSocialStats}>
-            {[{ value: 128, label: tr(language, "Followers", "粉丝", "追蹤者") }, { value: 84, label: tr(language, "Following", "关注中", "追蹤中") }, { value: 36, label: tr(language, "Friends", "好友", "好友") }, { value: 7, label: tr(language, "Mutual", "共同好友", "共同好友") }].map((stat) => <View key={stat.label} style={styles.profileSocialStat}><Text style={styles.profileSocialStatValue}>{stat.value}</Text><Text style={styles.profileSocialStatLabel}>{stat.label}</Text></View>)}
-          </View>
+          {(previewAudience === "friend" || publicSections.interests) && <View style={styles.publicProfileSection}>
+            <Text style={styles.publicProfileSectionTitle}>{tr(language, "Interests", "兴趣爱好", "興趣愛好")}</Text>
+            <View style={styles.publicProfileInterests}>{tags.map((item) => <Text key={item} style={styles.profileTag}>{item}</Text>)}</View>
+          </View>}
+          {(previewAudience === "friend" || publicSections.bio) && <View style={styles.publicProfileSection}>
+            <Text style={styles.publicProfileSectionTitle}>{tr(language, "Bio", "个人简介", "個人簡介")}</Text>
+            <Text style={styles.publicBio}>{bio}</Text>
+          </View>}
           {previewAudience === "friend" ? (
             <View style={styles.profileConnectionsCard}>
               <View style={styles.profileConnectionsHead}><View><Text style={styles.profileConnectionsTitle}>{tr(language, "Connections", "社交关系", "社交關係")}</Text><Text style={styles.profileConnectionsText}>{tr(language, "Accepted friends can see names and mutual connections.", "已接受的好友可以查看名单和共同好友。", "已接受的好友可以查看名單及共同好友。")}</Text></View><Ionicons name="lock-open-outline" size={19} color={palette.green} /></View>
-              <View style={styles.profileConnectionFaces}>{friends.slice(0, 3).map((friend, index) => <View key={friend.username} style={[styles.avatar, styles.profileConnectionAvatar, { backgroundColor: friend.color, marginLeft: index ? -8 : 0 }]}><Text style={styles.avatarText}>{friend.initials}</Text></View>)}<Text style={styles.profileConnectionNames}>Emma, Daniel, Lily +33</Text></View>
-              <Pressable style={styles.profileConnectionLink}><Text style={styles.profileConnectionLinkText}>{tr(language, "View friends, followers and following", "查看好友、粉丝和关注列表", "查看好友、追蹤者及追蹤中名單")}</Text><Ionicons name="chevron-forward" size={17} color={palette.blue} /></Pressable>
+              <View style={styles.profileConnectionFaces}>{friends.filter((friend) => acceptedFriends.includes(friend.username)).map((friend, index) => <View key={friend.username} style={[styles.avatar, styles.profileConnectionAvatar, { backgroundColor: friend.color, marginLeft: index ? -8 : 0 }]}><Text style={styles.avatarText}>{friend.initials}</Text></View>)}<Text style={styles.profileConnectionNames}>{friends.filter((friend) => acceptedFriends.includes(friend.username)).map((friend) => friend.fullName.split(" ")[0]).join(", ")}</Text></View>
+              <Pressable style={styles.profileConnectionLink} onPress={() => { setPreviewOpen(false); setConnectionsOpen(true); }}><Text style={styles.profileConnectionLinkText}>{tr(language, "View friends, followers and following", "查看好友、粉丝和关注列表", "查看好友、追蹤者及追蹤中名單")}</Text><Ionicons name="chevron-forward" size={17} color={palette.blue} /></Pressable>
             </View>
           ) : (
             <View style={styles.profileConnectionsLocked}><Ionicons name="lock-closed-outline" size={18} color={palette.muted} /><Text style={styles.profileConnectionsLockedText}>{tr(language, "People who are not friends can see totals only. Names and connection lists stay private.", "非好友只能看到人数，姓名和社交关系列表保持私密。", "非好友只能看到人數，姓名及社交關係名單保持私隱。")}</Text></View>
           )}
-          <Text style={styles.friendSectionTitle}>
-            {tr(language, "Bio", "个人简介", "個人簡介")}
-          </Text>
-          <Text style={styles.publicBio}>{bio}</Text>
-          <Text style={styles.friendSectionTitle}>
-            {tr(language, "Interests", "兴趣爱好", "興趣愛好")}
-          </Text>
-          <View style={styles.profileTags}>
-            {tags.map((item) => (
-              <Text key={item} style={styles.profileTag}>
-                {item}
-              </Text>
-            ))}
-          </View>
-          <View style={styles.profileActivityHead}>
+          {!studentVerified && <Text style={{ color: palette.muted, fontSize: 12, lineHeight: 18, marginTop: 16 }}>{tr(language, "Recent activity and reviews will appear after verification and participation.", "完成认证并参与活动后，近期动态与点评会显示在这里。", "完成認證並參與活動後，近期動態與評價會顯示在這裡。")}</Text>}
+          {studentVerified && (previewAudience === "friend" || publicSections.activity || publicSections.reviews) && <View style={styles.profileActivityHead}>
             <Text style={styles.friendSectionTitle}>
               {tr(
                 language,
@@ -11853,8 +12678,8 @@ function Profile({
               )}
             </Text>
             <Ionicons name="shield-checkmark" size={18} color={palette.green} />
-          </View>
-          <View style={styles.profileActivityCard}>
+          </View>}
+          {studentVerified && (previewAudience === "friend" || publicSections.reviews) && <View style={styles.profileActivityCard}>
             <Image
               source={{ uri: restaurants[1].image }}
               style={styles.profileActivityImage}
@@ -11870,8 +12695,8 @@ function Profile({
                 )}
               </Text>
             </View>
-          </View>
-          <View style={styles.profileActivityCard}>
+          </View>}
+          {studentVerified && (previewAudience === "friend" || publicSections.activity) && <View style={styles.profileActivityCard}>
             <Image
               source={{ uri: events[1].image }}
               style={styles.profileActivityImage}
@@ -11894,7 +12719,7 @@ function Profile({
                 )}
               </Text>
             </View>
-          </View>
+          </View>}
           <View style={styles.privacyIntro}>
             <Ionicons
               name="information-circle"
@@ -11904,14 +12729,28 @@ function Profile({
             <Text style={styles.privacyIntroText}>
               {tr(
                 language,
-                "This preview shows what accepted friends can see. Your privacy settings still control individual details and activities.",
-                "此预览展示已接受好友可见的内容。各项资料与活动仍受隐私设置控制。",
-                "此預覽展示已接受好友可見的內容。各項資料及活動仍受私隱設定控制。",
+                previewAudience === "friend" ? "Accepted friends can see your full profile. Public visibility choices do not hide details from friends." : "Choose which sections public visitors can see in Privacy and safety.",
+                previewAudience === "friend" ? "已接受的好友可查看完整资料；公开可见性设置不影响好友。" : "在隐私与安全中选择公开访客可见的内容。",
+                previewAudience === "friend" ? "已接受的好友可查看完整資料；公開可見度設定不影響好友。" : "在私隱及安全中選擇公開訪客可見的內容。",
               )}
             </Text>
           </View>
         </ScrollView>
       </Sheet>
+      <Sheet visible={connectionsOpen} title={tr(language, "Connections", "社交关系", "社交關係")} onClose={() => setConnectionsOpen(false)}>
+        <ScrollView contentContainerStyle={styles.modalBody}>
+          <View style={styles.profileAudienceTabs}>
+            {(["friends", "mutual", "following", "followers"] as const).map((item) => <Pressable key={item} style={[styles.profileAudienceTab, connectionsTab === item && styles.profileAudienceTabActive]} onPress={() => setConnectionsTab(item)}><Text style={[styles.profileAudienceText, connectionsTab === item && styles.profileAudienceTextActive]}>{({ friends: tr(language, "Friends", "好友", "好友"), mutual: tr(language, "Mutual", "共同", "共同"), following: tr(language, "Following", "关注", "追蹤中"), followers: tr(language, "Followers", "粉丝", "追蹤者") })[item]}</Text></Pressable>)}
+          </View>
+          {(connectionsTab === "friends" || connectionsTab === "mutual") && friends.filter((friend) => acceptedFriends.includes(friend.username)).map((friend) => <View key={friend.username} style={styles.friend}><View style={[styles.avatar, { backgroundColor: friend.color }]}><Text style={styles.avatarText}>{friend.initials}</Text></View><View style={{ flex: 1 }}><View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}><Text style={styles.friendName}>{friend.fullName}</Text><VerificationBadge kind="student" language={language} /></View><Text style={styles.friendInterests}>{friend.username} · {friend.uni}</Text></View></View>)}
+          {connectionsTab === "following" && <>
+            {organisationProfiles.filter((organisation) => followedOrganisations.includes(organisation.id)).map((organisation) => <Pressable key={organisation.id} style={styles.friend} onPress={() => setConnectionOrganisation(organisation)}><View style={[styles.avatar, { backgroundColor: organisation.color }]}><Text style={styles.avatarText}>{organisation.initials}</Text></View><View style={{ flex: 1 }}><View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}><Text style={styles.friendName}>{organisation.name}</Text>{organisation.verifiedOnUniMate && <VerificationBadge kind="organisation" language={language} />}</View><Text style={styles.friendInterests}>{organisation.category} · {organisation.handle}</Text></View><Ionicons name="chevron-forward" size={18} color={palette.blue} /></Pressable>)}
+            {friends.slice(2).map((friend) => <View key={friend.username} style={styles.friend}><View style={[styles.avatar, { backgroundColor: friend.color }]}><Text style={styles.avatarText}>{friend.initials}</Text></View><View style={{ flex: 1 }}><Text style={styles.friendName}>{friend.fullName}</Text><Text style={styles.friendInterests}>{friend.username}</Text></View></View>)}
+          </>}
+          {connectionsTab === "followers" && <Text style={styles.formDesc}>{tr(language, "No followers in this prototype account yet.", "此预览账号暂无粉丝。", "此預覽帳戶暫無追蹤者。")}</Text>}
+        </ScrollView>
+      </Sheet>
+      <OrganisationProfileSheet organisation={connectionOrganisation} language={language} following={!!connectionOrganisation && followedOrganisations.includes(connectionOrganisation.id)} onToggleFollow={onToggleOrganisationFollow} onClose={() => setConnectionOrganisation(null)} />
       <Sheet
         visible={editOpen}
         title={tr(language, "Edit profile", "编辑个人资料", "編輯個人資料")}
@@ -12115,6 +12954,21 @@ function Profile({
             </Text>
           </View>
           <View style={styles.profilePrivacyCard}>
+            <Text style={styles.formTitle}>{tr(language, "Public profile sections", "公开资料内容", "公開資料內容")}</Text>
+            <Text style={styles.formDesc}>{tr(language, "Choose what people who are not your friends can see. Accepted friends always see these sections.", "选择非好友可以查看的内容。已接受的好友始终可查看这些内容。", "選擇非好友可以查看的內容。已接受的好友始終可查看這些內容。")}</Text>
+            {([
+              ["bio", tr(language, "Bio", "个人简介", "個人簡介")],
+              ["interests", tr(language, "Interests", "兴趣爱好", "興趣愛好")],
+              ["activity", tr(language, "Recent activities", "最近活动", "最近活動")],
+              ["reviews", tr(language, "Reviews", "评价", "評價")],
+            ] as const).map(([key, label]) => <View key={key} style={[styles.profilePrivacyHead, { marginTop: 15 }]}>
+              <Text style={[styles.formTitle, { flex: 1 }]}>{label}</Text>
+              <Pressable accessibilityRole="switch" accessibilityLabel={`${label} visible to public`} accessibilityState={{ checked: publicSections[key] }} style={[styles.toggle, publicSections[key] && styles.toggleOn]} onPress={() => setPublicSections((current) => ({ ...current, [key]: !current[key] }))}>
+                <View style={[styles.toggleKnob, publicSections[key] && styles.toggleKnobOn]} />
+              </Pressable>
+            </View>)}
+          </View>
+          <View style={styles.profilePrivacyCard}>
             <View style={styles.profilePrivacyHead}>
               <Ionicons
                 name="shield-checkmark-outline"
@@ -12291,15 +13145,50 @@ function Profile({
         </ScrollView>
       </Sheet>
       <Sheet
-        visible={listingsOpen}
-        title={tr(language, "My marketplace listings", "我的二手商品", "我的二手商品")}
-        onClose={() => setListingsOpen(false)}
+        visible={studentMarketplaceOpen}
+        title={tr(language, "My marketplace", "我的市场", "我的市場")}
+        onClose={() => setStudentMarketplaceOpen(false)}
       >
         <ScrollView contentContainerStyle={styles.settingsBody}>
-          <View style={styles.listingSummaryCard}><View><Text style={styles.listingSummaryValue}>2</Text><Text style={styles.listingSummaryLabel}>{tr(language, "Active listings", "上架商品", "上架商品")}</Text></View><View><Text style={styles.listingSummaryValue}>£34</Text><Text style={styles.listingSummaryLabel}>{tr(language, "Estimated earnings", "预计收入", "預計收入")}</Text></View></View>
-          {[{ name: "Compact desk lamp", price: "£18", status: tr(language, "Under review", "审核中", "審核中") }, { name: "Statistics textbook", price: "£16", status: tr(language, "Live", "已上架", "已上架") }].map((item) => <Pressable key={item.name} style={styles.profileListingRow}><View style={styles.profileListingIcon}><Ionicons name="bag-handle-outline" size={20} color={palette.blue} /></View><View style={{ flex: 1 }}><Text style={styles.friendName}>{item.name}</Text><Text style={styles.friendUni}>{item.status}</Text></View><Text style={styles.profileListingPrice}>{item.price}</Text><Ionicons name="chevron-forward" size={17} color={palette.muted} /></Pressable>)}
-        </ScrollView>
-      </Sheet>
+          <View style={styles.segment}>{(["listings", "invoices"] as const).map((section) => <Pressable key={section} accessibilityRole="tab" accessibilityState={{ selected: studentMarketplaceTab === section }} style={[styles.segmentItem, studentMarketplaceTab === section && styles.segmentActive]} onPress={() => setStudentMarketplaceTab(section)}><Text style={[styles.segmentText, studentMarketplaceTab === section && styles.segmentTextActive]}>{section === "listings" ? tr(language, "Listings", "商品", "商品") : tr(language, "Invoices", "发票", "發票")}</Text></Pressable>)}</View>
+          {studentMarketplaceTab === "listings" ? <>
+          <Text style={styles.workspaceHint}>{tr(language, "Track quantity, sales and remaining stock for sample and submitted items. No real sale is processed here.", "追踪示例及已提交商品的数量、销售和剩余库存。此处不会处理真实销售。", "追蹤示例及已提交商品的數量、銷售和剩餘庫存。此處不會處理真實銷售。")}</Text>
+          <View style={[styles.workspaceMetricRow, { marginTop: 14, marginBottom: 16 }]}><WorkspaceMetric value={marketListings.filter((item) => item.status === "live").length} label={tr(language, "Live", "已上架", "已上架")} /><WorkspaceMetric value={marketListings.filter((item) => item.status === "pending").length} label={tr(language, "In review", "审核中", "審核中")} /><WorkspaceMetric value={marketListings.reduce((total, item) => total + Math.max(0, item.quantity - item.sold), 0)} label={tr(language, "Units left", "剩余件数", "剩餘件數")} /></View>
+          <View style={{ flexDirection: "row", gap: 7, marginBottom: 5 }}>{(["all", "live", "review"] as const).map((filter) => <Pressable key={filter} accessibilityRole="button" accessibilityState={{ selected: studentListingFilter === filter }} style={[styles.marketCategory, studentListingFilter === filter && styles.marketCategoryActive]} onPress={() => setStudentListingFilter(filter)}><Text style={[styles.marketCategoryText, studentListingFilter === filter && styles.marketCategoryTextActive]}>{filter === "all" ? tr(language, "All", "全部", "全部") : filter === "live" ? tr(language, "Live", "已上架", "已上架") : tr(language, "In review", "审核中", "審核中")} · {filter === "all" ? marketListings.length : marketListings.filter((item) => item.status === (filter === "review" ? "pending" : "live")).length}</Text></Pressable>)}</View>
+          <PendingListings listings={marketListings.filter((item) => studentListingFilter === "all" || item.status === (studentListingFilter === "review" ? "pending" : "live"))} language={language} onUpdate={onUpdateMarketListing} heading={false} />
+          </> : <>
+        <Text style={styles.workspaceSectionTitle}>{tr(language, "Invoices", "发票", "發票")}</Text>
+        <Text style={styles.workspaceHint}>{tr(language, "Track marketplace sale documents and payout records for your student listings.", "查看学生商品的市场销售文件及结算记录。", "查看學生商品的市場銷售文件及結算記錄。")}</Text>
+        <Pressable accessibilityRole="button" style={[styles.workspaceCard, { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 14 }]} onPress={() => { setStudentMarketplaceOpen(false); setStudentPayoutOpen(true); }}><Ionicons name="wallet-outline" size={24} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{tr(language, "Payouts & payment method", "结算与付款方式", "結算及付款方式")}</Text><Text style={styles.workspaceHint}>{studentPayoutAccount ? `${studentPayoutAccount.holder} · •••• ${studentPayoutAccount.lastFour}` : tr(language, "Add bank details for future payouts", "添加银行资料以备日后结算", "加入銀行資料以備日後結算")}</Text></View><Ionicons name="chevron-forward" size={18} color={palette.blue} /></Pressable>
+        <View style={[styles.workspaceMetricRow, { marginTop: 14, marginBottom: 16 }]}><WorkspaceMetric value={0} label={tr(language, "Issued", "已开具", "已開具")} /><WorkspaceMetric value={0} label={tr(language, "Pending payout", "待结算", "待結算")} /><WorkspaceMetric value="£0.00" label={tr(language, "Outstanding", "未结算", "未結算")} /></View>
+        <View style={styles.search}><Ionicons name="search" size={18} color={palette.muted} /><TextInput accessibilityLabel={tr(language, "Search student marketplace invoices", "搜索学生市场发票", "搜尋學生市場發票")} style={styles.searchInput} value={studentInvoiceSearch} onChangeText={setStudentInvoiceSearch} placeholder={tr(language, "Search item, order or buyer", "搜索商品、订单或买家", "搜尋商品、訂單或買家")} placeholderTextColor="#8B98AD" /></View>
+        <View style={[styles.workspaceCard, { alignItems: "center", gap: 8, paddingVertical: 28 }]}><Ionicons name="document-text-outline" size={28} color={palette.blue} /><Text style={styles.workspaceCardTitle}>{tr(language, "No invoices issued yet", "尚未开具发票", "尚未開具發票")}</Text><Text style={[styles.workspaceHint, { textAlign: "center" }]}>{tr(language, "Your sample listings have no completed sales. An invoice or payout record is not created just because an item is live.", "示例商品尚无已完成销售。商品已上架并不代表已生成发票或结算记录。", "示例商品尚無已完成銷售。商品已上架不代表已生成發票或結算記錄。")}</Text></View>
+        <View style={[styles.workspaceNotice, { marginTop: 14 }]}><Ionicons name="information-circle-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{tr(language, "Preview only. No official invoice, payment or payout is processed here.", "仅为预览。此处不会处理正式发票、付款或结算。", "只供預覽。此處不會處理正式發票、付款或結算。")}</Text></View>
+          </>}
+      </ScrollView></Sheet>
+      <Sheet visible={studentPayoutOpen} title={tr(language, "Payouts & payment method", "结算与付款方式", "結算及付款方式")} onClose={() => { setStudentPayoutOpen(false); setStudentMarketplaceTab("invoices"); setStudentMarketplaceOpen(true); }}><ScrollView contentContainerStyle={styles.modalBody}>
+        <View style={styles.workspaceNotice}><Ionicons name="shield-checkmark-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{tr(language, "Demo only. Do not enter real bank details. This screen is not connected to a payment provider; saving keeps only the account name and last four digits in memory.", "仅供演示。请勿输入真实银行资料。此页面未连接支付服务；保存后仅在内存中保留账户名称和末四位。", "只供示範。請勿輸入真實銀行資料。此頁面未連接付款服務；儲存後僅在記憶體中保留帳戶名稱及末四位。")}</Text></View>
+        <Text style={styles.workspaceSectionTitle}>{tr(language, "Payout bank account", "收款银行账户", "收款銀行帳戶")}</Text>
+        {studentPayoutAccount && <View style={[styles.workspaceCard, { marginBottom: 14 }]}><Text style={styles.workspaceCardTitle}>{studentPayoutAccount.holder}</Text><Text style={styles.workspaceCardText}>{tr(language, "Account ending", "账号末四位", "帳號末四位")} •••• {studentPayoutAccount.lastFour}</Text><Text style={styles.workspaceHint}>{tr(language, "Preview record only · not verified for payouts", "仅为预览记录 · 未验证结算资格", "只供預覽記錄 · 未驗證結算資格")}</Text></View>}
+        <Text style={styles.authFieldLabel}>{tr(language, "Account holder", "账户持有人", "帳戶持有人")}</Text><TextInput accessibilityLabel={tr(language, "Account holder", "账户持有人", "帳戶持有人")} style={styles.authInput} value={studentPayoutHolder} onChangeText={setStudentPayoutHolder} placeholder={tr(language, "Demo account name", "演示账户名称", "示範帳戶名稱")} />
+        <Text style={styles.authFieldLabel}>{tr(language, "Sort code", "银行代码", "銀行代碼")}</Text><TextInput accessibilityLabel={tr(language, "Sort code", "银行代码", "銀行代碼")} style={styles.authInput} value={studentPayoutSortCode} onChangeText={setStudentPayoutSortCode} keyboardType="number-pad" maxLength={8} placeholder="00-00-00" />
+        <Text style={styles.authFieldLabel}>{tr(language, "Account number", "银行账号", "銀行帳號")}</Text><TextInput accessibilityLabel={tr(language, "Account number", "银行账号", "銀行帳號")} style={styles.authInput} value={studentPayoutAccountNumber} onChangeText={setStudentPayoutAccountNumber} keyboardType="number-pad" maxLength={8} placeholder="00000000" />
+        {!!studentPayoutError && <Text style={styles.workspaceError}>{studentPayoutError}</Text>}
+        <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={saveStudentPayoutPreview}><Text style={styles.primaryButtonText}>{tr(language, "Save demo payout account", "保存演示收款账户", "儲存示範收款帳戶")}</Text></Pressable>
+        <Text style={[styles.workspaceSectionTitle, { marginTop: 24 }]}>{tr(language, "How you pay UniMate fees", "支付优你伴费用的方式", "支付優你伴費用的方式")}</Text>
+        <View style={[styles.workspaceCard, { gap: 10 }]}>{(["invoice", "card"] as const).map((method) => <Pressable key={method} accessibilityRole="radio" accessibilityState={{ checked: studentBillingMethod === method }} style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 7 }} onPress={() => setStudentBillingMethod(method)}><Ionicons name={studentBillingMethod === method ? "radio-button-on" : "radio-button-off"} size={21} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{method === "invoice" ? tr(language, "Invoice / bank transfer", "发票／银行转账", "發票／銀行轉帳") : tr(language, "Card via secure provider", "通过安全服务使用银行卡", "經安全服務使用銀行卡")}</Text><Text style={styles.workspaceHint}>{method === "invoice" ? tr(language, "Pay agreed fees against an issued invoice", "根据已开具发票支付约定费用", "按已開具發票支付約定費用") : tr(language, "Requires a payment-provider connection before launch", "上线前需要连接支付服务", "上線前須連接付款服務")}</Text></View></Pressable>)}</View>
+        <Text style={styles.workspaceHint}>{tr(language, "No card details, bank verification, invoices or payouts are processed in this preview.", "此预览不会处理银行卡资料、银行验证、发票或结算。", "此預覽不會處理銀行卡資料、銀行驗證、發票或結算。")}</Text>
+      </ScrollView></Sheet>
+      <PaymentMethodsSheet
+        visible={paymentOpen}
+        language={language}
+        methods={paymentMethods}
+        defaultId={defaultPaymentId}
+        onClose={() => setPaymentOpen(false)}
+        onAdd={onAddPaymentMethod}
+        onSetDefault={onSetDefaultPaymentMethod}
+        onRemove={onRemovePaymentMethod}
+      />
       <Sheet
         visible={settingsOpen}
         title={tr(language, "Settings", "设置", "設定")}
@@ -12337,15 +13226,23 @@ function Profile({
           <Text style={styles.settingsSectionLabel}>{tr(language, "Language", "语言", "語言")}</Text>
           <View style={styles.settingsLanguageRow}>{(["EN", "简体", "繁體"] as Language[]).map((item) => <Pressable key={item} style={[styles.settingsLanguageButton, language === item && styles.settingsLanguageButtonActive]} onPress={() => onLanguage(item)}><Text style={[styles.settingsLanguageText, language === item && styles.settingsLanguageTextActive]}>{({ EN: "English", 简体: "简体中文", 繁體: "繁體中文" } as Record<Language, string>)[item]}</Text>{language === item && <Ionicons name="checkmark-circle" size={16} color="white" />}</Pressable>)}</View>
           <Text style={styles.settingsSectionLabel}>{tr(language, "Account", "账户", "帳戶")}</Text>
-          <Pressable style={styles.logoutButton} onPress={() => Alert.alert(tr(language, "Log out?", "退出登录？", "登出？"), tr(language, "You can sign back in at any time.", "你可以随时重新登录。", "你可以隨時重新登入。"), [{ text: tr(language, "Cancel", "取消", "取消"), style: "cancel" }, { text: tr(language, "Log out", "退出登录", "登出"), onPress: () => Alert.alert(tr(language, "Logged out", "已退出登录", "已登出")) }])}><Ionicons name="log-out-outline" size={20} color={palette.blue} /><Text style={styles.logoutButtonText}>{tr(language, "Log out", "退出登录", "登出")}</Text></Pressable>
+          <Pressable style={styles.logoutButton} onPress={() => { setSettingsOpen(false); setLogoutConfirmOpen(true); }}><Ionicons name="log-out-outline" size={20} color={palette.blue} /><Text style={styles.logoutButtonText}>{tr(language, "Log out", "退出登录", "登出")}</Text></Pressable>
           <View style={styles.dangerZone}><Text style={styles.dangerZoneTitle}>{tr(language, "Danger zone", "危险操作", "危險操作")}</Text><Text style={styles.dangerZoneText}>{tr(language, "Deleting your account permanently removes your profile, reviews and activity history.", "删除账户将永久移除你的资料、评价和活动记录。", "刪除帳戶將永久移除你的資料、評價及活動記錄。")}</Text><Pressable style={styles.deleteAccountButton} onPress={() => Alert.alert(tr(language, "Delete your account?", "删除账户？", "刪除帳戶？"), tr(language, "This cannot be undone. Continue only if you want to permanently delete all account data.", "此操作无法撤销。仅在你确定要永久删除所有账户数据时继续。", "此操作無法撤銷。只有在你確定要永久刪除所有帳戶資料時繼續。"), [{ text: tr(language, "Cancel", "取消", "取消"), style: "cancel" }, { text: tr(language, "Continue", "继续", "繼續"), style: "destructive", onPress: () => Alert.alert(tr(language, "Final confirmation", "最终确认", "最終確認"), tr(language, "Are you absolutely sure? Your account and data will be scheduled for permanent deletion.", "你确定吗？你的账户和数据将安排永久删除。", "你確定嗎？你的帳戶及資料將安排永久刪除。"), [{ text: tr(language, "Keep my account", "保留账户", "保留帳戶"), style: "cancel" }, { text: tr(language, "Delete permanently", "永久删除", "永久刪除"), style: "destructive", onPress: () => Alert.alert(tr(language, "Deletion requested", "已申请删除", "已申請刪除"), tr(language, "Your request has been sent to the UNIMATE team for secure processing.", "你的申请已发送给UNIMATE团队进行安全处理。", "你的申請已傳送給UNIMATE團隊進行安全處理。")) }]) }])}><Ionicons name="trash-outline" size={19} color={palette.coral} /><Text style={styles.deleteAccountText}>{tr(language, "Delete account", "删除账户", "刪除帳戶")}</Text></Pressable></View>
         </ScrollView>
+      </Sheet>
+      <Sheet visible={logoutConfirmOpen} title={tr(language, "Log out", "退出登录", "登出")} onClose={() => setLogoutConfirmOpen(false)}>
+        <View style={styles.modalBody}>
+          <Text style={styles.formTitle}>{tr(language, "Log out of UniMate?", "退出优你伴？", "登出優你伴？")}</Text>
+          <Text style={styles.formDesc}>{tr(language, "You can sign back in at any time.", "你可以随时重新登录。", "你可以隨時重新登入。")}</Text>
+          <Pressable style={[styles.primaryButton, { marginTop: 22 }]} onPress={() => { setLogoutConfirmOpen(false); onLogout(); }}><Text style={styles.primaryButtonText}>{tr(language, "Log out", "退出登录", "登出")}</Text></Pressable>
+          <Pressable style={[styles.secondaryButton, { marginTop: 12 }]} onPress={() => setLogoutConfirmOpen(false)}><Text style={styles.secondaryButtonText}>{tr(language, "Stay signed in", "保持登录", "保持登入")}</Text></Pressable>
+        </View>
       </Sheet>
     </>
   );
 }
 
-function EventDateField({ language, value, onChange }: { language: Language; value: string; onChange: (value: string) => void }) {
+function EventDateField({ language, value, onChange, label }: { language: Language; value: string; onChange: (value: string) => void; label?: string }) {
   const [open, setOpen] = useState(false);
   const today = useMemo(() => { const date = new Date(); date.setHours(0, 0, 0, 0); return date; }, []);
   const latestDate = useMemo(() => { const date = new Date(today); date.setFullYear(date.getFullYear() + 1); return date; }, [today]);
@@ -12361,9 +13258,9 @@ function EventDateField({ language, value, onChange }: { language: Language; val
   const lastAvailableMonth = new Date(latestDate.getFullYear(), latestDate.getMonth(), 1);
   return (
     <View style={styles.eventDateField}>
-      <Text style={styles.fieldLabel}>{tr(language, "Date", "日期", "日期")}</Text>
-      <Pressable style={styles.eventDateButton} onPress={() => setOpen(!open)}>
-        <View style={styles.eventDateButtonCopy}><Ionicons name="calendar-outline" size={18} color={palette.blue} /><Text style={styles.eventDateButtonText}>{formatBookingDate(value, language)}</Text></View>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${label || tr(language, "Date", "日期", "日期")}: ${formatBookingDate(value, language)}`} accessibilityState={{ expanded: open }} style={[styles.eventDateButton, open && styles.eventDateButtonOpen]} onPress={() => setOpen(!open)}>
+        <View style={styles.eventScheduleIcon}><Ionicons name="calendar-outline" size={19} color={palette.blue} /></View>
+        <View style={styles.eventDateButtonCopy}><Text style={styles.eventScheduleLabel}>{label || tr(language, "Date", "日期", "日期")}</Text><Text style={styles.eventDateButtonText}>{formatBookingDate(value, language)}</Text></View>
         <Ionicons name={open ? "chevron-up" : "chevron-down"} size={17} color={palette.blue} />
       </Pressable>
       {open && <View style={styles.eventCalendarPanel}>
@@ -12393,8 +13290,7 @@ function EventTimeField({ label, value, onChange }: { label: string; value: stri
   const updateHour = (amount: number) => onChange(`${String((hour + amount + 24) % 24).padStart(2, "0")}:${String(minute).padStart(2, "0")}`);
   const updateMinute = (amount: number) => onChange(`${String(hour).padStart(2, "0")}:${String((minute + amount + 60) % 60).padStart(2, "0")}`);
   return <View style={styles.eventTimeField}>
-    <Text style={styles.fieldLabel}>{label}</Text>
-    <Pressable style={styles.eventDateButton} onPress={() => setOpen(!open)}><View style={styles.eventDateButtonCopy}><Ionicons name="time-outline" size={18} color={palette.blue} /><Text style={styles.eventTimeValue}>{value}</Text></View><Ionicons name={open ? "chevron-up" : "chevron-down"} size={17} color={palette.blue} /></Pressable>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value}`} accessibilityState={{ expanded: open }} style={[styles.eventDateButton, open && styles.eventDateButtonOpen]} onPress={() => setOpen(!open)}><View style={styles.eventScheduleIcon}><Ionicons name="time-outline" size={19} color={palette.blue} /></View><View style={styles.eventDateButtonCopy}><Text style={styles.eventScheduleLabel}>{label}</Text><Text style={styles.eventTimeValue}>{value}</Text></View><Ionicons name={open ? "chevron-up" : "chevron-down"} size={17} color={palette.blue} /></Pressable>
     {open && <View style={styles.eventTimePanel}>
       <View style={styles.eventTimeHeader}><Text style={styles.eventTimePanelTitle}>Set time</Text><Text style={styles.eventTimePanelHint}>24-hour clock · 5-minute intervals</Text></View>
       <View style={styles.eventTimeStepperRow}>
@@ -12407,23 +13303,81 @@ function EventTimeField({ label, value, onChange }: { label: string; value: stri
   </View>;
 }
 
+function LargeEventRequestSheet({ visible, language, onClose }: { visible: boolean; language: Language; onClose: () => void }) {
+  const [capacity, setCapacity] = useState(50);
+  const [venue, setVenue] = useState("");
+  const [riskSummary, setRiskSummary] = useState("");
+  const [stewards, setStewards] = useState("");
+  const [emergency, setEmergency] = useState("");
+  const [eventAttachments, setEventAttachments] = useState<{ name: string; uri: string; kind: "ideas" | "risk" }[]>([]);
+  const [submitted, setSubmitted] = useState(false);
+  const chooseDocuments = async (kind: "ideas" | "risk") => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ["image/*", "application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation"],
+      multiple: true,
+      copyToCacheDirectory: true,
+    });
+    if (result.canceled) return;
+    const available = Math.max(0, 6 - eventAttachments.length);
+    const accepted = result.assets.filter((asset) => !asset.size || asset.size <= 10 * 1024 * 1024).slice(0, available);
+    if (accepted.length) setEventAttachments((current) => [...current, ...accepted.map((asset) => ({ name: asset.name, uri: asset.uri, kind }))].slice(0, 6));
+    if (accepted.length < result.assets.length) {
+      Alert.alert(tr(language, "Some files were not added", "部分文件未添加", "部分檔案未加入"), tr(language, "Add up to 6 images, PDFs or documents, each under 10 MB.", "最多添加6个图片、PDF或文档，每个小于10 MB。", "最多加入6張圖片、PDF或文件，每個小於10 MB。"));
+    }
+  };
+  const ready = capacity > 30 && capacity <= 200 && !!venue.trim() && !!riskSummary.trim() && !!stewards.trim() && !!emergency.trim() && eventAttachments.some((attachment) => attachment.kind === "risk");
+  return (
+    <Sheet visible={visible} title={tr(language, "Larger event request", "大型活动申请", "大型活動申請")} onClose={onClose}>
+      <ScrollView contentContainerStyle={styles.foodReviewBody} showsVerticalScrollIndicator={false}>
+        {submitted ? (
+          <View style={styles.ticketCompletePage}>
+            <View style={styles.ticketCompleteIcon}><Ionicons name="document-text-outline" size={36} color="white" /></View>
+            <Text style={styles.ticketCompleteTitle}>{tr(language, "Request preview complete", "申请预览已完成", "申請預覽已完成")}</Text>
+            <Text style={styles.ticketCompleteText}>{tr(language, `${capacity} spots at ${venue}`, `${venue} · ${capacity}人`, `${venue} · ${capacity}人`)}</Text>
+            <Text style={styles.reviewPageDemoNote}>{tr(language, "This prototype has not sent your plan to an admin or approved the event. The 30-person student limit remains until a real review is completed.", "此原型未向管理员发送方案，也未批准活动。完成正式审核前仍适用30人上限。", "此原型未向管理員傳送方案，也未批准活動。完成正式審核前仍適用30人上限。")}</Text>
+            <Pressable style={styles.primaryButton} onPress={onClose}><Text style={styles.primaryButtonText}>{tr(language, "Done", "完成", "完成")}</Text></Pressable>
+          </View>
+        ) : (
+          <>
+            <Text style={styles.formTitle}>{tr(language, "Request more than 30 spots", "申请超过30个名额", "申請超過30個名額")}</Text>
+            <Text style={styles.formDesc}>{tr(language, "Larger student events need a named organiser, venue plan, risk assessment and admin approval before capacity can increase. This form is a prototype preview.", "大型学生活动需提供负责人、场地方案及风险评估，并经管理员批准后方可提高人数。此表单为原型预览。", "大型學生活動需提供負責人、場地方案及風險評估，並經管理員批准後才可提高人數。此表格為原型預覽。")}</Text>
+            <View style={styles.field}><Text style={styles.fieldLabel}>{tr(language, "Requested capacity (31–200)", "申请人数（31–200）", "申請人數（31–200）")}</Text><TextInput value={String(capacity)} onChangeText={(value) => setCapacity(Number(value.replace(/\D/g, "")) || 0)} keyboardType="number-pad" /></View>
+            <View style={styles.field}><Text style={styles.fieldLabel}>{tr(language, "Venue and full address", "场地及完整地址", "場地及完整地址")}</Text><TextInput value={venue} onChangeText={setVenue} placeholder={tr(language, "Venue name and address", "场地名称和地址", "場地名稱及地址")} placeholderTextColor="#A1ADBE" /></View>
+            <View style={[styles.field, styles.textAreaField]}><Text style={styles.fieldLabel}>{tr(language, "Health & safety risks and controls", "健康与安全风险及控制措施", "健康與安全風險及控制措施")}</Text><TextInput multiline value={riskSummary} onChangeText={setRiskSummary} style={styles.textAreaInput} placeholder={tr(language, "Crowding, access, equipment, weather and mitigations", "拥挤、通道、设备、天气及应对措施", "擠擁、通道、設備、天氣及應對措施")} placeholderTextColor="#A1ADBE" /></View>
+            <View style={[styles.field, styles.textAreaField]}><Text style={styles.fieldLabel}>{tr(language, "Organiser team and stewarding", "主办团队及现场管理", "主辦團隊及現場管理")}</Text><TextInput multiline value={stewards} onChangeText={setStewards} style={styles.textAreaInput} placeholder={tr(language, "Who is responsible and how many helpers will attend?", "谁负责现场？将有多少名工作人员？", "誰負責現場？將有多少名工作人員？")} placeholderTextColor="#A1ADBE" /></View>
+            <View style={[styles.field, styles.textAreaField]}><Text style={styles.fieldLabel}>{tr(language, "Emergency and first-aid plan", "紧急情况及急救方案", "緊急情況及急救方案")}</Text><TextInput multiline value={emergency} onChangeText={setEmergency} style={styles.textAreaInput} placeholder={tr(language, "Exits, first aid and emergency contacts", "出口、急救及紧急联系人", "出口、急救及緊急聯絡人")} placeholderTextColor="#A1ADBE" /></View>
+            <Text style={styles.formSectionTitle}>{tr(language, "Supporting attachments", "支持文件", "支援附件")}</Text>
+            <Text style={styles.formDesc}>{tr(language, "Show us your event ideas and attach a risk assessment. Images, PDFs, Word and PowerPoint files are supported.", "上传活动创意和风险评估。支持图片、PDF、Word和PowerPoint文件。", "上傳活動構思和風險評估。支援圖片、PDF、Word及PowerPoint檔案。")}</Text>
+            <Pressable style={styles.reviewCountAction} disabled={eventAttachments.length >= 6} onPress={() => chooseDocuments("ideas")}><Text style={styles.reviewCountActionText}>{tr(language, "Attach event ideas or venue plans", "附上活动创意或场地方案", "附上活動構思或場地方案")}</Text><Ionicons name="images-outline" size={18} color={palette.blue} /></Pressable>
+            <Pressable style={styles.reviewCountAction} disabled={eventAttachments.length >= 6} onPress={() => chooseDocuments("risk")}><Text style={styles.reviewCountActionText}>{tr(language, "Attach risk assessment (required)", "附上风险评估（必填）", "附上風險評估（必填）")}</Text><Ionicons name="attach-outline" size={18} color={palette.blue} /></Pressable>
+            {eventAttachments.map((attachment, index) => <View key={`${attachment.uri}-${index}`} style={styles.largeEventAttachmentRow}><Ionicons name={attachment.kind === "risk" ? "shield-checkmark-outline" : "document-attach-outline"} size={19} color={palette.blue} /><View style={{ flex: 1 }}><Text numberOfLines={1} style={styles.friendName}>{attachment.name}</Text><Text style={styles.metaText}>{attachment.kind === "risk" ? tr(language, "Risk assessment", "风险评估", "風險評估") : tr(language, "Event ideas", "活动创意", "活動構思")}</Text></View><Pressable accessibilityRole="button" accessibilityLabel={tr(language, `Remove ${attachment.name}`, `移除${attachment.name}`, `移除${attachment.name}`)} onPress={() => setEventAttachments((current) => current.filter((_, itemIndex) => itemIndex !== index))}><Ionicons name="close-circle-outline" size={20} color={palette.muted} /></Pressable></View>)}
+            <Text style={styles.reviewPageDemoNote}>{tr(language, "Up to 6 files, 10 MB each. Do not include personal medical records. Approval is not automatic and local venue requirements still apply.", "最多6个文件，每个10 MB。请勿包含个人医疗记录。审批不会自动通过，仍需遵守场地要求。", "最多6個檔案，每個10 MB。請勿包含個人醫療紀錄。審批不會自動通過，仍需遵守場地要求。")}</Text>
+            <Pressable style={[styles.primaryButton, !ready && { opacity: 0.45 }]} disabled={!ready} onPress={() => setSubmitted(true)}><Text style={styles.primaryButtonText}>{tr(language, "Preview application", "预览申请", "預覽申請")}</Text></Pressable>
+          </>
+        )}
+      </ScrollView>
+    </Sheet>
+  );
+}
+
 function EventModal({
   visible,
   onClose,
   onViewMyEvents,
+  onLargeEventRequest,
   language,
 }: {
   visible: boolean;
   onClose: () => void;
   onViewMyEvents: () => void;
+  onLargeEventRequest: () => void;
   language: Language;
 }) {
-  const categoryScrollRef = useRef<NativeScrollView>(null);
   const [submitted, setSubmitted] = useState(false);
   const [paymentMode, setPaymentMode] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<"Card" | "Apple Pay" | "WeChat Pay">("Card");
   const [ticketPrice, setTicketPrice] = useState("");
-  const [eventCapacity, setEventCapacity] = useState(50);
+  const [eventCapacity, setEventCapacity] = useState(30);
   const [eventDate, setEventDate] = useState(() => bookingDateFromToday(7));
   const [startTime, setStartTime] = useState("18:00");
   const [endTime, setEndTime] = useState("21:00");
@@ -12634,23 +13588,7 @@ function EventModal({
             <Text style={styles.formSectionLabel}>
               {tr(language, "EVENT CATEGORY", "活动分类", "活動分類")}
             </Text>
-            <View style={styles.eventCategoryRail}>
-              <Pressable
-                accessibilityLabel={tr(language, "Previous categories", "上一组分类", "上一組分類")}
-                style={styles.eventCategoryArrow}
-                onPress={() => categoryScrollRef.current?.scrollTo({ x: 0, animated: true })}
-              >
-                <Ionicons name="chevron-back" size={18} color={palette.blue} />
-              </Pressable>
-              <ScrollView
-                ref={categoryScrollRef}
-                horizontal
-                nestedScrollEnabled
-                directionalLockEnabled
-                showsHorizontalScrollIndicator={false}
-                style={styles.eventCategoryScroller}
-                contentContainerStyle={styles.categoryRow}
-              >
+            <SlidableCategories language={language} containerStyle={styles.eventCategoryRail} rowStyle={styles.categoryRow}>
                 {categories.map((item) => (
                   <Pressable
                     key={item}
@@ -12670,15 +13608,7 @@ function EventModal({
                     </Text>
                   </Pressable>
                 ))}
-              </ScrollView>
-              <Pressable
-                accessibilityLabel={tr(language, "More categories", "更多分类", "更多分類")}
-                style={styles.eventCategoryArrow}
-                onPress={() => categoryScrollRef.current?.scrollToEnd({ animated: true })}
-              >
-                <Ionicons name="chevron-forward" size={18} color={palette.blue} />
-              </Pressable>
-            </View>
+            </SlidableCategories>
             <View style={styles.photoPicker}>
               {photo ? (
                 <Image source={{ uri: photo }} style={styles.photoPreview} />
@@ -12769,9 +13699,9 @@ function EventModal({
                   <Text style={styles.eventCapacityHint}>
                     {tr(
                       language,
-                      "Student events can host up to 50 people.",
-                      "学生个人活动最多可容纳50人。",
-                      "學生個人活動最多可容納50人。",
+                      "Standard student events can host 2–30 people.",
+                      "普通学生活动可容纳2至30人。",
+                      "一般學生活動可容納2至30人。",
                     )}
                   </Text>
                 </View>
@@ -12779,10 +13709,12 @@ function EventModal({
               <View style={styles.eventCapacityControl}>
                 <Pressable
                   accessibilityLabel={tr(language, "Reduce capacity", "减少人数", "減少人數")}
-                  style={styles.eventCapacityButton}
-                  onPress={() => setEventCapacity((value) => Math.max(1, value - 1))}
+                  accessibilityState={{ disabled: eventCapacity <= 2 }}
+                  disabled={eventCapacity <= 2}
+                  style={[styles.eventCapacityButton, eventCapacity <= 2 && styles.eventCapacityButtonDisabled]}
+                  onPress={() => setEventCapacity((value) => Math.max(2, value - 1))}
                 >
-                  <Ionicons name="remove" size={20} color={palette.blue} />
+                  <Ionicons name="remove" size={20} color={eventCapacity <= 2 ? "#AAB7C5" : palette.blue} />
                 </Pressable>
                 <View style={styles.eventCapacityValueWrap}>
                   <Text style={styles.eventCapacityValue}>{eventCapacity}</Text>
@@ -12792,14 +13724,16 @@ function EventModal({
                 </View>
                 <Pressable
                   accessibilityLabel={tr(language, "Increase capacity", "增加人数", "增加人數")}
-                  style={styles.eventCapacityButton}
-                  onPress={() => setEventCapacity((value) => Math.min(50, value + 1))}
+                  accessibilityState={{ disabled: eventCapacity >= 30 }}
+                  disabled={eventCapacity >= 30}
+                  style={[styles.eventCapacityButton, eventCapacity >= 30 && styles.eventCapacityButtonDisabled]}
+                  onPress={() => setEventCapacity((value) => Math.min(30, value + 1))}
                 >
-                  <Ionicons name="add" size={20} color={palette.blue} />
+                  <Ionicons name="add" size={20} color={eventCapacity >= 30 ? "#AAB7C5" : palette.blue} />
                 </Pressable>
               </View>
               <View style={styles.eventCapacityPresets}>
-                {[10, 20, 30, 50].map((value) => (
+                {[10, 20, 30].map((value) => (
                   <Pressable
                     key={value}
                     style={[
@@ -12824,12 +13758,13 @@ function EventModal({
                 <Text style={styles.eventCapacityPolicyText}>
                   {tr(
                     language,
-                    "Verified clubs and societies can request capacities up to 200 through their organiser account.",
-                    "已认证的俱乐部和学生社团可通过主办方账户申请最多200人的容量。",
-                    "已認證的俱樂部及學生社團可透過主辦方帳戶申請最多200人的容量。",
+                    "Need more than 30 spots? Submit a separate health-and-safety plan for admin review before listing a larger event.",
+                    "需要超过30个名额？请单独提交健康与安全方案，管理员审核后方可发布大型活动。",
+                    "需要超過30個名額？請單獨提交健康與安全方案，管理員審核後才可發佈大型活動。",
                   )}
                 </Text>
               </View>
+              <Pressable style={styles.reviewCountAction} onPress={onLargeEventRequest}><Text style={styles.reviewCountActionText}>{tr(language, "Request more than 30 spots", "申请超过30个名额", "申請超過30個名額")}</Text><Ionicons name="chevron-forward" size={17} color={palette.blue} /></Pressable>
             </View>
             <View style={styles.organiserIdentity}>
               <View style={styles.organiserAvatar}>
@@ -12902,32 +13837,153 @@ function EventModal({
   );
 }
 
+function StudentFeatureLocked({ language, feature, status, onVerify }: { language: Language; feature: "events" | "friends" | "food"; status: StudentVerificationStatus; onVerify: () => void }) {
+  const featureName = feature === "events" ? tr(language, "Events", "活动", "活動") : feature === "friends" ? tr(language, "Make friends", "结交朋友", "結交朋友") : tr(language, "Student reviews", "学生点评", "學生評價");
+  return <ScrollView contentContainerStyle={{ padding: 24, flexGrow: 1, justifyContent: "center", alignItems: "center" }}>
+    <View style={{ width: 72, height: 72, borderRadius: 22, backgroundColor: "#EAF4FF", alignItems: "center", justifyContent: "center", marginBottom: 18 }}><Ionicons name="lock-closed-outline" size={31} color={palette.blue} /></View>
+    <Text style={{ color: palette.navy, fontSize: 22, fontWeight: "900", textAlign: "center" }}>{tr(language, "Verify to use", "认证后使用", "認證後使用")} {featureName}</Text>
+    <Text style={{ color: palette.muted, fontSize: 13, lineHeight: 20, textAlign: "center", marginTop: 10, marginBottom: 22 }}>{status === "pending" ? tr(language, "Your student verification is pending review. This feature will unlock after approval.", "学生认证正在审核。批准后即可使用此功能。", "學生認證正在審核。批准後即可使用此功能。") : tr(language, "Verify your student identity to discover and join events, use event group chats, make friends and read student food reviews.", "认证学生身份后，即可参加活动、使用活动群聊、结交朋友并阅读学生美食点评。", "認證學生身份後，即可參加活動、使用活動群組、結交朋友並閱讀學生美食評價。")}</Text>
+    <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={onVerify}><Text style={styles.primaryButtonText}>{status === "pending" ? tr(language, "View verification status", "查看认证状态", "查看認證狀態") : tr(language, "Start student verification", "开始学生认证", "開始學生認證")}</Text></Pressable>
+    <Text style={{ color: palette.muted, fontSize: 11, lineHeight: 16, textAlign: "center", marginTop: 17 }}>{tr(language, "You can still browse the home screen and contact support while waiting.", "等待期间仍可浏览首页及联系客服。", "等候期間仍可瀏覽首頁及聯絡客服。")}</Text>
+  </ScrollView>;
+}
+
 function AppContent({
   darkMode,
   onToggleDarkMode,
+  language,
+  onLanguage,
+  accountRole,
+  studentStatus,
+  accountName,
+  onLogout,
+  onPreviewBooking,
+  previewBookings,
+  staffAvailability,
+  completedJobs,
+  serviceChatCases,
+  statusUpdates,
+  onOpenServiceChatCase,
+  onAddServiceCaseMessage,
+  serviceReviews,
+  onSubmitServiceReview,
+  staffTips,
+  onAddStaffTip,
+  studentProfilePhoto,
+  onStudentProfilePhotoChange,
+  submittedReviews,
+  setSubmittedReviews,
+  restaurantReviewReplies,
+  restaurantProfile,
+  marketplaceConversations,
+  onOpenMarketplaceConversation,
+  onSendMarketplaceMessage,
+  onConfirmMarketplaceReceipt,
+  onOpenMarketplaceIssue,
 }: {
   darkMode: boolean;
   onToggleDarkMode: () => void;
+  language: Language;
+  onLanguage: (language: Language) => void;
+  accountRole: AccountRole;
+  studentStatus: StudentVerificationStatus;
+  accountName?: string;
+  onLogout: () => void;
+  onPreviewBooking: (order: ServiceCheckoutOrder) => void;
+  previewBookings: (StaffBooking & { service: StaffService })[];
+  staffAvailability: Record<StaffService, StaffAvailability>;
+  completedJobs: StaffCompletedJob[];
+  serviceChatCases: ServiceChatCase[];
+  statusUpdates: ServiceStatusUpdate[];
+  onOpenServiceChatCase: (job: StaffCompletedJob, reason: ServiceCaseReason, openedBy: "customer" | "staff", details: string) => void;
+  onAddServiceCaseMessage: (bookingId: string, author: "customer" | "staff", message: string) => void;
+  serviceReviews: StaffServiceReview[];
+  onSubmitServiceReview: (review: StaffServiceReview) => void;
+  staffTips: StaffTip[];
+  onAddStaffTip: (tip: StaffTip) => void;
+  studentProfilePhoto: string;
+  onStudentProfilePhotoChange: (photo: string) => void;
+  submittedReviews: PlaceReview[];
+  setSubmittedReviews: React.Dispatch<React.SetStateAction<PlaceReview[]>>;
+  restaurantReviewReplies: Record<string, string>;
+  restaurantProfile: RestaurantPublicProfile;
+  marketplaceConversations: MarketplaceConversation[];
+  onOpenMarketplaceConversation: (product: (typeof products)[number], sellerHandle: string) => string;
+  onSendMarketplaceMessage: (id: string, author: "buyer" | "seller", text: string, attachment?: ChatAttachment) => void;
+  onConfirmMarketplaceReceipt: (id: string) => void;
+  onOpenMarketplaceIssue: (id: string, reason: MarketplaceIssueReason, details: string, openedBy: "buyer" | "seller") => void;
 }) {
   const [tab, setTab] = useState<Tab>("home");
-  const [eventView, setEventView] = useState<"browse" | "mine">("browse");
-  const [language, setLanguage] = useState<Language>("EN");
+  const [eventView, setEventView] = useState<"browse" | "going" | "mine">("browse");
+  const setLanguage = onLanguage;
   const [eventModal, setEventModal] = useState(false);
+  const [largeEventOpen, setLargeEventOpen] = useState(false);
   const [service, setService] = useState<
     "airport" | "cleaning" | "moving" | "market" | null
   >(null);
+  const [serviceOrder, setServiceOrder] = useState<ServiceCheckoutOrder | null>(null);
+  const assignedBookingsForDate = (service: StaffService, date: string) => [...staffWorkspaceData[service].bookings, ...previewBookings.filter((booking) => booking.service === service)].filter((booking) => booking.date === date && !completedJobs.some((job) => job.booking.id === booking.id));
+  const isServiceDateUnavailable = (service: StaffService, dayKey: string) => { const date = formatStaffBookingDate(dayKey); return !!staffAvailability[service].blockedDates[date] || assignedBookingsForDate(service, date).length >= 3; };
+  const reviewServiceOrder = (order: ServiceCheckoutOrder) => {
+    const service = order.service;
+    const availability = staffAvailability[service];
+    if (!order.bookingDate || availability.blockedDates[order.bookingDate] || assignedBookingsForDate(service, order.bookingDate).length >= 3) { Alert.alert(tr(language, "No staff available", "暂无员工可接单", "暫無員工可接單"), tr(language, "This date is blocked or fully booked. Choose another date.", "该日期已封锁或排满，请选择其他日期。", "該日期已封鎖或排滿，請選擇其他日期。")); return; }
+    if (!isOrderInWorkAreas(order, availability.areas)) { Alert.alert(tr(language, "Outside staff work area", "超出员工服务范围", "超出員工服務範圍"), tr(language, "Enter a full London-area address served by an available staff member, then try again. No job is assigned outside their selected areas.", "请输入可用员工服务范围内的完整伦敦地区地址，再重试。不会向服务区域外的员工分配工作。", "請輸入可用員工服務範圍內的完整倫敦地區地址，再重試。不會向服務範圍外的員工分派工作。")); return; }
+    if (assignedBookingsForDate(service, order.bookingDate).some((booking) => bookingTimesOverlap(booking.time, order.bookingTime || ""))) { Alert.alert(tr(language, "Time slot unavailable", "时段不可预约", "時段不可預約"), tr(language, "The available staff member already has a booking at this time. Choose another slot.", "该员工此时已有预订，请选择其他时段。", "該員工此時已有預訂，請選擇其他時段。")); return; }
+    setServiceOrder(order);
+  };
+  const [paymentMethods, setPaymentMethods] = useState<SavedPaymentMethod[]>([]);
+  const [defaultPaymentId, setDefaultPaymentId] = useState<string | null>(null);
+  const [visitedPlaces, setVisitedPlaces] = useState<VisitedPlace[]>([]);
+  const [verificationOpen, setVerificationOpen] = useState(false);
+  const [localStudentStatus, setLocalStudentStatus] = useState(studentStatus);
+  const studentFeaturesLocked = accountRole === "student" && localStudentStatus !== "verified";
+  const addPaymentMethod = (brand: SavedPaymentMethod["brand"], last4: string, makeDefault: boolean) => {
+    const id = `demo-card-${Date.now()}`;
+    setPaymentMethods((current) => [...current, { id, brand, last4 }]);
+    if (makeDefault || !defaultPaymentId) setDefaultPaymentId(id);
+  };
+  const removePaymentMethod = (id: string) => {
+    const remaining = paymentMethods.filter((method) => method.id !== id);
+    setPaymentMethods(remaining);
+    if (defaultPaymentId === id) setDefaultPaymentId(remaining[0]?.id || null);
+  };
   const [sell, setSell] = useState(false);
+  const [pendingMarketListings, setPendingMarketListings] = useState<PendingMarketListing[]>([
+    { id: "STU-SAMPLE-1", name: "Compact desk lamp", price: "£18", quantity: 2, sold: 0, status: "pending" },
+    { id: "STU-SAMPLE-2", name: "Statistics textbook", price: "£16", quantity: 5, sold: 1, status: "live" },
+  ]);
+  const [studentDemoRequestStatus, setStudentDemoRequestStatus] = useState<DemoRequestStatus>("pending");
   const [location, setLocation] = useState("London");
   const [locationOpen, setLocationOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [ticketPassOpen, setTicketPassOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(6);
-  const [messageDeepLink, setMessageDeepLink] = useState<
-    "support" | "lost" | "group" | null
-  >(null);
+  const [messageDeepLink, setMessageDeepLink] = useState<string | null>(null);
   const [eventDeepLink, setEventDeepLink] = useState<string | null>(null);
   const [eventAnnouncements, setEventAnnouncements] = useState<string[]>([]);
   const [favourites, setFavourites] = useState<string[]>([]);
+  const [acceptedFriends, setAcceptedFriends] = useState(studentStatus === "verified" ? [friends[0].username, friends[1].username] : []);
+  const [followedOrganisations, setFollowedOrganisations] = useState(["unimate"]);
+  const toggleOrganisationFollow = (id: string) => setFollowedOrganisations((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+  // The sample cruise ticket already appears in Bookings and Notifications.
+  const [reservedEvents, setReservedEvents] = useState<string[]>(studentStatus === "verified" ? ["Thames River Cruise"] : []);
+  const [pendingCancellation, setPendingCancellation] = useState<string | null>(null);
+  const cancellationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reserveEvent = (eventTitle: string) => {
+    setReservedEvents((current) => current.includes(eventTitle) ? current : [...current, eventTitle]);
+    setPendingCancellation(null);
+  };
+  const cancelReservation = (eventTitle: string) => {
+    if (cancellationTimer.current) clearTimeout(cancellationTimer.current);
+    if (pendingCancellation === eventTitle) {
+      setReservedEvents((current) => current.filter((title) => title !== eventTitle));
+      setPendingCancellation(null);
+    } else {
+      setPendingCancellation(eventTitle);
+      cancellationTimer.current = setTimeout(() => setPendingCancellation(null), 6000);
+    }
+  };
   const toggleFavourite = (eventTitle: string) =>
     setFavourites((current) =>
       current.includes(eventTitle)
@@ -12939,23 +13995,37 @@ function AppContent({
       tab === "home" ? (
         <Home
           language={language}
+          studentStatus={localStudentStatus}
+          onOpenVerification={() => setVerificationOpen(true)}
           setTab={setTab}
-          openService={setService}
+          openService={(nextService) => { setServiceOrder(null); setService(nextService); }}
           openFriends={() => setTab("friends")}
           openEvent={(eventTitle) => { setEventDeepLink(eventTitle); setTab("events"); }}
           favourites={favourites}
           onToggleFavourite={toggleFavourite}
+          reservedEvents={reservedEvents}
+          pendingCancellation={pendingCancellation}
+          onReserveEvent={studentFeaturesLocked ? () => setTab("events") : reserveEvent}
+          onCancelReservation={cancelReservation}
+          acceptedFriends={acceptedFriends}
         />
+      ) : studentFeaturesLocked && (tab === "events" || tab === "friends" || tab === "food") ? (
+        <StudentFeatureLocked language={language} feature={tab} status={localStudentStatus} onVerify={() => setVerificationOpen(true)} />
       ) : tab === "events" ? (
         <EventsForum
           key={eventView}
           language={language}
           initialEvent={eventDeepLink}
+          onClearInitialEvent={() => setEventDeepLink(null)}
           view={eventView}
           onViewChange={setEventView}
           onPost={() => setEventModal(true)}
           favourites={favourites}
           onToggleFavourite={toggleFavourite}
+          reservedEvents={reservedEvents}
+          pendingCancellation={pendingCancellation}
+          onReserveEvent={reserveEvent}
+          onCancelReservation={cancelReservation}
           onOpenGroupChat={() => {
             setMessageDeepLink("group");
             setTab("messages");
@@ -12963,14 +14033,26 @@ function AppContent({
           onPublishAnnouncement={(announcement) =>
             setEventAnnouncements((current) => [announcement, ...current])
           }
+          onLargeEventRequest={() => setLargeEventOpen(true)}
+          acceptedFriends={acceptedFriends}
         />
       ) : tab === "food" ? (
-        <FoodForum language={language} />
+        <FoodForum language={language} visitedPlaces={visitedPlaces} setVisitedPlaces={setVisitedPlaces} submittedReviews={submittedReviews} setSubmittedReviews={setSubmittedReviews} reviewerName={accountName || "Sophie Chen"} reviewReplies={restaurantReviewReplies} restaurantProfile={restaurantProfile} />
       ) : tab === "friends" ? (
-        <FriendsHub language={language} />
+        <FriendsHub language={language} acceptedFriends={acceptedFriends} setAcceptedFriends={setAcceptedFriends} followedOrganisations={followedOrganisations} onToggleOrganisationFollow={toggleOrganisationFollow} />
       ) : tab === "bookings" ? (
         <BookingsPage
           language={language}
+          previewBookings={previewBookings}
+          completedJobs={completedJobs}
+          serviceChatCases={serviceChatCases}
+          statusUpdates={statusUpdates}
+          onOpenServiceChatCase={onOpenServiceChatCase}
+          serviceReviews={serviceReviews}
+          onSubmitServiceReview={onSubmitServiceReview}
+          staffTips={staffTips}
+          onAddStaffTip={onAddStaffTip}
+          reviewerName={accountName || ""}
           onOpenEvent={(eventTitle) => {
             setEventDeepLink(eventTitle);
             setTab("events");
@@ -12983,14 +14065,46 @@ function AppContent({
       ) : tab === "messages" ? (
         <MessagesPage
           language={language}
-          initialThread={messageDeepLink}
+          previewBookings={previewBookings}
+          statusUpdates={statusUpdates}
+          initialThread={studentFeaturesLocked && messageDeepLink === "group" ? null : messageDeepLink}
           onClearInitialThread={() => setMessageDeepLink(null)}
           eventAnnouncements={eventAnnouncements}
+          completedJobs={completedJobs}
+          serviceChatCases={serviceChatCases}
+          onAddServiceCaseMessage={onAddServiceCaseMessage}
+          viewerName={accountName || "Sophie Chen"}
+          ownPhoto={studentProfilePhoto}
+          marketplaceConversations={marketplaceConversations}
+          onSendMarketplaceMessage={(id, text, attachment) => onSendMarketplaceMessage(id, "buyer", text, attachment)}
+          onConfirmMarketplaceReceipt={onConfirmMarketplaceReceipt}
+          onOpenMarketplaceIssue={(id, reason, details) => onOpenMarketplaceIssue(id, reason, details, "buyer")}
+          demoRequestStatus={studentDemoRequestStatus}
+          onDemoRequestDecision={setStudentDemoRequestStatus}
+          canAccessEventGroup={!studentFeaturesLocked}
+          onRequestVerification={() => setVerificationOpen(true)}
         />
       ) : (
         <Profile
           language={language}
           onLanguage={setLanguage}
+          paymentMethods={paymentMethods}
+          defaultPaymentId={defaultPaymentId}
+          onAddPaymentMethod={addPaymentMethod}
+          onSetDefaultPaymentMethod={setDefaultPaymentId}
+          onRemovePaymentMethod={removePaymentMethod}
+          marketListings={pendingMarketListings}
+          onUpdateMarketListing={(listing) => setPendingMarketListings((current) => current.map((item) => item.id === listing.id ? listing : item))}
+          acceptedFriends={acceptedFriends}
+          followedOrganisations={followedOrganisations}
+          onToggleOrganisationFollow={toggleOrganisationFollow}
+          accountRole={accountRole}
+          studentVerified={!studentFeaturesLocked}
+          studentStatus={localStudentStatus}
+          accountName={accountName}
+          onLogout={onLogout}
+          profilePhoto={studentProfilePhoto}
+          onProfilePhotoChange={onStudentProfilePhotoChange}
           onNavigate={(nextTab) => {
             if (nextTab === "events") setEventView("mine");
             setTab(nextTab);
@@ -12999,7 +14113,7 @@ function AppContent({
           onToggleDarkMode={onToggleDarkMode}
         />
       ),
-    [tab, language, eventDeepLink, favourites, messageDeepLink, darkMode, eventView, eventAnnouncements],
+    [tab, language, eventDeepLink, favourites, acceptedFriends, followedOrganisations, reservedEvents, pendingCancellation, messageDeepLink, darkMode, eventView, eventAnnouncements, paymentMethods, defaultPaymentId, visitedPlaces, submittedReviews, restaurantReviewReplies, restaurantProfile, marketplaceConversations, studentDemoRequestStatus, pendingMarketListings, accountRole, onLogout, localStudentStatus, studentFeaturesLocked, accountName, onLanguage],
   );
   const tabs = [
     { id: "home" as const, icon: "home", label: words[language].home },
@@ -13013,6 +14127,7 @@ function AppContent({
       id: "messages" as const,
       icon: "chatbubbles",
       label: words[language].messages,
+      badge: studentDemoRequestStatus === "pending" ? 1 : 0,
     },
     { id: "profile" as const, icon: "person", label: words[language].profile },
   ];
@@ -13062,13 +14177,13 @@ function AppContent({
                 setTab(item.id);
               }}
             >
-              <Ionicons
+              <View><Ionicons
                 name={
                   (tab === item.id ? item.icon : `${item.icon}-outline`) as any
                 }
                 size={22}
                 color={tab === item.id ? palette.blue : palette.muted}
-              />
+              />{!!("badge" in item && item.badge) && <View style={{ position: "absolute", top: -7, right: -12, minWidth: 17, height: 17, paddingHorizontal: 3, borderRadius: 9, backgroundColor: palette.coral, alignItems: "center", justifyContent: "center" }}><Text style={{ color: "#FFFFFF", fontSize: 10, fontWeight: "800" }}>{item.badge}</Text></View>}</View>
               <Text
                 style={[
                   styles.tabText,
@@ -13083,12 +14198,14 @@ function AppContent({
         <EventModal
           visible={eventModal}
           onClose={() => setEventModal(false)}
+          onLargeEventRequest={() => setLargeEventOpen(true)}
           onViewMyEvents={() => {
             setEventView("mine");
             setTab("events");
           }}
           language={language}
         />
+        <LargeEventRequestSheet visible={largeEventOpen} language={language} onClose={() => setLargeEventOpen(false)} />
         <LocationPicker
           visible={locationOpen}
           language={language}
@@ -13130,37 +14247,1478 @@ function AppContent({
           title={
             service === "market" ? words[language].market : words[language].book
           }
-          onClose={() => setService(null)}
+          onClose={() => { setService(null); setServiceOrder(null); }}
         >
           {service === "market" ? (
-            <Marketplace language={language} onSell={() => setSell(true)} />
+            <Marketplace language={language} onSell={() => setSell(true)} pendingListings={pendingMarketListings.filter((item) => item.status === "pending" && !item.id.startsWith("STU-SAMPLE"))} onMessageSeller={(product, sellerHandle) => { const id = onOpenMarketplaceConversation(product, sellerHandle); setService(null); setMessageDeepLink(`market:${id}`); setTab("messages"); }} />
           ) : service ? (
-            <ScrollView contentContainerStyle={styles.modalBody}>
-              <ServiceForm
-                type={
-                  service === "airport"
-                    ? "Airport transfer"
-                    : service === "moving"
-                      ? "Moving"
-                      : "Cleaning"
-                }
-                language={language}
-              />
-            </ScrollView>
+            <View style={{ flex: 1 }}>
+              <ScrollView style={{ display: serviceOrder ? "none" : "flex" }} contentContainerStyle={styles.modalBody}>
+                <ServiceForm
+                  type={service === "airport" ? "Airport transfer" : service === "moving" ? "Moving" : "Cleaning"}
+                  language={language}
+                  onCheckout={reviewServiceOrder}
+                  isUnavailable={(dayKey) => isServiceDateUnavailable(service as StaffService, dayKey)}
+                />
+              </ScrollView>
+              {serviceOrder && (
+                <ServicePaymentPage
+                  key={`${serviceOrder.service}-${serviceOrder.when}`}
+                  order={serviceOrder}
+                  language={language}
+                  onBack={() => setServiceOrder(null)}
+                  onDone={() => { setServiceOrder(null); setService(null); }}
+                  onPaymentPreview={onPreviewBooking}
+                  defaultPaymentMethod={paymentMethods.find((method) => method.id === defaultPaymentId) || null}
+                />
+              )}
+            </View>
           ) : null}
         </Sheet>
         <SellItemForm
           visible={sell}
           language={language}
           onClose={() => setSell(false)}
+          onSubmitted={(listing) => setPendingMarketListings((current) => [listing, ...current])}
         />
+        {studentFeaturesLocked && <StudentVerificationSheet visible={verificationOpen} language={language} status={localStudentStatus} startApply={localStudentStatus === "unverified"} onClose={() => setVerificationOpen(false)} onSubmit={(decision) => { setLocalStudentStatus(decision); if (decision !== "failed") setVerificationOpen(false); }} onContactSupport={() => { setVerificationOpen(false); setMessageDeepLink("support"); setTab("messages"); }} />}
       </SafeAreaView>
     </>
   );
 }
 
+function AuthPreferences({ language, onLanguage, darkMode, onToggleDarkMode }: { language: Language; onLanguage: (language: Language) => void; darkMode: boolean; onToggleDarkMode: () => void }) {
+  const [languageOpen, setLanguageOpen] = useState(false);
+  const languageNames: Record<Language, string> = { EN: "English", 简体: "简体中文", 繁體: "繁體中文" };
+  return <View style={[styles.header, { width: "100%" }]}>
+    <AuthBrand darkMode={darkMode} />
+    <View style={styles.headerControls}>
+      <Pressable accessibilityRole="switch" accessibilityLabel={darkMode ? tr(language, "Use light mode", "使用浅色模式", "使用淺色模式") : tr(language, "Use dark mode", "使用深色模式", "使用深色模式")} accessibilityState={{ checked: darkMode }} onPress={onToggleDarkMode} style={styles.headerIconButton}><Ionicons name={darkMode ? "sunny-outline" : "moon-outline"} size={20} color={darkMode ? "#FFD166" : palette.navy} /></Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Language: ${languageNames[language]}`} accessibilityState={{ expanded: languageOpen }} onPress={() => setLanguageOpen(!languageOpen)} style={styles.languageIconButton}><Ionicons name="globe-outline" size={20} color={palette.navy} /><Text style={styles.languageCompact}>{language}</Text><Ionicons name={languageOpen ? "chevron-up" : "chevron-down"} size={11} color={palette.blue} /></Pressable>
+    </View>
+    {languageOpen && <View style={styles.languageMenu}>{(["EN", "简体", "繁體"] as Language[]).map((item) => <Pressable key={item} accessibilityRole="button" accessibilityState={{ selected: language === item }} style={[styles.languageOption, language === item && styles.languageOptionActive]} onPress={() => { onLanguage(item); setLanguageOpen(false); }}><Text style={styles.languageCode}>{item}</Text><Text style={[styles.languageName, language === item && styles.languageNameActive]}>{languageNames[item]}</Text>{language === item && <Ionicons name="checkmark-circle" size={18} color={palette.blue} />}</Pressable>)}</View>}
+  </View>;
+}
+
+function AuthBrand({ darkMode }: { darkMode: boolean }) {
+  return <View style={styles.brandLogoFrame}><Image source={require("./assets/unimate-logo.png")} style={[styles.brandLogo, darkMode && styles.brandLogoDark]} resizeMode="contain" />{darkMode && <View style={styles.brandLogoMarkClip}><Image source={require("./assets/unimate-logo.png")} style={styles.brandLogoMark} resizeMode="contain" /></View>}</View>;
+}
+
+const sellerCategoryOptions = ["Handmade & crochet", "Custom jewellery", "Clothing & accessories", "Art & stationery", "Home & gifts", "Fragrance & beauty", "Other niche goods"];
+
+function AuthScreen({ onEnter, onPreview, onSupport, onExploreDemos, language, onLanguage, darkMode, onToggleDarkMode }: { onEnter: (role: AccountRole, mode: "signin" | "create", name: string, staffPosition: string, staffService: StaffService, organisationType: OrganisationType, movingDriver: boolean, sellerCategories: string[]) => void; onPreview: () => void; onSupport: () => void; onExploreDemos: () => void; language: Language; onLanguage: (language: Language) => void; darkMode: boolean; onToggleDarkMode: () => void }) {
+  const t = (en: string, simplified: string, traditional = simplified) => tr(language, en, simplified, traditional);
+  const [mode, setMode] = useState<"signin" | "create" | "reset">("signin");
+  const [role, setRole] = useState<AccountRole>("student");
+  const [staffService, setStaffService] = useState<StaffService>("cleaning");
+  const [movingDriver, setMovingDriver] = useState(true);
+  const [organisationType, setOrganisationType] = useState<OrganisationType>("events");
+  const [name, setName] = useState("");
+  const [staffPosition, setStaffPosition] = useState("");
+  const [sellerCategories, setSellerCategories] = useState<string[]>([]);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [resetRequested, setResetRequested] = useState(false);
+  const passwordRules = [
+    { label: t("At least 10 characters", "至少 10 个字符", "至少 10 個字元"), passed: password.length >= 10 },
+    { label: t("Uppercase and lowercase letters", "包含大小写字母", "包含大小寫字母"), passed: /[A-Z]/.test(password) && /[a-z]/.test(password) },
+    { label: t("A number", "包含数字", "包含數字"), passed: /\d/.test(password) },
+    { label: t("A special character", "包含特殊字符", "包含特殊字元"), passed: /[^A-Za-z0-9\s]/.test(password) },
+  ];
+  const changeMode = (nextMode: "signin" | "create" | "reset") => {
+    setMode(nextMode);
+    setPassword("");
+    setConfirmPassword("");
+    setError("");
+    setResetRequested(false);
+  };
+  const submit = () => {
+    if (mode === "reset") {
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError(t("Enter a valid email address.", "请输入有效的电子邮箱地址。", "請輸入有效的電郵地址。")); return; }
+      setError("");
+      setResetRequested(true);
+      return;
+    }
+    if (mode === "create" && name.trim().length < 2) { setError(t("Enter your name or organisation name.", "请输入姓名或机构名称。", "請輸入姓名或機構名稱。")); return; }
+    if (mode === "create" && role === "staff" && staffPosition.trim().length < 2) { setError(t("Enter your staff position or job title.", "请输入员工职位。", "請輸入員工職位。")); return; }
+    if (mode === "create" && role === "seller" && !sellerCategories.length) { setError(t("Choose at least one product category.", "请至少选择一个商品类别。", "請至少選擇一個商品類別。")); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) { setError(t("Enter a valid email address.", "请输入有效的电子邮箱地址。", "請輸入有效的電郵地址。")); return; }
+    if (mode === "create") {
+      if (!passwordRules.every((rule) => rule.passed)) { setError(t("Please meet all password requirements.", "请满足所有密码要求。", "請符合所有密碼要求。")); return; }
+      if (password !== confirmPassword) { setError(t("Passwords do not match. Please try again.", "两次输入的密码不一致。", "兩次輸入的密碼不一致。")); return; }
+    } else if (password.length < 8) { setError(t("Enter a password with at least 8 characters.", "请输入至少 8 个字符的预览密码。", "請輸入至少 8 個字元的預覽密碼。")); return; }
+    setError("");
+    setPassword("");
+    setConfirmPassword("");
+    onEnter(role, mode, name.trim(), staffPosition.trim(), staffService, organisationType, movingDriver, sellerCategories);
+  };
+  const roleOptions = [
+    { id: "student" as const, title: t("Student", "学生", "學生"), icon: "school-outline", note: t("Student ID and camera verification", "学生证及相机验证", "學生證及相機驗證") },
+    { id: "staff" as const, title: t("Staff", "员工", "員工"), icon: "shield-checkmark-outline", note: t("Workplace approval required", "需要工作单位审核", "需要工作機構審核") },
+    { id: "organisation" as const, title: t("Organisation", "机构", "機構"), icon: "business-outline", note: t("Official page review required", "需要官方主页审核", "需要官方主頁審核") },
+    { id: "seller" as const, title: t("Marketplace seller", "独立卖家", "獨立賣家"), icon: "bag-handle-outline", note: t("Marketplace-only access · review required", "仅限二手市场 · 需要审核", "只限二手市場 · 需要審核") },
+  ];
+  return <SafeAreaView style={styles.safe}><AuthPreferences language={language} onLanguage={onLanguage} darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} /><ScrollView contentContainerStyle={{ padding: 24, paddingTop: 32, paddingBottom: 52, flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+    <Text style={{ color: palette.navy, fontWeight: "900", fontSize: 23, marginBottom: 6 }}>{mode === "signin" ? t("Welcome back", "欢迎回来", "歡迎回來") : mode === "create" ? t("Create your account", "创建账号", "建立帳戶") : t("Reset your password", "重置密码", "重設密碼")}</Text>
+    <Text style={{ color: palette.muted, fontSize: 13, lineHeight: 19, marginBottom: 22 }}>{mode === "signin" ? t("Choose how you use UniMate, then sign in.", "请选择账号类型，然后登录。", "請選擇帳戶類型，然後登入。") : mode === "create" ? t("Choose the right account type to get started.", "请选择适合您的账号类型。", "請選擇適合您的帳戶類型。") : t("Enter your account email address to request a reset link.", "输入账号邮箱以申请重置链接。", "輸入帳戶電郵以申請重設連結。")}</Text>
+    {mode !== "reset" && <><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 24 }}>{roleOptions.map((option) => <Pressable key={option.id} accessibilityRole="button" accessibilityState={{ selected: role === option.id }} onPress={() => { setRole(option.id); setError(""); }} style={{ width: "48%", flexGrow: 1, minHeight: 74, padding: 10, borderRadius: 15, borderWidth: 1.5, borderColor: role === option.id ? palette.blue : "#D6E1F1", backgroundColor: role === option.id ? "#EFF7FF" : "white", alignItems: "center", justifyContent: "center", gap: 5 }}><Ionicons name={option.icon as any} size={22} color={palette.blue} /><Text style={{ color: palette.navy, fontWeight: "800", fontSize: 11, textAlign: "center" }}>{option.title}</Text></Pressable>)}</View>
+    <View style={{ backgroundColor: "#F4F8FD", borderRadius: 12, padding: 12, marginBottom: 18, flexDirection: "row", alignItems: "center", gap: 9 }}><Ionicons name="information-circle-outline" size={18} color={palette.blue} /><Text style={{ color: palette.navy, flex: 1, fontSize: 12 }}>{roleOptions.find((option) => option.id === role)?.note}</Text></View>
+    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 21 }}>{([ ["student", t("Student", "学生", "學生")], ["staff", t("Staff", "员工", "員工")], ["organisation", t("Official page", "官方主页", "官方主頁")], ["seller", t("Approved seller", "已批准卖家", "已批准賣家")], ["unverified", t("Unverified", "未认证", "未認證")] ] as const).map(([kind, label]) => <View key={kind} style={{ flexDirection: "row", alignItems: "center", gap: 4 }}><VerificationBadge kind={kind} language={language} /><Text style={{ color: palette.muted, fontSize: 11 }}>{label}</Text></View>)}</View></>}
+    {mode !== "reset" && role === "staff" && <View style={styles.authRoleDetail}><Text style={styles.authFieldLabel}>{t("Staff service", "员工服务类型", "員工服務類型")}</Text><View style={styles.authRoleChoices}>{([
+      ["cleaning", t("Cleaning", "清洁", "清潔"), "sparkles-outline"],
+      ["moving", t("Moving", "搬运", "搬運"), "cube-outline"],
+      ["airport", t("Airport transfer", "机场接送", "機場接送"), "airplane-outline"],
+    ] as const).map(([value, label, icon]) => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: staffService === value }} style={[styles.authRoleChoice, staffService === value && styles.authRoleChoiceActive]} onPress={() => setStaffService(value)}><Ionicons name={icon} size={17} color={palette.blue} /><Text style={styles.authRoleChoiceText}>{label}</Text></Pressable>)}</View>
+      {mode === "create" && staffService === "moving" && <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: movingDriver }} onPress={() => setMovingDriver((current) => !current)} style={{ flexDirection: "row", alignItems: "center", gap: 9, marginTop: 12 }}><Ionicons name={movingDriver ? "checkbox" : "square-outline"} size={19} color={palette.blue} /><Text style={{ color: palette.navy, fontSize: 12, flex: 1 }}>{t("I will drive a van for moving jobs", "我会驾驶货车执行搬家服务", "我會駕駛貨車執行搬屋服務")}</Text></Pressable>}
+      {mode === "create" && (staffService === "airport" || staffService === "moving" && movingDriver) && <Text style={[styles.workspaceHint, { marginTop: 8 }]}>{t("Driving work requires licence, driving-record, vehicle and insurance checks after applying. Do not enter licence numbers or upload documents in this preview.", "驾驶工作在申请后需核验驾驶证、驾驶记录、车辆及保险。请勿在此预览输入证件号码或上传文件。", "駕駛工作在申請後需核實駕駛執照、駕駛紀錄、車輛及保險。請勿在此預覽輸入證件號碼或上傳文件。")}</Text>}
+    </View>}
+    {mode !== "reset" && role === "organisation" && <View style={styles.authRoleDetail}><Text style={styles.authFieldLabel}>{t("Organisation activities · select one or both", "机构业务 · 可选择一项或两项", "機構業務 · 可選擇一項或兩項")}</Text><View style={styles.authRoleChoices}>{([
+      ["events", t("Events & venues", "活动与场馆", "活動與場館"), "calendar-outline"],
+      ["restaurant", t("Restaurants & food", "餐厅与美食", "餐廳與美食"), "restaurant-outline"],
+    ] as const).map(([value, label, icon]) => { const selected = organisationType === value || organisationType === "both"; return <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected }} style={[styles.authRoleChoice, selected && styles.authRoleChoiceActive]} onPress={() => setOrganisationType((current) => current === "both" ? (value === "events" ? "restaurant" : "events") : current === value ? current : "both")}><Ionicons name={selected ? "checkbox" : icon} size={17} color={palette.blue} /><Text style={styles.authRoleChoiceText}>{label}</Text></Pressable>; })}</View></View>}
+    {mode === "create" && role === "seller" && <View style={styles.authRoleDetail}><Text style={styles.authFieldLabel}>{t("What do you plan to sell? *", "计划销售什么商品？*", "計劃銷售甚麼商品？*")}</Text><Text style={styles.workspaceHint}>{t("Choose all that apply. Restricted categories still need product-by-product review.", "可多选。受限类别仍须逐件审核。", "可多選。受限類別仍須逐件審核。")}</Text><View style={[styles.authRoleChoices, { marginTop: 9 }]}>{sellerCategoryOptions.map((category) => <Pressable key={category} accessibilityRole="checkbox" accessibilityState={{ checked: sellerCategories.includes(category) }} style={[styles.authRoleChoice, sellerCategories.includes(category) && styles.authRoleChoiceActive]} onPress={() => { setSellerCategories((current) => current.includes(category) ? current.filter((item) => item !== category) : [...current, category]); setError(""); }}><Ionicons name={sellerCategories.includes(category) ? "checkbox" : "square-outline"} size={17} color={palette.blue} /><Text style={styles.authRoleChoiceText}>{category}</Text></Pressable>)}</View></View>}
+    {mode === "create" && <View style={{ marginBottom: 15 }}><Text style={styles.authFieldLabel}>{role === "organisation" ? t("Organisation name", "机构名称", "機構名稱") : t("Full name", "姓名", "姓名")}</Text><TextInput style={styles.authInput} value={name} onChangeText={setName} autoComplete="name" placeholderTextColor="#68778F" placeholder={role === "organisation" ? t("Your organisation", "您的机构", "您的機構") : t("Your full name", "您的姓名", "您的姓名")} /></View>}
+    {mode === "create" && role === "staff" && <View style={{ marginBottom: 15 }}><Text style={styles.authFieldLabel}>{t("Staff position / job title", "员工职位 / 岗位", "員工職位 / 崗位")}</Text><TextInput style={styles.authInput} value={staffPosition} onChangeText={(value) => { setStaffPosition(value); setError(""); }} autoCapitalize="words" placeholderTextColor="#68778F" placeholder={t("e.g. Event coordinator", "例如：活动协调员", "例如：活動統籌員")} /></View>}
+    <View style={{ marginBottom: 15 }}><Text style={styles.authFieldLabel}>{mode === "reset" ? t("Account email", "账号邮箱", "帳戶電郵") : role === "student" ? t("University email", "大学邮箱", "大學電郵") : role === "staff" ? t("Work email", "工作邮箱", "工作電郵") : role === "seller" ? t("Seller email", "卖家邮箱", "賣家電郵") : t("Organisation email", "机构邮箱", "機構電郵")}</Text><TextInput style={styles.authInput} value={email} onChangeText={(value) => { setEmail(value); setError(""); setResetRequested(false); }} autoCapitalize="none" keyboardType="email-address" autoComplete="email" placeholderTextColor="#68778F" placeholder="you@example.com" /></View>
+    {mode !== "reset" && <View style={{ marginBottom: 8 }}><Text style={styles.authFieldLabel}>{t("Password", "密码", "密碼")}</Text><TextInput style={styles.authInput} value={password} onChangeText={(value) => { setPassword(value); setError(""); }} secureTextEntry autoComplete={mode === "create" ? "new-password" : "current-password"} placeholderTextColor="#68778F" placeholder={mode === "create" ? t("Create a strong password", "创建高强度密码", "建立高強度密碼") : t("Enter your password", "输入密码", "輸入密碼")} /></View>}
+    {mode === "create" && <><View style={{ marginBottom: 12 }}>{passwordRules.map((rule) => <View key={rule.label} style={{ flexDirection: "row", alignItems: "center", gap: 7, marginTop: 5 }}><Ionicons name={rule.passed ? "checkmark-circle" : "ellipse-outline"} size={15} color={rule.passed ? palette.green : palette.muted} /><Text style={{ color: rule.passed ? palette.green : palette.muted, fontSize: 11 }}>{rule.label}</Text></View>)}</View><View style={{ marginBottom: 8 }}><Text style={styles.authFieldLabel}>{t("Confirm password", "确认密码", "確認密碼")}</Text><TextInput style={styles.authInput} value={confirmPassword} onChangeText={(value) => { setConfirmPassword(value); setError(""); }} secureTextEntry autoComplete="new-password" placeholderTextColor="#68778F" placeholder={t("Enter your password again", "再次输入密码", "再次輸入密碼")} /></View>{confirmPassword.length > 0 && <Text style={{ color: confirmPassword === password ? palette.green : palette.coral, fontSize: 11, marginBottom: 8 }}>{confirmPassword === password ? t("Passwords match", "密码一致", "密碼一致") : t("Passwords do not match", "密码不一致", "密碼不一致")}</Text>}</>}
+    {mode === "signin" && <Pressable accessibilityRole="button" onPress={() => changeMode("reset")} style={{ alignSelf: "flex-end", paddingVertical: 8, marginBottom: 8 }}><Text style={{ color: palette.blue, fontWeight: "700", fontSize: 12 }}>{t("Forgot password?", "忘记密码？", "忘記密碼？")}</Text></Pressable>}
+    {!!error && <Text style={{ color: palette.coral, fontSize: 12, marginBottom: 8 }}>{error}</Text>}
+    {mode === "reset" ? <><Text style={{ color: palette.muted, fontSize: 11, lineHeight: 16, marginBottom: 18 }}>{t("Password reset emails are not connected in this prototype. No email will be sent.", "此原型尚未连接密码重置邮件服务，不会发送邮件。", "此原型尚未連接密碼重設電郵服務，不會發送電郵。")}</Text>{resetRequested && <View style={{ backgroundColor: "#FFF8E7", borderRadius: 12, padding: 12, marginBottom: 16 }}><Text style={{ color: palette.navy, fontSize: 12, lineHeight: 18 }}>{t("This is a preview of the reset flow. An email service and real account system must be connected before UniMate can send a secure reset link.", "这是重置流程预览。需要连接真实账号和邮件服务才能发送安全重置链接。", "這是重設流程預覽。需要連接真實帳戶及電郵服務才能發送安全重設連結。")}</Text></View>}</> : <Text style={{ color: palette.muted, fontSize: 11, lineHeight: 16, marginBottom: 18 }}>{mode === "create" ? t("Prototype only — this previews the application process. No real account is created, password saved or verification submitted. Do not use a real password.", "仅供原型预览：这是申请流程预览。不会创建真实账号、保存密码或提交认证。请勿使用真实密码。", "僅供原型預覽：這是申請流程預覽。不會建立真實帳戶、儲存密碼或提交認證。請勿使用真實密碼。") : t("Prototype only — this opens a sample account. No real account is created, password saved or identity verified. Do not use a real password.", "仅供原型预览：不会创建真实账号、保存密码或验证身份。请勿使用真实密码。", "僅供原型預覽：不會建立真實帳戶、儲存密碼或驗證身分。請勿使用真實密碼。")}</Text>}
+    <Pressable style={styles.primaryButton} onPress={submit}><Text style={styles.primaryButtonText}>{mode === "signin" ? t("Sign in", "登录", "登入") : mode === "create" ? t("Create account", "创建账号", "建立帳戶") : t("Request reset link", "申请重置链接", "申請重設連結")}</Text></Pressable>
+    <Pressable onPress={() => changeMode(mode === "signin" ? "create" : "signin")} style={{ alignSelf: "center", padding: 14, marginTop: 9 }}><Text style={{ color: palette.blue, fontWeight: "800", fontSize: 13 }}>{mode === "signin" ? t("New to UniMate? Create an account", "新用户？创建账号", "新用戶？建立帳戶") : t("Back to sign in", "返回登录", "返回登入")}</Text></Pressable>
+    {mode !== "reset" && <Pressable accessibilityRole="button" onPress={onPreview} style={[styles.secondaryButton, { marginTop: 8 }]}><Text style={styles.secondaryButtonText}>{t("Open main app preview", "打开主应用预览", "開啟主程式預覽")}</Text></Pressable>}
+    {mode !== "reset" && <Pressable accessibilityRole="button" onPress={onExploreDemos} style={[styles.secondaryButton, { marginTop: 8 }]}><Text style={styles.secondaryButtonText}>{t("View staff & organisation workspaces", "查看员工与机构预览", "查看員工及機構預覽")}</Text></Pressable>}
+    <Pressable accessibilityRole="button" onPress={onSupport} style={styles.authSupportButton}><Ionicons name="help-circle-outline" size={18} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.authSupportTitle}>{t("Need help signing up or signing in?", "注册或登录遇到问题？", "註冊或登入遇到問題？")}</Text><Text style={styles.authSupportDetail}>{t("Contact support or the tech team · chat", "联系支持或技术团队聊天", "聯絡支援或技術團隊聊天")}</Text></View><Ionicons name="chevron-forward" size={16} color={palette.blue} /></Pressable>
+    <Text style={styles.authSupportNote}>{t("This prototype does not send messages to a real support team.", "此原型不会向真实支持团队发送消息。", "此原型不會向真實支援團隊發送訊息。")}</Text>
+  </ScrollView></SafeAreaView>;
+}
+
+function AuthSupportScreen({ language, onLanguage, darkMode, onToggleDarkMode, onBack }: { language: Language; onLanguage: (language: Language) => void; darkMode: boolean; onToggleDarkMode: () => void; onBack: () => void }) {
+  const [draft, setDraft] = useState("");
+  const [messages, setMessages] = useState<string[]>([]);
+  const t = (en: string, simplified: string, traditional = simplified) => tr(language, en, simplified, traditional);
+  const addDemoMessage = () => { if (draft.trim()) { setMessages((current) => [...current, draft.trim()]); setDraft(""); } };
+  return <SafeAreaView style={styles.safe}>
+    <AuthPreferences language={language} onLanguage={onLanguage} darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} />
+    <View style={styles.authSupportHeader}><Pressable accessibilityRole="button" onPress={onBack} style={styles.authSupportBack}><Ionicons name="arrow-back" size={20} color={palette.blue} /><Text style={styles.authSupportBackText}>{t("Back", "返回", "返回")}</Text></Pressable><Text style={styles.authSupportHeaderTitle}>{t("Account support", "账号支持", "帳戶支援")}</Text></View>
+    <ScrollView contentContainerStyle={styles.authSupportBody}>
+      <View style={styles.authSupportIntro}><Ionicons name="headset-outline" size={24} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.authSupportIntroTitle}>{t("Sign-up and login help", "注册与登录帮助", "註冊與登入協助")}</Text><Text style={styles.authSupportIntroText}>{t("Describe an account or verification issue for the support or tech team.", "请描述账号或认证问题，以便支持或技术团队协助。", "請描述帳戶或認證問題，以便支援或技術團隊協助。")}</Text></View></View>
+      <View style={styles.authSupportDemoNotice}><Ionicons name="information-circle-outline" size={18} color={palette.blue} /><Text style={styles.authSupportDemoText}>{t("Prototype notice: messages below stay on this screen. They are not delivered to UniMate. A secure support backend is needed before launch.", "仅供预览：下方消息只保留在此页面，不会发送给 UniMate。正式上线前需要安全的支持系统。", "僅供預覽：下方訊息只保留在此頁面，不會傳送給 UniMate。正式推出前需要安全的支援系統。")}</Text></View>
+      <View style={styles.authSupportBubble}><Text style={styles.authSupportBubbleText}>{t("Hi! What are you having trouble with: creating an account, signing in, or student verification? Please do not enter a password or ID number here.", "您好！您遇到的是注册、登录还是学生认证问题？请不要在这里输入密码或证件号码。", "您好！您遇到的是註冊、登入還是學生認證問題？請不要在這裡輸入密碼或證件號碼。")}</Text></View>
+      {messages.map((message, index) => <View key={`${index}-${message}`} style={styles.authSupportOwnBubble}><Text style={styles.authSupportOwnText}>{message}</Text></View>)}
+      {messages.length > 0 && <Text style={styles.authSupportLocalNote}>{t("Saved in this preview only · not sent", "仅保存在此预览中 · 未发送", "僅保存在此預覽中 · 未發送")}</Text>}
+    </ScrollView>
+    <View style={styles.authSupportComposer}><TextInput accessibilityLabel={t("Describe your issue", "描述您的问题", "描述您的問題")} style={styles.authSupportInput} value={draft} onChangeText={setDraft} placeholder={t("Describe your issue…", "描述您的问题…", "描述您的問題…")} placeholderTextColor="#68778F" multiline /><Pressable accessibilityRole="button" accessibilityLabel={t("Add message", "添加预览消息", "加入預覽訊息")} disabled={!draft.trim()} style={[styles.authSupportSend, !draft.trim() && { opacity: 0.45 }]} onPress={addDemoMessage}><Ionicons name="arrow-up" size={20} color="#FFFFFF" /></Pressable></View>
+  </SafeAreaView>;
+}
+
+function WorkspaceTabs<T extends string>({ tabs, active, onSelect }: { tabs: { id: T; label: string; icon: string; badge?: number }[]; active: T; onSelect: (id: T) => void }) {
+  return <View style={styles.tabBar}>{tabs.map((tab) => <Pressable key={tab.id} accessibilityRole="button" accessibilityLabel={tab.badge ? `${tab.label}, ${tab.badge} new` : tab.label} accessibilityState={{ selected: active === tab.id }} onPress={() => onSelect(tab.id)} style={styles.tab}><View><Ionicons name={(active === tab.id ? tab.icon.replace(/-outline$/, "") : tab.icon) as any} size={22} color={active === tab.id ? palette.blue : palette.muted} />{!!tab.badge && <View style={{ position: "absolute", top: -7, right: -12, minWidth: 17, height: 17, paddingHorizontal: 3, borderRadius: 9, backgroundColor: palette.coral, alignItems: "center", justifyContent: "center" }}><Text style={{ color: "#FFFFFF", fontSize: 10, fontWeight: "800" }}>{tab.badge > 9 ? "9+" : tab.badge}</Text></View>}</View><Text style={[styles.tabText, active === tab.id && styles.tabTextActive]}>{tab.label}</Text></Pressable>)}</View>;
+}
+
+function WorkspaceMetric({ value, label }: { value: string | number; label: string }) {
+  return <View style={styles.workspaceMetric}><Text style={styles.workspaceMetricValue}>{value}</Text><Text style={styles.workspaceMetricLabel}>{label}</Text></View>;
+}
+
+type WorkspaceThread = { id: string; name: string; type: string; preview: string; time: string; initials: string; color: string; photo?: string | null; locked?: boolean };
+type ChatAttachment = { name: string; uri: string; type: "image" | "file" };
+const commonChatEmojis = ["😊", "😂", "❤️", "👍", "🙏", "🎉", "😢", "😮", "✅", "📍", "📎", "✨"];
+
+function ChatPersonAvatar({ name, photo, own = false, size = 32 }: { name: string; photo?: string | null; own?: boolean; size?: number }) {
+  const initials = name.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "?";
+  return photo ? <Image source={{ uri: photo }} style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: "#EAF4FF" }} /> : <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: own ? palette.blue : "#EAF4FF", alignItems: "center", justifyContent: "center" }}><Text style={{ color: own ? "#FFFFFF" : palette.blue, fontSize: size >= 40 ? 13 : 11, fontWeight: "800" }}>{initials}</Text></View>;
+}
+
+function SharedChatComposer({ language, value, onChange, onSend, onAttach, attachDisabled = false, canSend, onMention }: { language: Language; value: string; onChange: (value: string) => void; onSend: () => void; onAttach: () => void; attachDisabled?: boolean; canSend: boolean; onMention?: () => void }) {
+  const [emojiOpen, setEmojiOpen] = useState(false);
+  const t = (en: string, simplified: string, traditional = simplified) => tr(language, en, simplified, traditional);
+  return <View style={styles.chatComposerArea}>
+    {emojiOpen && <View style={styles.emojiTray}>{commonChatEmojis.map((emoji) => <Pressable key={emoji} accessibilityRole="button" style={styles.emojiOption} onPress={() => onChange(value + emoji)}><Text style={styles.emojiText}>{emoji}</Text></Pressable>)}</View>}
+    <View style={styles.chatComposer}><Pressable accessibilityRole="button" accessibilityLabel={t("Attach a file", "添加附件", "加入附件")} disabled={attachDisabled} style={[styles.chatToolButton, attachDisabled && { opacity: 0.35 }]} onPress={onAttach}><Ionicons name="add" size={23} color={palette.blue} /></Pressable><Pressable accessibilityRole="button" accessibilityLabel={t("Choose an emoji", "选择表情", "選擇表情")} style={[styles.chatToolButton, emojiOpen && styles.chatToolButtonActive]} onPress={() => setEmojiOpen((current) => !current)}><Ionicons name="happy-outline" size={21} color={palette.blue} /></Pressable>{onMention && <Pressable accessibilityRole="button" accessibilityLabel={t("Mention a member", "提及群成员", "提及群組成員")} style={styles.chatToolButton} onPress={onMention}><Text style={{ color: palette.blue, fontWeight: "900", fontSize: 18 }}>@</Text></Pressable>}<TextInput style={styles.chatInput} value={value} onChangeText={onChange} multiline placeholder={t("Write a message…", "输入消息…", "輸入訊息…")} placeholderTextColor="#8B98AD" /><Pressable accessibilityRole="button" accessibilityLabel={t("Send message", "发送消息", "傳送訊息")} disabled={!canSend} style={[styles.chatSend, !canSend && styles.chatSendDisabled]} onPress={() => { onSend(); setEmojiOpen(false); }}><Ionicons name="send" size={18} color="#FFFFFF" /></Pressable></View>
+  </View>;
+}
+
+async function pickLocalChatAttachment(language: Language, source: "camera" | "library" | "file"): Promise<ChatAttachment | null> {
+  if (source === "file") {
+    const result = await DocumentPicker.getDocumentAsync({ type: "*/*", multiple: false, copyToCacheDirectory: true });
+    return result.canceled || !result.assets[0] ? null : { name: result.assets[0].name, uri: result.assets[0].uri, type: "file" };
+  }
+  const uris = await selectPhotoUris(language, source, { multiple: false, limit: 1, quality: 0.8 });
+  return uris[0] ? { name: source === "camera" ? "Camera photo" : "Photo", uri: uris[0], type: "image" } : null;
+}
+
+function ChatAttachmentPreview({ attachment, onRemove }: { attachment: ChatAttachment; onRemove?: () => void }) {
+  return <View style={{ flexDirection: "row", alignItems: "center", gap: 7, padding: 7, borderRadius: 10, backgroundColor: "#EAF4FF", alignSelf: "flex-start", maxWidth: "100%" }}>{attachment.type === "image" ? <Image source={{ uri: attachment.uri }} style={{ width: 36, height: 36, borderRadius: 7 }} /> : <Ionicons name="document-attach-outline" size={22} color={palette.blue} />}<Text numberOfLines={1} style={[styles.workspaceHint, { flexShrink: 1 }]}>{attachment.name}</Text>{onRemove && <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${attachment.name}`} onPress={onRemove}><Ionicons name="close-circle" size={18} color={palette.muted} /></Pressable>}</View>;
+}
+
+type DemoRequestStatus = "pending" | "accepted" | "declined" | "blocked";
+function DemoMessageRequests({ language, sender, context, message, status, onDecision }: { language: Language; sender: string; context: string; message: string; status: DemoRequestStatus; onDecision: (status: DemoRequestStatus) => void }) {
+  const [open, setOpen] = useState(false);
+  const [screen, setScreen] = useState<"list" | "chat">("list");
+  const [draft, setDraft] = useState("");
+  const [replies, setReplies] = useState<string[]>([]);
+  const t = (en: string, simplified: string, traditional = simplified) => tr(language, en, simplified, traditional);
+  const show = (next: "list" | "chat") => { setScreen(next); setOpen(true); };
+  const decide = (next: DemoRequestStatus) => { onDecision(next); setOpen(false); };
+  const send = () => { const value = draft.trim(); if (!value || status !== "accepted") return; setReplies((current) => [...current, value]); setDraft(""); };
+  return <>
+    <Pressable accessibilityRole="button" style={[styles.workspaceCard, { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 14, backgroundColor: "#F3F8FF" }]} onPress={() => show("list")}><View style={{ width: 40, height: 40, borderRadius: 13, backgroundColor: "#E4F0FF", alignItems: "center", justifyContent: "center" }}><Ionicons name="mail-unread-outline" size={21} color={palette.blue} /></View><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{t("Message requests", "消息请求", "訊息請求")}</Text><Text style={styles.workspaceHint}>{status === "pending" ? t("Open and decide in the chat", "打开聊天后决定", "開啟聊天後決定") : t("No new message requests", "没有新的消息请求", "沒有新的訊息請求")}</Text></View>{status === "pending" && <View style={{ minWidth: 25, height: 25, paddingHorizontal: 6, borderRadius: 13, backgroundColor: palette.blue, alignItems: "center", justifyContent: "center" }}><Text style={{ color: "#FFFFFF", fontWeight: "800" }}>1</Text></View>}<Ionicons name="chevron-forward" size={18} color={palette.blue} /></Pressable>
+    {status === "accepted" && <Pressable accessibilityRole="button" style={[styles.workspaceCard, { flexDirection: "row", alignItems: "center", gap: 11, marginBottom: 14 }]} onPress={() => show("chat")}><ChatPersonAvatar name={sender} size={40} /><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{sender}</Text><Text style={styles.workspaceHint}>{context}</Text><Text style={styles.workspaceCardText} numberOfLines={1}>{replies.at(-1) || message}</Text></View><Ionicons name="chevron-forward" size={18} color={palette.muted} /></Pressable>}
+    <Sheet visible={open} title={screen === "list" ? t("Message requests", "消息请求", "訊息請求") : sender} onClose={() => setOpen(false)}><ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
+      {screen === "list" ? <>{status === "pending" ? <><Text style={[styles.workspaceHint, { marginBottom: 12 }]}>{t("Open a request to read it, then accept or decline in the conversation.", "打开请求查看内容，再在对话中接受或拒绝。", "開啟請求查看內容，再在對話中接受或拒絕。")}</Text><Pressable accessibilityRole="button" style={[styles.workspaceCard, { flexDirection: "row", alignItems: "center", gap: 11 }]} onPress={() => setScreen("chat")}><ChatPersonAvatar name={sender} size={42} /><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{sender}</Text><Text style={styles.workspaceHint}>{context}</Text><Text style={styles.workspaceCardText} numberOfLines={1}>{message}</Text></View><View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: palette.blue }} /><Ionicons name="chevron-forward" size={18} color={palette.muted} /></Pressable></> : <View style={[styles.workspaceCard, { alignItems: "center", gap: 8, paddingVertical: 28 }]}><Ionicons name="mail-open-outline" size={28} color={palette.blue} /><Text style={styles.workspaceCardTitle}>{t("No new message requests", "没有新的消息请求", "沒有新的訊息請求")}</Text></View>}{(status === "declined" || status === "blocked") && <Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 16 }]} onPress={() => setScreen("chat")}><Ionicons name="archive-outline" size={17} color={palette.blue} /><Text style={styles.secondaryButtonText}>{t("View closed request", "查看已关闭请求", "查看已關閉請求")}</Text></Pressable>}</> : <>
+        <Pressable accessibilityRole="button" style={{ flexDirection: "row", alignItems: "center", gap: 8 }} onPress={() => setScreen("list")}><Ionicons name="arrow-back" size={19} color={palette.blue} /><Text style={styles.workspaceCardLink}>{t("Back to requests", "返回请求", "返回請求")}</Text></Pressable>
+        <View style={[styles.workspaceCard, { marginTop: 12 }]}><Text style={styles.workspaceCardTitle}>{sender}</Text><Text style={styles.workspaceHint}>{context}</Text></View>
+        <View style={styles.workspaceNotice}><Ionicons name="shield-checkmark-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("Local demo request. Reading it does not alert the sender; no messages are delivered.", "本地演示请求。查看不会通知发送者，消息不会实际送达。", "本機示範請求。查看不會通知發送者，訊息不會實際送達。")}</Text></View>
+        <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 8, marginTop: 12 }}><ChatPersonAvatar name={sender} /><View style={[styles.incomingBubble, { flexShrink: 1, backgroundColor: "#F2F6FB", borderWidth: 1, borderColor: palette.line }]}><Text style={styles.incomingText}>{message}</Text></View></View>
+        {replies.map((reply, index) => <View key={`${index}-${reply}`} style={{ alignSelf: "flex-end", marginTop: 9 }}><View style={styles.outgoingBubble}><Text style={styles.outgoingText}>{reply}</Text></View></View>)}
+        {status === "pending" ? <View style={[styles.workspaceCard, { gap: 10, marginTop: 20 }]}><Text style={styles.workspaceCardTitle}>{t("New message request", "新的消息请求", "新的訊息請求")}</Text><Text style={styles.workspaceHint}>{t("Choose whether to start this conversation after reading the message.", "阅读消息后选择是否开始对话。", "閱讀訊息後選擇是否開始對話。")}</Text><View style={{ flexDirection: "row", gap: 8 }}><Pressable accessibilityRole="button" style={[styles.primaryButton, { flex: 1, marginTop: 0 }]} onPress={() => decide("accepted")}><Text style={styles.primaryButtonText}>{t("Accept", "接受", "接受")}</Text></Pressable><Pressable accessibilityRole="button" style={[styles.secondaryButton, { flex: 1, marginTop: 0 }]} onPress={() => decide("declined")}><Text style={styles.secondaryButtonText}>{t("Decline", "拒绝", "拒絕")}</Text></Pressable></View><Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 0, borderColor: "#D8A1A4" }]} onPress={() => decide("blocked")}><Ionicons name="ban-outline" size={16} color={palette.coral} /><Text style={[styles.secondaryButtonText, { color: palette.coral }]}>{t("Block contact", "屏蔽联系人", "封鎖聯絡人")}</Text></Pressable></View> : status === "accepted" ? <View style={{ marginTop: 18 }}><SharedChatComposer language={language} value={draft} onChange={setDraft} onSend={send} onAttach={() => {}} attachDisabled canSend={!!draft.trim()} /></View> : <Text style={[styles.workspaceHint, { marginTop: 18, textAlign: "center" }]}>{t("This request is closed · read-only", "此请求已关闭 · 只供查看", "此請求已關閉 · 只供查看")}</Text>}
+      </>}
+    </ScrollView></Sheet>
+  </>;
+}
+
+function MarketplaceConversationView({ language, conversation, viewer, onBack, onSend, onMarkSold, onConfirmReceived, onOpenIssue, onDecision, buyerPhoto }: { language: Language; conversation: MarketplaceConversation; viewer: "buyer" | "seller"; onBack: () => void; onSend: (text: string, attachment?: ChatAttachment) => void; onMarkSold: () => void; onConfirmReceived: () => void; onOpenIssue: (reason: MarketplaceIssueReason, details: string) => void; onDecision?: (decision: "accepted" | "declined" | "blocked") => void; buyerPhoto?: string | null }) {
+  const [draft, setDraft] = useState("");
+  const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reason, setReason] = useState<MarketplaceIssueReason | null>(null);
+  const [details, setDetails] = useState("");
+  const [reportError, setReportError] = useState("");
+  const { height } = useWindowDimensions();
+  const t = (en: string, simplified: string, traditional = simplified) => tr(language, en, simplified, traditional);
+  const closed = !conversation.issue && (conversation.status === "received" || conversation.requestStatus === "declined" || conversation.requestStatus === "blocked");
+  const canSend = !closed && (conversation.requestStatus === "accepted" || !!conversation.issue || viewer === "buyer" && conversation.requestStatus === "pending" && conversation.messages.length === 0);
+  const ownName = viewer === "buyer" ? conversation.buyerName : conversation.sellerHandle;
+  const otherName = viewer === "buyer" ? conversation.sellerHandle : conversation.buyerName;
+  const otherPhoto = viewer === "seller" ? buyerPhoto : undefined;
+  const send = () => { const text = draft.trim(); if ((!text && !attachment) || !canSend) return; onSend(text, attachment || undefined); setDraft(""); setAttachment(null); };
+  const openAttach = () => Alert.alert(t("Add attachment", "添加附件", "加入附件"), t("Choose a photo or file for this local preview conversation.", "为本机预览对话选择照片或文件。", "為本機預覽對話選擇相片或檔案。"), [{ text: t("Camera", "拍照", "拍照"), onPress: () => { void pickLocalChatAttachment(language, "camera").then(setAttachment); } }, { text: t("Photo library", "相册", "相簿"), onPress: () => { void pickLocalChatAttachment(language, "library").then(setAttachment); } }, { text: t("File", "文件", "檔案"), onPress: () => { void pickLocalChatAttachment(language, "file").then(setAttachment); } }, { text: t("Cancel", "取消", "取消"), style: "cancel" }]);
+  const submitIssue = () => { if (!reason || details.trim().length < 10) { setReportError(t("Choose a reason and add at least 10 characters of detail.", "请选择原因并填写至少 10 个字的详情。", "請選擇原因並填寫至少 10 個字的詳情。")); return; } onOpenIssue(reason, details.trim()); setReportOpen(false); setReason(null); setDetails(""); setReportError(""); };
+  return <View style={{ minHeight: Math.max(520, height - 280), gap: 12, paddingBottom: 14 }}>
+    <View style={[styles.chatHead, { borderWidth: 1, borderColor: palette.line, borderRadius: 16, paddingHorizontal: 12 }]}><Pressable accessibilityRole="button" accessibilityLabel={t("Back to messages", "返回消息", "返回訊息")} onPress={onBack}><Ionicons name="arrow-back" size={20} color={palette.blue} /></Pressable><ChatPersonAvatar name={otherName} photo={otherPhoto} size={40} /><View style={{ flex: 1 }}><Text style={styles.chatTitle}>{otherName}</Text><Text style={styles.chatType}>{conversation.issue ? t("Supported product case", "商品支持个案", "商品支援個案") : t("Product conversation", "商品对话", "商品對話")}</Text></View></View>
+    <View style={[styles.workspaceCard, { flexDirection: "row", alignItems: "center", gap: 12, padding: 11 }]}><Image source={{ uri: conversation.productImage }} style={{ width: 64, height: 64, borderRadius: 10, backgroundColor: "#EAF4FF" }} /><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{conversation.productName}</Text><Text style={styles.workspaceCardText}>{conversation.productPrice} · {conversation.id}</Text><Text style={styles.workspaceHint}>{conversation.status === "received" ? t("Received", "已收货", "已收貨") : conversation.status === "sold" ? t("Sold · awaiting buyer receipt", "已售出 · 等待买家收货", "已售出 · 等待買家收貨") : t("Product enquiry", "商品咨询", "商品查詢")}</Text></View></View>
+    {conversation.issue ? <View style={styles.workspaceNotice}><Ionicons name="people-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("UniMate support has joined this product case", "优你伴支持已加入此商品个案", "優你伴支援已加入此商品個案")} · {marketplaceIssueLabel(language, conversation.issue.reason)}. {t("Buyer, seller and support can liaise here. Demo only; no real agent is connected.", "买家、卖家及支持团队可在此沟通。仅为演示，未连接真人客服。", "買家、賣家及支援團隊可在此溝通。僅為示範，未連接真人客服。")}</Text></View> : closed ? <View style={styles.workspaceNotice}><Ionicons name="lock-closed-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{conversation.requestStatus === "blocked" ? t("This contact was blocked. A safety or product case can still be raised for UniMate support.", "此联系人已被屏蔽。您仍可向优你伴报告安全或商品问题。", "此聯絡人已被封鎖。您仍可向優你伴報告安全或商品問題。") : conversation.requestStatus === "declined" ? t("This message request was declined. A safety or product case can still be raised for UniMate support.", "此消息请求已被拒绝。您仍可向优你伴报告安全或商品问题。", "此訊息請求已被拒絕。您仍可向優你伴報告安全或商品問題。") : t("This chat closed automatically after the buyer confirmed receipt. Raise a refund, fault, harassment or scam case to reopen it with UniMate support.", "买家确认收货后，此聊天已自动关闭。如需退款、报告商品故障、骚扰或诈骗，可开启优你伴支持个案。", "買家確認收貨後，此聊天已自動關閉。如需退款、報告商品故障、騷擾或詐騙，可開啟優你伴支援個案。")}</Text></View> : <View style={[styles.chatSafety, { borderRadius: 10 }]}><Ionicons name="shield-checkmark-outline" size={16} color={palette.green} /><Text style={styles.chatSafetyText}>{t("Preview conversation · no messages, sale or payment are processed outside this device.", "预览对话 · 消息、销售及付款均不会在本机以外处理。", "預覽對話 · 訊息、銷售及付款均不會在本機以外處理。")}</Text></View>}
+    <Text style={[styles.workspaceHint, { textAlign: "center", marginTop: 4 }]}>{t("Product-linked conversation · local preview", "关联商品的对话 · 本机预览", "關聯商品的對話 · 本機預覽")}</Text>
+    {conversation.messages.map((message, index) => { const own = message.author === viewer; const senderName = message.author === "support" ? "UniMate support" : message.author === "buyer" ? conversation.buyerName : conversation.sellerHandle; return <View key={`${index}-${message.author}`} style={{ flexDirection: own ? "row-reverse" : "row", alignSelf: own ? "flex-end" : "flex-start", alignItems: "flex-end", gap: 7, maxWidth: "92%" }}><ChatPersonAvatar name={senderName} photo={message.author === "buyer" ? buyerPhoto : undefined} own={own} /><View style={{ flexShrink: 1 }}><Text style={[styles.workspaceHint, { marginBottom: 3, textAlign: own ? "right" : "left" }]}>{own ? t("You", "您", "您") : senderName}</Text><View style={own ? styles.outgoingBubble : [styles.incomingBubble, { borderWidth: 1, borderColor: palette.line, backgroundColor: message.author === "support" ? "#EAF4FF" : "#F2F6FB" }]}>{!!message.text && <Text style={own ? styles.outgoingText : styles.incomingText}>{message.text}</Text>}{message.attachment && <ChatAttachmentPreview attachment={message.attachment} />}</View></View></View>; })}
+    {conversation.requestStatus === "pending" && viewer === "seller" && !conversation.issue && <View style={[styles.workspaceCard, { gap: 10 }]}><Text style={styles.workspaceCardTitle}>{t("New customer request", "新的客户消息请求", "新的客戶訊息請求")}</Text><Text style={styles.workspaceHint}>{t("Choose whether to start this product conversation. Blocking also stops future direct messages from this customer in the preview.", "选择是否开启此商品对话。屏蔽后，此客户在预览中无法再直接发消息。", "選擇是否開啟此商品對話。封鎖後，此客戶在預覽中無法再直接發訊息。")}</Text><View style={{ flexDirection: "row", gap: 8 }}><Pressable accessibilityRole="button" style={[styles.primaryButton, { flex: 1, marginTop: 0 }]} onPress={() => onDecision?.("accepted")}><Text style={styles.primaryButtonText}>{t("Accept", "接受", "接受")}</Text></Pressable><Pressable accessibilityRole="button" style={[styles.secondaryButton, { flex: 1, marginTop: 0 }]} onPress={() => onDecision?.("declined")}><Text style={styles.secondaryButtonText}>{t("Decline", "拒绝", "拒絕")}</Text></Pressable></View><Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 0, borderColor: "#D8A1A4" }]} onPress={() => onDecision?.("blocked")}><Ionicons name="ban-outline" size={16} color={palette.coral} /><Text style={[styles.secondaryButtonText, { color: palette.coral }]}>{t("Block customer", "屏蔽客户", "封鎖客戶")}</Text></Pressable></View>}
+    {conversation.requestStatus === "pending" && viewer === "buyer" && conversation.messages.length > 0 && <Text style={[styles.workspaceHint, { textAlign: "center" }]}>{t("Request sent · waiting for the seller to accept", "请求已发送 · 等待卖家接受", "請求已傳送 · 等待賣家接受")}</Text>}
+    {conversation.status === "enquiry" && conversation.requestStatus === "accepted" && viewer === "seller" && <Pressable accessibilityRole="button" style={styles.secondaryButton} onPress={onMarkSold}><Ionicons name="bag-check-outline" size={18} color={palette.blue} /><Text style={styles.secondaryButtonText}>{t("Mark item sold in preview", "在预览中标记商品已售", "在預覽中標記商品已售")}</Text></Pressable>}
+    {conversation.status === "sold" && viewer === "buyer" && <Pressable accessibilityRole="button" style={styles.secondaryButton} onPress={onConfirmReceived}><Ionicons name="checkmark-circle-outline" size={18} color={palette.blue} /><Text style={styles.secondaryButtonText}>{t("Confirm I received this item", "确认我已收到商品", "確認我已收到商品")}</Text></Pressable>}
+    {!conversation.issue && <Pressable accessibilityRole="button" style={[styles.secondaryButton, { borderColor: "#D8A1A4" }]} onPress={() => setReportOpen((current) => !current)}><Ionicons name="alert-circle-outline" size={18} color={palette.coral} /><Text style={[styles.secondaryButtonText, { color: palette.coral }]}>{closed ? t("Raise an issue and reopen chat", "报告问题并重新开启聊天", "報告問題並重新開啟聊天") : t("Report a product or safety issue", "报告商品或安全问题", "報告商品或安全問題")}</Text></Pressable>}
+    {reportOpen && !conversation.issue && <View style={[styles.workspaceCard, { gap: 11 }]}><Text style={styles.workspaceCardTitle}>{t("Open a UniMate-supported case", "开启优你伴支持个案", "開啟優你伴支援個案")}</Text><Text style={styles.workspaceHint}>{t("Select the issue and explain what happened. In the live app this would alert the support team; here it stays on this device.", "请选择问题并说明经过。正式应用会通知支持团队；此处仅保存在本机。", "請選擇問題並說明經過。正式應用會通知支援團隊；此處僅保存在本機。")}</Text><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7 }}>{(["refund", "fault", "harassment", "scam"] as MarketplaceIssueReason[]).map((item) => <Pressable key={item} accessibilityRole="button" accessibilityState={{ selected: reason === item }} style={[styles.marketCategory, reason === item && styles.marketCategoryActive]} onPress={() => { setReason(item); setReportError(""); }}><Text style={[styles.marketCategoryText, reason === item && styles.marketCategoryTextActive]}>{marketplaceIssueLabel(language, item)}</Text></Pressable>)}</View><TextInput accessibilityLabel={t("Issue details", "问题详情", "問題詳情")} style={[styles.workspaceInput, { minHeight: 84, textAlignVertical: "top" }]} multiline value={details} onChangeText={(value) => { setDetails(value); setReportError(""); }} placeholder={t("Tell UniMate what happened…", "告诉优你伴发生了什么…", "告訴優你伴發生了甚麼…")} placeholderTextColor="#8B98AD" />{!!reportError && <Text style={styles.workspaceError}>{reportError}</Text>}<Pressable accessibilityRole="button" style={styles.primaryButton} onPress={submitIssue}><Text style={styles.primaryButtonText}>{t("Open supported case in preview", "在预览中开启支持个案", "在預覽中開啟支援個案")}</Text></Pressable></View>}
+    {!canSend ? <Text style={[styles.workspaceHint, { marginTop: "auto", textAlign: "center" }]}>{closed ? t("Chat closed · read-only", "聊天已关闭 · 只供查看", "聊天已關閉 · 只供查看") : t("Waiting for the request to be accepted", "等待消息请求被接受", "等待訊息請求被接受")}</Text> : <View style={{ marginTop: "auto" }}>{attachment && <ChatAttachmentPreview attachment={attachment} onRemove={() => setAttachment(null)} />}<SharedChatComposer language={language} value={draft} onChange={setDraft} onSend={send} onAttach={openAttach} canSend={!!draft.trim() || !!attachment} /></View>}
+  </View>;
+}
+
+function WorkspaceMessages({ language, threads, selected, onSelect, draft, onDraft, onSend, sent, relatedBooking, onOpenBooking, serviceCase, statusUpdates = [], onQuickUpdate, ownName = "You", ownPhoto, otherPhoto }: { language: Language; threads: WorkspaceThread[]; selected: string | null; onSelect: (id: string | null) => void; draft: string; onDraft: (value: string) => void; onSend: (attachment?: ChatAttachment) => void; sent: { to: string; text: string; attachment?: ChatAttachment }[]; relatedBooking?: StaffBooking; onOpenBooking?: (booking: StaffBooking) => void; serviceCase?: ServiceChatCase; statusUpdates?: ServiceStatusUpdate[]; onQuickUpdate?: (kind: ServiceStatusKind) => void; ownName?: string; ownPhoto?: string | null; otherPhoto?: string | null }) {
+  const [query, setQuery] = useState("");
+  const [attachment, setAttachment] = useState<ChatAttachment | null>(null);
+  const { height } = useWindowDimensions();
+  const t = (en: string, simplified: string, traditional = simplified) => tr(language, en, simplified, traditional);
+  const active = threads.find((thread) => thread.id === selected);
+  const shown = threads.filter((thread) => `${thread.name} ${thread.type} ${thread.preview}`.toLowerCase().includes(query.trim().toLowerCase()));
+  const openAttach = () => Alert.alert(t("Add attachment", "添加附件", "加入附件"), t("Choose a photo or file for this local preview conversation.", "为本机预览对话选择照片或文件。", "為本機預覽對話選擇相片或檔案。"), [{ text: t("Camera", "拍照", "拍照"), onPress: () => { void pickLocalChatAttachment(language, "camera").then(setAttachment); } }, { text: t("Photo library", "相册", "相簿"), onPress: () => { void pickLocalChatAttachment(language, "library").then(setAttachment); } }, { text: t("File", "文件", "檔案"), onPress: () => { void pickLocalChatAttachment(language, "file").then(setAttachment); } }, { text: t("Cancel", "取消", "取消"), style: "cancel" }]);
+  const send = () => { if (!draft.trim() && !attachment) return; onSend(attachment || undefined); setAttachment(null); };
+  return <View style={{ gap: 12, minHeight: active ? Math.max(420, height - 260) : undefined }}>
+    {active ? <>
+      <View style={[styles.chatHead, { borderWidth: 1, borderColor: palette.line, borderRadius: 16, paddingHorizontal: 12 }]}><Pressable accessibilityRole="button" accessibilityLabel={t("Back to messages", "返回消息", "返回訊息")} onPress={() => onSelect(null)}><Ionicons name="arrow-back" size={20} color={palette.blue} /></Pressable><ChatPersonAvatar name={active.name} photo={active.photo || otherPhoto} size={40} /><View style={{ flex: 1 }}><Text style={styles.chatTitle}>{active.name}</Text><Text style={styles.chatType}>{active.type}</Text></View></View>
+      {relatedBooking && onOpenBooking && <Pressable accessibilityRole="button" style={[styles.workspaceCard, { backgroundColor: "#F5F9FF", flexDirection: "row", alignItems: "center", gap: 10 }]} onPress={() => onOpenBooking(relatedBooking)}><Ionicons name="receipt-outline" size={20} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{relatedBooking.title} · {relatedBooking.id}</Text><Text style={styles.workspaceCardText}>{relatedBooking.date} · {relatedBooking.time}</Text><Text style={styles.workspaceCardLink}>{t("View booking details", "查看预订详情", "查看預訂詳情")}</Text></View><Ionicons name="chevron-forward" size={18} color={palette.blue} /></Pressable>}
+      {active.locked && <View style={styles.workspaceNotice}><Ionicons name="lock-closed-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("This customer conversation closed automatically when the job was completed. Staff cannot send more messages unless a lost-property or safety case is opened through UniMate.", "服务完成后，此客户对话已自动关闭。除非通过优你伴开启失物或安全个案，否则员工无法继续发送消息。", "服務完成後，此客戶對話已自動關閉。除非透過優你伴開啟失物或安全個案，否則員工無法繼續傳送訊息。")}</Text></View>}
+      {serviceCase && <View style={styles.workspaceNotice}><Ionicons name="people-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("Supported case · customer, assigned staff and UniMate support. Local preview only; no real coordinator is connected.", "支持个案 · 客户、相关员工及优你伴支持。仅为本机预览；尚无真实协调人员接入。", "支援個案 · 客戶、相關員工及優你伴支援。僅為本機預覽；尚無真實協調人員接入。")}</Text></View>}
+      <View style={[styles.chatSafety, { borderRadius: 10, padding: 9 }]}><Ionicons name="shield-checkmark-outline" size={16} color={palette.green} /><Text style={styles.chatSafetyText}>{t("Preview conversation · messages stay on this device and are not delivered.", "预览对话 · 消息仅保存在本机，不会发送。", "預覽對話 · 訊息只保存在本機，不會傳送。")}</Text></View>
+      <Text style={[styles.workspaceHint, { textAlign: "center", marginTop: 10 }]}>{t("Today · local preview", "今天 · 本机预览", "今天 · 本機預覽")}</Text>
+      <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 7 }}><ChatPersonAvatar name={active.name} photo={active.photo || otherPhoto} /><View style={[styles.incomingBubble, { backgroundColor: "#F2F6FB", borderWidth: 1, borderColor: palette.line, flexShrink: 1 }]}><Text style={styles.incomingText}>{active.preview}</Text></View></View>
+      {sent.filter((message) => message.to === active.id).map((message, index) => <View key={`${index}-${message.text}`} style={{ flexDirection: "row", alignSelf: "flex-end", alignItems: "flex-end", gap: 7, maxWidth: "92%" }}><View style={styles.outgoingBubble}>{!!message.text && <Text style={styles.outgoingText}>{message.text}</Text>}{message.attachment && <ChatAttachmentPreview attachment={message.attachment} />}</View><ChatPersonAvatar name={ownName} photo={ownPhoto} own /></View>)}
+      {statusUpdates.filter((update) => update.bookingId === active.id).map((update, index) => <View key={`status-${index}`} style={{ flexDirection: "row", alignSelf: "flex-end", alignItems: "flex-end", gap: 7, maxWidth: "92%" }}><View style={styles.outgoingBubble}><Text style={styles.outgoingText}>{update.text}</Text></View><ChatPersonAvatar name={ownName} photo={ownPhoto} own /></View>)}
+      {serviceCase?.messages.map((message, index) => <View key={`${index}-${message.author}`} style={{ flexDirection: message.author === "staff" ? "row-reverse" : "row", alignSelf: message.author === "staff" ? "flex-end" : "flex-start", alignItems: "flex-end", gap: 7, maxWidth: "92%" }}><ChatPersonAvatar name={message.author === "staff" ? ownName : message.author === "customer" ? serviceCase.booking.student : "UniMate support"} photo={message.author === "staff" ? ownPhoto : message.author === "customer" ? active.photo || otherPhoto : undefined} own={message.author === "staff"} /><View style={{ flexShrink: 1 }}><Text style={styles.workspaceHint}>{message.author === "staff" ? t("You", "您", "您") : message.author === "customer" ? serviceCase.booking.student : t("UniMate support", "优你伴支持", "優你伴支援")}</Text><View style={message.author === "staff" ? styles.outgoingBubble : styles.incomingBubble}><Text style={message.author === "staff" ? styles.outgoingText : styles.incomingText}>{message.text}</Text></View></View></View>)}
+      {relatedBooking && !active.locked && !serviceCase && onQuickUpdate && <View style={[styles.workspaceCard, { gap: 9 }]}><Text style={styles.workspaceCardTitle}>{t("Quick arrival updates", "快捷到达通知", "快捷到達通知")}</Text><Text style={styles.workspaceHint}>{t("Tap to add an update to this customer conversation. Preview only; no message is delivered.", "点击即可在此客户对话中添加进度通知。仅供预览，不会实际发送。", "點按即可在此客戶對話加入進度通知。僅供預覽，不會實際傳送。")}</Text><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>{([{ kind: "on-way", label: t("On my way", "正在前往", "正在前往") }, { kind: "five-minutes", label: t("5 minutes away", "还有5分钟", "還有5分鐘") }, { kind: "traffic", label: t("Stuck in traffic", "遇到堵车", "遇上塞車") }, { kind: "running-late", label: t("Running late", "会迟到", "會遲到") }, { kind: "arrived", label: t("I've arrived", "我已到达", "我已到達") }] as { kind: ServiceStatusKind; label: string }[]).map((item) => <Pressable key={item.kind} accessibilityRole="button" style={styles.marketCategory} onPress={() => onQuickUpdate(item.kind)}><Text style={styles.marketCategoryText}>{item.label}</Text></Pressable>)}</View></View>}
+      {active.locked ? <Text style={[styles.workspaceHint, { marginTop: "auto", textAlign: "center" }]}>{t("Chat closed · read-only", "聊天已关闭 · 只供查看", "聊天已關閉 · 只供查看")}</Text> : <View style={{ marginTop: "auto" }}>{attachment && <ChatAttachmentPreview attachment={attachment} onRemove={() => setAttachment(null)} />}<SharedChatComposer language={language} value={draft} onChange={onDraft} onSend={send} onAttach={openAttach} attachDisabled={!!serviceCase} canSend={!!draft.trim() || !!attachment} /></View>}
+    </> : <>
+      <Text style={styles.pageTitle}>{t("Messages", "消息", "訊息")}</Text>
+      <View style={styles.search}><Ionicons name="search" size={18} color={palette.muted} /><TextInput style={styles.searchInput} value={query} onChangeText={setQuery} placeholder={t("Search messages…", "搜索消息…", "搜尋訊息…")} placeholderTextColor="#8B98AD" /></View>
+      <View style={styles.messageSafety}><Ionicons name="shield-checkmark" size={21} color={palette.green} /><View style={{ flex: 1 }}><Text style={styles.messageSafetyTitle}>{t("Safe, supported conversations", "安全、有保障的对话", "安全、有保障的對話")}</Text><Text style={styles.messageSafetyText}>{t("Only conversations connected to this account appear here.", "此处只显示与该账号相关的对话。", "此處只顯示與該帳戶相關的對話。")}</Text></View></View>
+      {shown.map((thread) => <Pressable key={thread.id} accessibilityRole="button" style={styles.messageRow} onPress={() => onSelect(thread.id)}><ChatPersonAvatar name={thread.name} photo={thread.photo} size={44} /><View style={{ flex: 1 }}><View style={styles.messageTitleRow}><Text style={styles.messageTitle}>{thread.name}</Text><Text style={styles.messageTime}>{thread.time}</Text></View><Text style={styles.messageType}>{thread.type}</Text><Text style={styles.messagePreview} numberOfLines={1}>{sent.filter((message) => message.to === thread.id).at(-1)?.text || thread.preview}</Text></View><Ionicons name="chevron-forward" size={15} color={palette.muted} /></Pressable>)}
+      {!shown.length && <Text style={styles.workspaceHint}>{t("No matching conversations", "没有匹配的对话", "沒有相符的對話")}</Text>}
+    </>}
+  </View>;
+}
+
+type StaffBooking = { id: string; title: string; student: string; date: string; time: string; dropoffEta?: string; place: string; detail: string; intake?: { fields: { label: string; value: string }[]; photos: string[] } };
+const cleaningArrivalWindows = ["09:00–12:00", "12:00–15:00", "15:00–18:00"];
+const movingPickupWindows = [...cleaningArrivalWindows, "18:00–21:00"];
+const airportTimeHours = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0"));
+const airportTimeMinutes = Array.from({ length: 60 }, (_, index) => String(index).padStart(2, "0"));
+type StaffCompletedJob = { service: StaffService; booking: StaffBooking; beforePhotos: string[]; photos: string[] };
+type ServiceCaseReason = "lost-property" | "harassment" | "safety" | "property-damage";
+type ServiceCaseMessage = { author: "customer" | "staff" | "unimate"; text: string };
+type ServiceChatCase = { bookingId: string; service: StaffService; reason: ServiceCaseReason; booking: StaffBooking; openedBy: "customer" | "staff"; messages: ServiceCaseMessage[] };
+type ServiceStatusKind = "on-way" | "five-minutes" | "traffic" | "running-late" | "arrived";
+type ServiceStatusUpdate = { bookingId: string; service: StaffService; kind: ServiceStatusKind; text: string };
+const serviceCaseReasonLabel = (language: Language, reason: ServiceCaseReason) => reason === "lost-property" ? tr(language, "Lost property", "遗失物品", "遺失物品") : reason === "harassment" ? tr(language, "Harassment", "骚扰", "騷擾") : reason === "safety" ? tr(language, "Safety concern", "安全问题", "安全問題") : tr(language, "Property damage", "物品损坏", "物品損壞");
+type ReviewCategory = "quality" | "communication" | "punctuality" | "professionalism";
+const serviceReviewCriteria: { id: ReviewCategory; en: string; simplified: string; traditional: string; icon: string }[] = [
+  { id: "quality", en: "Quality of work", simplified: "服务质量", traditional: "服務品質", icon: "ribbon-outline" },
+  { id: "communication", en: "Communication", simplified: "沟通", traditional: "溝通", icon: "chatbubble-outline" },
+  { id: "punctuality", en: "Punctuality", simplified: "守时", traditional: "守時", icon: "time-outline" },
+  { id: "professionalism", en: "Professionalism & courtesy", simplified: "专业与礼貌", traditional: "專業與禮貌", icon: "heart-outline" },
+];
+type StaffServiceReview = { bookingId: string; service: StaffService; rating: number; comment: string; categories: Record<ReviewCategory, number>; staffResponse?: string };
+type StaffTip = { bookingId: string; service: StaffService; staffName: string; amount: number };
+type StaffInvoice = { id: string; booking: StaffBooking; amount: number | null; issued: string | null; due: string | null; status: "draft" | "due" | "overdue" | "paid" };
+const staffBookingHistory: Record<StaffService, (StaffBooking & { outcome: "completed" | "closed" })[]> = {
+  cleaning: [
+    { id: "CL-190", title: "End-of-tenancy clean", student: "Emma Chen", date: "18 Sep 2026", time: "10:00–12:00", place: "Flat 5, 12 Example Road, Camden NW1", detail: "Completed and closed", outcome: "completed" },
+    { id: "CL-183", title: "Kitchen and bathroom clean", student: "Daniel Wong", date: "2 Sep 2026", time: "12:00–15:00", place: "Room 7, 8 Student Way, Camden NW1", detail: "Completed service", outcome: "completed" },
+    { id: "CL-176", title: "Weekly room clean", student: "Lily Zhang", date: "28 Aug 2026", time: "09:00–12:00", place: "Flat 4, 22 Example Street, Islington N1", detail: "Completed service", outcome: "completed" },
+    { id: "CL-188", title: "Weekly room clean", student: "Sophie Chen", date: "12 Sep 2026", time: "14:00–15:00", place: "Room 3, 8 Campus Lane, Bloomsbury WC1", detail: "Closed booking", outcome: "closed" },
+  ],
+  moving: [
+    { id: "MV-289", title: "Student move", student: "Sophie Chen", date: "18 Sep 2026", time: "09:00–12:00", dropoffEta: "13:00", place: "6 Campus Lane, Camden NW1 → 4 Uni Way, E1", detail: "Completed and closed", outcome: "completed" },
+    { id: "MV-278", title: "Box collection", student: "Daniel Wong", date: "2 Sep 2026", time: "12:00–15:00", place: "14 Example Road, Bloomsbury WC1 → 8 Dock Lane, E14", detail: "Completed service", outcome: "completed" },
+    { id: "MV-269", title: "Student move", student: "Emma Chen", date: "28 Aug 2026", time: "09:00–12:00", place: "22 Example Street, Islington N1 → 4 Uni Way, E1", detail: "Completed service", outcome: "completed" },
+    { id: "MV-285", title: "Box collection", student: "Emma Chen", date: "11 Sep 2026", time: "13:00–14:00", place: "14 Example Road, Bloomsbury WC1", detail: "Closed booking", outcome: "closed" },
+  ],
+  airport: [
+    { id: "AT-389", title: "Heathrow arrival pickup", student: "Daniel Wong", date: "18 Sep 2026", time: "16:30–18:00", place: "Heathrow T2 → 8 Campus Lane, Camden NW1", detail: "Completed and closed", outcome: "completed" },
+    { id: "AT-376", title: "Gatwick departure drop-off", student: "Sophie Chen", date: "2 Sep 2026", time: "05:30–07:00", place: "6 Campus Lane, Camden NW1 → Gatwick South", detail: "Completed service", outcome: "completed" },
+    { id: "AT-368", title: "London City arrival pickup", student: "Lily Zhang", date: "28 Aug 2026", time: "12:00–13:00", place: "London City Airport → 6 Campus Lane, Camden NW1", detail: "Completed service", outcome: "completed" },
+    { id: "AT-384", title: "Gatwick departure drop-off", student: "Lily Zhang", date: "10 Sep 2026", time: "05:30–07:00", place: "22 Example Street, Islington N1 → Gatwick South", detail: "Closed booking", outcome: "closed" },
+  ],
+};
+const staffInvoiceAmounts: Record<StaffService, Record<string, number>> = {
+  cleaning: { "CL-190": 96, "CL-183": 72, "CL-176": 48 },
+  moving: { "MV-289": 84, "MV-278": 55, "MV-269": 110 },
+  airport: { "AT-389": 58, "AT-376": 74, "AT-368": 42 },
+};
+const staffWorkspaceData: Record<StaffService, { name: string; initials: string; title: string; role: string; bookings: StaffBooking[]; completed: number }> = {
+  cleaning: { name: "Maya Patel", initials: "MP", title: "Cleaning services", role: "Cleaning professional", completed: 184, bookings: [
+    { id: "CL-201", title: "End-of-tenancy clean", student: "Sophie Chen", date: "24 Sep 2026", time: "09:00–12:00", place: "Flat 2B, 14 Example Road, Bloomsbury WC1", detail: "1-bedroom student flat · Sample booking", intake: { fields: [{ label: "Cleaning type", value: "End of tenancy" }, { label: "Property type", value: "Student flat / apartment" }, { label: "Approximate size", value: "42 m²" }, { label: "Bedrooms", value: "1" }, { label: "Bathrooms", value: "1" }, { label: "Kitchens", value: "1" }, { label: "Living rooms", value: "1" }, { label: "Pets", value: "No pets" }, { label: "Parking", value: "Free parking available" }, { label: "Parking fee", value: "£0" }, { label: "Special instructions", value: "Call on arrival" }], photos: [] } },
+    { id: "CL-202", title: "Room refresh", student: "Emma Chen", date: "24 Sep 2026", time: "12:00–15:00", place: "Room 18, 6 Campus Lane, Camden NW1", detail: "Student room · Bring cleaning supplies" },
+    { id: "CL-203", title: "Kitchen and bathroom clean", student: "Lily Zhang", date: "24 Sep 2026", time: "15:00–18:00", place: "Flat 4, 22 Example Street, Islington N1", detail: "Shared flat · Kitchen and bathroom" },
+    { id: "CL-204", title: "Weekly room clean", student: "Daniel Wong", date: "25 Sep 2026", time: "12:00–15:00", place: "Room 7, 8 Student Way, Camden NW1", detail: "Regular cleaning appointment" },
+  ] },
+  moving: { name: "Jordan Lee", initials: "JL", title: "Moving services", role: "Moving team lead", completed: 361, bookings: [
+    { id: "MV-301", title: "Student move", student: "Daniel Wong", date: "24 Sep 2026", time: "09:00–12:00", dropoffEta: "13:00", place: "14 Example Road, Bloomsbury WC1 → 8 Dock Lane, E14", detail: "4 boxes · 1 suitcase · 1 mover · Sample booking", intake: { fields: [{ label: "Pickup address", value: "14 Example Road, Bloomsbury WC1" }, { label: "Drop-off address", value: "8 Dock Lane, E14" }, { label: "Pickup floor & access", value: "Ground floor · Lift available" }, { label: "Drop-off floor & access", value: "2nd floor · Lift available" }, { label: "Pickup parking", value: "Free parking available" }, { label: "Drop-off parking", value: "Free parking available" }, { label: "Inventory", value: "2 small boxes · 2 large boxes · 1 suitcase · no furniture" }, { label: "Crew", value: "1 mover" }, { label: "Special instructions", value: "Call before arriving" }], photos: [] } },
+    { id: "MV-303", title: "Box collection", student: "Sophie Chen", date: "24 Sep 2026", time: "12:00–15:00", place: "6 Campus Lane, Camden NW1 → 2 Study Road, N1", detail: "3 boxes · Collection and drop-off" },
+    { id: "MV-304", title: "Small furniture move", student: "Emma Chen", date: "24 Sep 2026", time: "15:00–18:00", place: "22 Example Street, Islington N1 → 4 Uni Way, E1", detail: "Desk and chair · Van required" },
+    { id: "MV-302", title: "Furniture collection", student: "Lily Zhang", date: "26 Sep 2026", time: "12:00–15:00", place: "Shoreditch → Stratford", detail: "Desk and two chairs · Van required" },
+  ] },
+  airport: { name: "Alex Morgan", initials: "AM", title: "Airport transfers", role: "Airport transfer driver", completed: 245, bookings: [
+    { id: "AT-403", title: "Heathrow departure drop-off", student: "Daniel Wong", date: "24 Sep 2026", time: "08:00", place: "14 Example Road, Bloomsbury WC1 → Heathrow T5", detail: "1 passenger · 1 suitcase", intake: { fields: [{ label: "Journey", value: "Airport drop-off" }, { label: "Airport / terminal", value: "Heathrow Terminal 5" }, { label: "Passengers", value: "1" }, { label: "Luggage", value: "1 suitcase" }, { label: "Meeting point", value: "Outside main entrance" }, { label: "Luggage help", value: "Requested" }], photos: [] } },
+    { id: "AT-404", title: "London City arrival pickup", student: "Lily Zhang", date: "24 Sep 2026", time: "12:00", place: "London City Airport → 6 Campus Lane, Camden NW1", detail: "Flight LC 312 · 1 suitcase" },
+    { id: "AT-401", title: "Heathrow arrival pickup", student: "Sophie Chen", date: "24 Sep 2026", time: "18:30", place: "Heathrow T2 → 22 Example Street, Islington N1", detail: "Flight BA 2836 · 2 suitcases" },
+    { id: "AT-402", title: "Gatwick departure drop-off", student: "Emma Chen", date: "27 Sep 2026", time: "06:15", place: "Camden → Gatwick South", detail: "1 passenger · 1 suitcase" },
+  ] },
+};
+
+const staffCredentialChecklist: Record<StaffService, { title: string; detail: string; icon: string; drivingOnly?: boolean }[]> = {
+  cleaning: [
+    { title: "Identity and work eligibility", detail: "Check identity and permission to work before assigning jobs.", icon: "id-card-outline" },
+    { title: "Cleaning safety training", detail: "Record relevant chemical and equipment safety training.", icon: "sparkles-outline" },
+    { title: "Public liability cover", detail: "Check the policy scope and expiry for work in student homes.", icon: "shield-checkmark-outline" },
+  ],
+  moving: [
+    { title: "Identity and work eligibility", detail: "Check identity and permission to work before assigning jobs.", icon: "id-card-outline" },
+    { title: "Manual-handling training", detail: "Record safe lifting and equipment training.", icon: "cube-outline" },
+    { title: "Driving licence and DVLA record", detail: "For van drivers only: obtain consent and a DVLA check code; verify valid entitlement for the vehicle, restrictions and expiry. Do not rely on a photo alone.", icon: "card-outline", drivingOnly: true },
+    { title: "Vehicle and goods cover", detail: "For van drivers only: check business-use motor insurance, vehicle roadworthiness and suitable goods-in-transit cover.", icon: "car-outline", drivingOnly: true },
+  ],
+  airport: [
+    { title: "Identity, work eligibility and DVLA licence", detail: "Match the applicant to their licence and, with permission, check their driving record and expiry with DVLA.", icon: "id-card-outline" },
+    { title: "Private-hire driver licence", detail: "Check the issuing licensing authority, licence status and expiry. London transfers require a TfL-licensed driver.", icon: "person-circle-outline" },
+    { title: "Background and medical checks", detail: "Confirm the licensing authority's DBS and medical requirements have been met; do not self-certify these in the app.", icon: "shield-checkmark-outline" },
+    { title: "Licensed vehicle and insurance", detail: "Check private-hire vehicle licensing, current roadworthiness and hire-and-reward insurance for this driver and vehicle.", icon: "car-sport-outline" },
+  ],
+};
+
+function WorkspaceHeadingBadge({ kind, language }: { kind: "staff" | "organisation" | "seller" | "unverified"; language: Language }) {
+  const label = kind === "staff" ? tr(language, "UniMate approved", "优你伴已批准", "優你伴已批准") : kind === "organisation" ? tr(language, "Official page", "官方主页", "官方主頁") : kind === "seller" ? tr(language, "Approved seller", "已批准卖家", "已批准賣家") : tr(language, "Unverified", "未认证", "未認證");
+  return <View style={{ alignItems: "center", gap: 3, maxWidth: 92 }}><VerificationBadge kind={kind} language={language} /><Text style={{ color: palette.muted, fontSize: 9, fontWeight: "800", textAlign: "center" }}>{label}</Text></View>;
+}
+
+function WorkspaceProfileRow({ icon, title, description, onPress }: { icon: string; title: string; description?: string; onPress: () => void }) {
+  return <Pressable accessibilityRole="button" style={styles.menuItem} onPress={onPress}><Ionicons name={icon as any} size={22} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.menuText}>{title}</Text>{description ? <Text style={styles.workspaceCardText}>{description}</Text> : null}</View><Ionicons name="chevron-forward" size={17} color={palette.muted} /></Pressable>;
+}
+
+function WorkspaceCommonSettings({ language, onLanguage, darkMode, onToggleDarkMode, notifications, onToggleNotifications, notificationDescription, onLogout }: { language: Language; onLanguage: (language: Language) => void; darkMode: boolean; onToggleDarkMode: () => void; notifications: boolean; onToggleNotifications: () => void; notificationDescription: string; onLogout: () => void }) {
+  const t = (en: string, simplified: string, traditional = simplified) => tr(language, en, simplified, traditional);
+  return <>
+    <Text style={[styles.settingsSectionLabel, styles.settingsFirstSectionLabel]}>{t("App preferences", "应用偏好", "應用程式偏好")}</Text>
+    <View style={styles.settingsCard}>
+      <View style={styles.settingsRow}><View style={styles.settingsIcon}><Ionicons name={darkMode ? "moon" : "sunny-outline"} size={20} color={palette.blue} /></View><View style={{ flex: 1 }}><Text style={styles.settingsRowTitle}>{t("Appearance", "外观", "外觀")}</Text><Text style={styles.settingsRowText}>{darkMode ? t("Dark mode", "深色模式", "深色模式") : t("Light mode", "浅色模式", "淺色模式")}</Text></View><Pressable accessibilityRole="switch" accessibilityState={{ checked: darkMode }} style={[styles.toggle, darkMode && styles.toggleOn]} onPress={onToggleDarkMode}><View style={[styles.toggleKnob, darkMode && styles.toggleKnobOn]} /></Pressable></View>
+      <View style={styles.settingsRow}><View style={styles.settingsIcon}><Ionicons name="notifications-outline" size={20} color={palette.blue} /></View><View style={{ flex: 1 }}><Text style={styles.settingsRowTitle}>{t("Activity notifications", "动态通知", "動態通知")}</Text><Text style={styles.settingsRowText}>{notificationDescription}</Text></View><Pressable accessibilityRole="switch" accessibilityState={{ checked: notifications }} style={[styles.toggle, notifications && styles.toggleOn]} onPress={onToggleNotifications}><View style={[styles.toggleKnob, notifications && styles.toggleKnobOn]} /></Pressable></View>
+    </View>
+    <Text style={styles.settingsSectionLabel}>{t("Language", "语言", "語言")}</Text>
+    <View style={styles.settingsLanguageRow}>{(["EN", "简体", "繁體"] as Language[]).map((item) => <Pressable key={item} accessibilityRole="button" accessibilityState={{ selected: language === item }} style={[styles.settingsLanguageButton, language === item && styles.settingsLanguageButtonActive]} onPress={() => onLanguage(item)}><Text style={[styles.settingsLanguageText, language === item && styles.settingsLanguageTextActive]}>{({ EN: "English", 简体: "简体中文", 繁體: "繁體中文" } as Record<Language, string>)[item]}</Text>{language === item && <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />}</Pressable>)}</View>
+    <Text style={styles.settingsSectionLabel}>{t("Account", "账户", "帳戶")}</Text>
+    <Pressable accessibilityRole="button" style={styles.logoutButton} onPress={onLogout}><Ionicons name="log-out-outline" size={20} color={palette.blue} /><Text style={styles.logoutButtonText}>{t("Log out", "退出登录", "登出")}</Text></Pressable>
+  </>;
+}
+
+function StaffWorkspace({ service, movingDriver, language, onLanguage, darkMode, onToggleDarkMode, onLogout, previewBookings, completedJobs, onCompleteJob, availability, onAvailabilityChange, serviceChatCases, onOpenServiceChatCase, onAddServiceCaseMessage, serviceReviews, onRespondReview, statusUpdates, onAddStatusUpdate, staffTips, studentProfilePhoto }: { service: StaffService; movingDriver: boolean; language: Language; onLanguage: (language: Language) => void; darkMode: boolean; onToggleDarkMode: () => void; onLogout: () => void; previewBookings: StaffBooking[]; completedJobs: StaffCompletedJob[]; onCompleteJob: (job: StaffCompletedJob) => void; availability: StaffAvailability; onAvailabilityChange: (availability: StaffAvailability) => void; serviceChatCases: ServiceChatCase[]; onOpenServiceChatCase: (job: StaffCompletedJob, reason: ServiceCaseReason, openedBy: "customer" | "staff", details: string) => void; onAddServiceCaseMessage: (bookingId: string, author: "customer" | "staff", message: string) => void; serviceReviews: StaffServiceReview[]; onRespondReview: (bookingId: string, response: string) => void; statusUpdates: ServiceStatusUpdate[]; onAddStatusUpdate: (update: ServiceStatusUpdate) => void; staffTips: StaffTip[]; studentProfilePhoto: string }) {
+  const [tab, setTab] = useState<"overview" | "bookings" | "invoices" | "messages" | "profile">("overview");
+  const [demoRequestStatus, setDemoRequestStatus] = useState<DemoRequestStatus>("pending");
+  const [bookingSection, setBookingSection] = useState<"upcoming" | "calendar" | "history">("upcoming");
+  const [selectedBooking, setSelectedBooking] = useState<StaffBooking | null>(null);
+  const [conversation, setConversation] = useState<string | null>(null);
+  const [draft, setDraft] = useState("");
+  const [localMessages, setLocalMessages] = useState<{ to: string; text: string; attachment?: ChatAttachment }[]>([]);
+  const [accountPanel, setAccountPanel] = useState<"edit" | "credentials" | "payouts" | "invoices" | "invoice-detail" | "settings" | "support" | null>(null);
+  const [invoiceSearch, setInvoiceSearch] = useState("");
+  const [invoiceFilter, setInvoiceFilter] = useState<"all" | "due" | "overdue" | "paid" | "draft">("all");
+  const [selectedInvoice, setSelectedInvoice] = useState<StaffInvoice | null>(null);
+  const [supportJobId, setSupportJobId] = useState("");
+  const [supportIssue, setSupportIssue] = useState("");
+  const [supportDescription, setSupportDescription] = useState("");
+  const [supportError, setSupportError] = useState("");
+  const [bookingNotifications, setBookingNotifications] = useState(true);
+  const [displayName, setDisplayName] = useState(staffWorkspaceData[service].name);
+  const workAreas = availability.areas;
+  const serviceArea = workAreas.join(" · ");
+  const [workAreaOpen, setWorkAreaOpen] = useState(false);
+  const [profileBio, setProfileBio] = useState("");
+  const [staffPhoto, setStaffPhoto] = useState<string | null>(null);
+  const [staffPublicOpen, setStaffPublicOpen] = useState(false);
+  const [staffReviewsOpen, setStaffReviewsOpen] = useState(false);
+  const [replyReviewId, setReplyReviewId] = useState<string | null>(null);
+  const [replyDraft, setReplyDraft] = useState("");
+  const data = staffWorkspaceData[service];
+  const [bookings, setBookings] = useState<StaffBooking[]>([...previewBookings, ...staffWorkspaceData[service].bookings]);
+  const [bookingState, setBookingState] = useState<Record<string, "confirmed" | "on-way" | "arrived" | "cancel-requested" | "completed">>({});
+  const [completionPhotos, setCompletionPhotos] = useState<Record<string, string[]>>({});
+  const [beforePhotos, setBeforePhotos] = useState<Record<string, string[]>>({});
+  const [completionError, setCompletionError] = useState("");
+  const [scheduleView, setScheduleView] = useState<"day" | "month" | "history">("month");
+  const blockedDates = availability.blockedDates;
+  const [scheduleManagerOpen, setScheduleManagerOpen] = useState(false);
+  const [scheduleError, setScheduleError] = useState("");
+  const [calendarMonth, setCalendarMonth] = useState(8);
+  const [calendarYear, setCalendarYear] = useState(2026);
+  const [selectedDay, setSelectedDay] = useState("24 Sep 2026");
+  const [editingBooking, setEditingBooking] = useState(false);
+  const [editDate, setEditDate] = useState("");
+  const [editTime, setEditTime] = useState("");
+  const [editDropoffEta, setEditDropoffEta] = useState("");
+  const [bookingEditError, setBookingEditError] = useState("");
+  const [cancelArmed, setCancelArmed] = useState(false);
+  const t = (en: string, simplified: string, traditional = simplified) => tr(language, en, simplified, traditional);
+  const airportBookingTimeLabel = (booking: StaffBooking) => booking.intake?.fields.find((field) => field.label === "Journey")?.value === "Airport drop-off" || booking.title.toLowerCase().includes("drop-off") ? t("Airport arrival time (London time)", "到达机场时间（伦敦时间）", "到達機場時間（倫敦時間）") : t("Flight arrival time (London time)", "航班到达时间（伦敦时间）", "航班到達時間（倫敦時間）");
+  const pickStaffPhoto = async (source?: PhotoSource) => { if (!source) { askPhotoSource(language, pickStaffPhoto); return; } const uris = await selectPhotoUris(language, source, { allowsEditing: true, aspect: [1, 1], quality: 0.8 }); if (uris[0]) setStaffPhoto(uris[0]); };
+  const pickJobPhoto = async (stage: "before" | "after", source?: PhotoSource) => { if (!selectedBooking) return; if (!source) { askPhotoSource(language, (selected) => pickJobPhoto(stage, selected)); return; } const uris = await selectPhotoUris(language, source, { quality: 0.8, multiple: source === "library", limit: 8 }); if (uris.length) { const bookingId = selectedBooking.id; const setPhotos = stage === "before" ? setBeforePhotos : setCompletionPhotos; setPhotos((current) => ({ ...current, [bookingId]: [...(current[bookingId] || []), ...uris].slice(0, 8) })); setCompletionError(""); } };
+  const completedForService = completedJobs.filter((job) => job.service === service);
+  const tipForBooking = (bookingId: string) => staffTips.find((tip) => tip.bookingId === bookingId && tip.service === service);
+  const completedIds = new Set(completedForService.map((job) => job.booking.id));
+  const historicalBooking = (booking: StaffBooking) => staffBookingHistory[service].find((item) => item.id === booking.id);
+  const activeReviews = serviceReviews.filter((review) => review.service === service);
+  const publicReviewSamples = service === "cleaning" ? [{ rating: 5, text: "Maya was careful, thorough and left the flat spotless.", source: "Sample cleaning review" }] : service === "moving" ? [{ rating: 5, text: "The move was organised and everything arrived safely.", source: "Sample moving review" }] : [{ rating: 5, text: "On time, friendly and helped with the luggage.", source: "Sample transfer review" }];
+  const sampleReviewSummary = service === "cleaning" ? { rating: 4.9, count: 94 } : service === "moving" ? { rating: 4.9, count: 121 } : { rating: 4.8, count: 87 };
+  const displayReviewCount = sampleReviewSummary.count + activeReviews.length;
+  const displayReviewRating = ((sampleReviewSummary.rating * sampleReviewSummary.count + activeReviews.reduce((total, review) => total + review.rating, 0)) / displayReviewCount).toFixed(1);
+  const reviewCategories: { id: ReviewCategory; label: string; icon: string; sample: number }[] = serviceReviewCriteria.map((criterion, index) => ({ id: criterion.id, label: t(criterion.en, criterion.simplified, criterion.traditional), icon: criterion.icon, sample: [4.9, 4.8, 4.8, 4.9][index] }));
+  const toggleWorkArea = (area: string) => { const next = workAreas.includes(area) ? workAreas.filter((item) => item !== area) : [...workAreas, area]; if (!next.length) return; onAvailabilityChange({ ...availability, areas: next }); };
+  const tabs = [
+    { id: "overview" as const, label: t("Home", "首页", "首頁"), icon: "home-outline" },
+    { id: "bookings" as const, label: t("Bookings", "预订", "預訂"), icon: "receipt-outline" },
+    { id: "invoices" as const, label: t("Invoices", "发票", "發票"), icon: "document-text-outline" },
+    { id: "messages" as const, label: t("Messages", "消息", "訊息"), icon: "chatbubbles-outline", badge: demoRequestStatus === "pending" ? 1 : 0 },
+    { id: "profile" as const, label: t("Profile", "资料", "資料"), icon: "person-outline" },
+  ];
+  const openStudentMessage = (booking: StaffBooking) => { setConversation(booking.id); setTab("messages"); setSelectedBooking(null); };
+  const openStaffSupport = (booking?: StaffBooking) => { setSupportJobId(booking?.id || ""); setSupportIssue(""); setSupportDescription(""); setSupportError(""); setSelectedBooking(null); setAccountPanel("support"); };
+  const goToTechSupportChat = (general = false) => {
+    if (!general && (!supportJobId || !supportIssue)) { setSupportError(t("Choose a job and issue type first.", "请先选择工作及问题类型。", "請先選擇工作及問題類型。")); return; }
+    const booking = bookings.find((item) => item.id === supportJobId) || staffBookingHistory[service].find((item) => item.id === supportJobId);
+    const completedJob = completedForService.find((item) => item.booking.id === supportJobId);
+    const caseReason: ServiceCaseReason | null = supportIssue === t("Lost property", "遗失物品", "遺失物品") ? "lost-property" : supportIssue === t("Harassment or threatening behaviour", "骚扰或威胁行为", "騷擾或威脅行為") ? "harassment" : supportIssue === t("Unsafe property or working conditions", "房屋或工作环境不安全", "物業或工作環境不安全") ? "safety" : supportIssue === t("Property damage", "物品损坏", "物品損壞") ? "property-damage" : null;
+    if (!general && completedJob && caseReason) {
+      onOpenServiceChatCase(completedJob, caseReason, "staff", supportDescription.trim() || supportIssue);
+      setConversation(completedJob.booking.id); setDraft(""); setTab("messages"); setAccountPanel(null); return;
+    }
+    setDraft(general ? t("I need help with my staff account or an app problem.", "我需要员工账号或应用技术问题方面的帮助。", "我需要員工帳戶或應用程式技術問題方面的協助。") : `${t("Job", "工作", "工作")}: ${booking?.id || supportJobId} · ${booking?.title || ""}\n${t("Issue", "问题", "問題")}: ${supportIssue}\n${t("Details", "详情", "詳情")}: ${supportDescription.trim() || t("Please contact me to discuss.", "请联系我进一步讨论。", "請聯絡我進一步討論。")}`);
+    setConversation("UniMate tech & safety"); setTab("messages"); setAccountPanel(null);
+  };
+  const sendDemoMessage = (attachment?: ChatAttachment) => { if (!conversation || !draft.trim() && !attachment) return; if (completedIds.has(conversation) || bookingState[conversation] === "completed") { if (!serviceChatCases.some((item) => item.bookingId === conversation && item.service === service) || !draft.trim()) return; onAddServiceCaseMessage(conversation, "staff", draft.trim()); } else { setLocalMessages((current) => [...current, { to: conversation, text: draft.trim(), attachment }]); } setDraft(""); };
+  const sendQuickUpdate = (kind: ServiceStatusKind) => { const booking = bookings.find((item) => item.id === conversation); if (!booking || completedIds.has(booking.id) || bookingState[booking.id] === "completed") return; const textByKind: Record<ServiceStatusKind, string> = { "on-way": t("I'm on my way to your booking.", "我正在前往您的预订地点。", "我正在前往您的預訂地點。"), "five-minutes": t("I'm about 5 minutes away.", "我大约还有5分钟到达。", "我大約還有5分鐘到達。"), traffic: t("I'm stuck in traffic and will update you shortly.", "我遇到堵车，会尽快告知最新进度。", "我遇上塞車，會盡快告知最新進度。"), "running-late": t("I'm running late. I'll confirm my updated arrival time as soon as possible.", "我会迟到，会尽快确认新的到达时间。", "我會遲到，會盡快確認新的到達時間。"), arrived: t("I've arrived at the pickup or service location.", "我已到达取件或服务地点。", "我已到達取件或服務地點。") }; onAddStatusUpdate({ bookingId: booking.id, service, kind, text: textByKind[kind] }); if (kind === "on-way" || kind === "arrived") setBookingState((current) => ({ ...current, [booking.id]: kind === "arrived" ? "arrived" : "on-way" })); };
+  const staffMessageThreads: WorkspaceThread[] = [
+    ...bookings.filter((booking) => bookingState[booking.id] !== "cancel-requested").map((booking, index) => { const closed = completedIds.has(booking.id) || bookingState[booking.id] === "completed"; const supportCase = serviceChatCases.find((item) => item.bookingId === booking.id && item.service === service); return { id: booking.id, name: booking.student, type: supportCase ? `${t("UniMate support case", "优你伴支持个案", "優你伴支援個案")} · ${booking.id}` : closed ? `${t("Closed · job complete", "已关闭 · 服务完成", "已關閉 · 服務完成")} · ${booking.id}` : `${data.title} · ${booking.id}`, preview: supportCase ? serviceCaseReasonLabel(language, supportCase.reason) : closed ? t("Customer chat closed after completion", "服务完成后客户聊天已关闭", "服務完成後客戶聊天已關閉") : booking.detail, time: index === 0 ? t("Today", "今天", "今天") : t("Yesterday", "昨天", "昨天"), initials: booking.student.split(" ").map((part) => part[0]).join("").slice(0, 2), color: index === 0 ? palette.blue : palette.green, photo: booking.student === "Sophie Chen" || booking.student === "Student preview" ? studentProfilePhoto : undefined, locked: closed && !supportCase }; }),
+    { id: "UniMate operations", name: t("UniMate operations", "优你伴运营", "優你伴營運"), type: t("Staff team", "员工团队", "員工團隊"), preview: t("Contact us about shifts, safety or booking changes.", "如有排班、安全或预订变更，请联系我们。", "如有排班、安全或預訂變更，請聯絡我們。"), time: t("Today", "今天", "今天"), initials: "UM", color: palette.blue },
+    { id: "UniMate tech & safety", name: t("UniMate tech & safety", "优你伴技术与安全支持", "優你伴技術與安全支援"), type: t("Staff support", "员工支持", "員工支援"), preview: t("Report a job issue or ask for technical help.", "报告工作问题或寻求技术帮助。", "報告工作問題或尋求技術協助。"), time: t("Today", "今天", "今天"), initials: "TS", color: palette.coral },
+  ];
+  const activeBookings = bookings.filter((booking) => bookingState[booking.id] !== "cancel-requested" && bookingState[booking.id] !== "completed" && !completedIds.has(booking.id));
+  const bookingStatusText = (booking: StaffBooking) => historicalBooking(booking)?.outcome === "closed" ? t("Closed", "已结单", "已結單") : historicalBooking(booking)?.outcome === "completed" || bookingState[booking.id] === "completed" || completedIds.has(booking.id) ? t("Completed", "已完成", "已完成") : bookingState[booking.id] === "cancel-requested" ? t("Cancellation requested", "已申请取消", "已申請取消") : bookingState[booking.id] === "arrived" ? t("Arrived", "已到达", "已到達") : bookingState[booking.id] === "on-way" ? t("On the way", "前往途中", "前往途中") : t("Confirmed", "已确认", "已確認");
+  const proofPhotosFor = (booking: StaffBooking) => completionPhotos[booking.id] || completedForService.find((job) => job.booking.id === booking.id)?.photos || [];
+  const beforePhotosFor = (booking: StaffBooking) => beforePhotos[booking.id] || completedForService.find((job) => job.booking.id === booking.id)?.beforePhotos || [];
+  const formatCalendarDate = (day: number) => `${day} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][calendarMonth]} ${calendarYear}`;
+  const monthBookings = activeBookings.filter((booking) => { const date = new Date(booking.date); return date.getMonth() === calendarMonth && date.getFullYear() === calendarYear; });
+  const visibleSchedule = (scheduleView === "day" ? monthBookings.filter((booking) => booking.date === selectedDay) : monthBookings).sort((a, b) => a.date === b.date ? a.time.localeCompare(b.time) : new Date(a.date).getTime() - new Date(b.date).getTime());
+  const shiftCalendarMonth = (step: number) => { const next = new Date(calendarYear, calendarMonth + step, 1); setCalendarMonth(next.getMonth()); setCalendarYear(next.getFullYear()); setSelectedDay(`1 ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][next.getMonth()]} ${next.getFullYear()}`); setScheduleError(""); };
+  const markUnavailable = (kind: "blocked" | "holiday" | "emergency") => { if (kind !== "emergency" && activeBookings.some((booking) => booking.date === selectedDay)) { setScheduleError(t("Move or resolve existing bookings before blocking this date.", "请先调整或处理现有预订，再封锁该日期。", "請先調整或處理現有預訂，再封鎖該日期。")); return; } onAvailabilityChange({ ...availability, blockedDates: { ...blockedDates, [selectedDay]: kind } }); setScheduleError(kind === "emergency" && activeBookings.some((booking) => booking.date === selectedDay) ? t("Emergency marked. Existing jobs still need manual reassignment and client notification; this preview sends neither.", "已标记紧急情况。现有工作仍需人工改派及通知客户；此预览不会发送通知。", "已標記緊急情況。現有工作仍需人工改派及通知客戶；此預覽不會傳送通知。") : ""); };
+  const formatStaffDate = (date: Date) => `${date.getDate()} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][date.getMonth()]} ${date.getFullYear()}`;
+  const invoiceRecords: StaffInvoice[] = [
+    ...completedForService.map((job): StaffInvoice => ({ id: `INV-${job.booking.id}`, booking: job.booking, amount: null, issued: null, due: null, status: "draft" })),
+    ...staffBookingHistory[service].filter((booking) => booking.outcome === "completed").map((booking, index): StaffInvoice => { const dueDate = new Date(booking.date); dueDate.setDate(dueDate.getDate() + 7); return { id: `INV-${booking.id}`, booking, amount: staffInvoiceAmounts[service][booking.id], issued: booking.date, due: formatStaffDate(dueDate), status: index === 0 ? "due" : index === 1 ? "overdue" : "paid" }; }),
+  ];
+  const shownInvoices = invoiceRecords.filter((invoice) => (invoiceFilter === "all" || invoice.status === invoiceFilter) && `${invoice.id} ${invoice.booking.id} ${invoice.booking.student} ${invoice.booking.title}`.toLowerCase().includes(invoiceSearch.trim().toLowerCase()));
+  const invoiceOutstanding = invoiceRecords.filter((invoice) => invoice.status === "due" || invoice.status === "overdue").reduce((total, invoice) => total + (invoice.amount || 0), 0);
+  const invoiceStatusText = (status: StaffInvoice["status"]) => status === "draft" ? t("Draft", "草稿", "草稿") : status === "paid" ? t("Paid", "已付款", "已付款") : status === "overdue" ? t("Overdue", "逾期", "逾期") : t("Due", "待付款", "待付款");
+  const invoiceStatusStyle = (status: StaffInvoice["status"]) => status === "due" ? { color: "#9A6700", backgroundColor: "#FFF3CF" } : status === "overdue" ? { color: "#C83942", backgroundColor: "#FFE9EB" } : status === "paid" ? { color: "#16824A", backgroundColor: "#E3F7EB" } : { color: palette.muted, backgroundColor: "#EEF2F7" };
+  const editDateOptions = selectedBooking ? Array.from(new Set([selectedBooking.date, ...Array.from({ length: 21 }, (_, offset) => { const date = new Date(); date.setDate(date.getDate() + offset); return formatStaffDate(date); })])) : [];
+  const editSlotOptions = service === "cleaning" ? cleaningArrivalWindows : movingPickupWindows;
+  const openBooking = (booking: StaffBooking) => { setSelectedBooking(booking); setEditDate(booking.date); setEditTime(service === "airport" ? booking.time.slice(0, 5) : booking.time); setEditDropoffEta(booking.dropoffEta || ""); setEditingBooking(false); setBookingEditError(""); setCompletionError(""); setCancelArmed(false); };
+  const completeBooking = () => { if (!selectedBooking) return; const photos = completionPhotos[selectedBooking.id] || []; const before = beforePhotos[selectedBooking.id] || []; if ((service === "cleaning" || service === "moving") && (!before.length || !photos.length)) { setCompletionError(t("Add at least one before-service and one completion photo before marking this job complete. Both are required for invoice review.", "完成服务前请至少添加一张服务前照片和一张完工照片。发票审核需要两组照片。", "完成服務前請至少加入一張服務前相片及一張完工相片。發票審核需要兩組相片。")); return; } setBookingState((current) => ({ ...current, [selectedBooking.id]: "completed" })); onCompleteJob({ service, booking: selectedBooking, beforePhotos: before, photos }); setCompletionError(""); };
+  const saveBookingSlot = () => { if (!selectedBooking) return; if (blockedDates[editDate]) { setBookingEditError(t("This date is blocked or marked as holiday.", "该日期已封锁或标记为休假。", "該日期已封鎖或標記為休假。")); return; } if (service === "airport" ? !/^([01]\d|2[0-3]):[0-5]\d$/.test(editTime) : !editSlotOptions.includes(editTime)) { setBookingEditError(t("Choose a time offered in the student booking form.", "请选择学生预订表单中的时间段。", "請選擇學生預訂表單中的時段。")); return; } if (bookings.some((booking) => booking.id !== selectedBooking.id && booking.date === editDate && booking.time === editTime && bookingState[booking.id] !== "cancel-requested")) { setBookingEditError(t("Another booking already uses this time slot.", "已有其他预订使用此时间段。", "已有其他預訂使用此時段。")); return; } if (service === "moving" && editDropoffEta.trim()) { const eta = editDropoffEta.trim(); if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(eta) || eta < editTime.slice(0, 5)) { setBookingEditError(t("Enter a valid same-day drop-off ETA (HH:MM) after pickup begins.", "请输入取件开始后有效的当日送达预计时间（时:分）。", "請輸入取件開始後有效的當日送達預計時間（時:分）。")); return; } } const updated = { ...selectedBooking, date: editDate, time: editTime, ...(service === "moving" ? { dropoffEta: editDropoffEta.trim() || undefined } : {}) }; setBookings((current) => current.map((booking) => booking.id === updated.id ? updated : booking)); setSelectedBooking(updated); setEditingBooking(false); setBookingEditError(""); };
+  return <SafeAreaView style={styles.safe}>
+    <AuthPreferences language={language} onLanguage={onLanguage} darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} />
+    <View style={styles.workspaceHeading}><View style={{ flex: 1 }}><Text style={styles.workspaceEyebrow}>{t("APPROVED STAFF", "已批准员工", "已批准員工")}</Text><Text style={styles.workspaceTitle}>{data.title}</Text><Text style={styles.workspaceSubtitle}>{displayName} · {data.role}</Text></View><WorkspaceHeadingBadge kind="staff" language={language} /></View>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.workspaceBody}>
+      {tab === "overview" && <>
+        <View style={styles.workspaceMetricRow}><WorkspaceMetric value={activeBookings.length} label={t("Confirmed", "已确认", "已確認")} /><WorkspaceMetric value={data.completed + completedForService.length} label={t("Completed", "已完成", "已完成")} /><WorkspaceMetric value={activeBookings.length} label={t("Scheduled", "已排期", "已排期")} /></View>
+        <Text style={styles.workspaceSectionTitle}>{t("Next confirmed booking", "下一笔已确认预订", "下一筆已確認預訂")}</Text>
+        {activeBookings[0] ? <Pressable accessibilityRole="button" style={styles.workspaceCard} onPress={() => openBooking(activeBookings[0])}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{activeBookings[0].title}</Text><Text style={styles.workspaceStatus}>{t("Confirmed", "已确认", "已確認")}</Text></View><Text style={styles.workspaceCardText}>{activeBookings[0].date} · {activeBookings[0].time}</Text><Text style={styles.workspaceCardText}>{activeBookings[0].student} · {activeBookings[0].place}</Text><Text style={styles.workspaceCardLink}>{t("View booking", "查看预订", "查看預訂")}  ›</Text></Pressable> : <Text style={styles.workspaceHint}>{t("No active bookings", "暂无有效预订", "暫無有效預訂")}</Text>}
+        <View style={styles.workspaceNotice}><Ionicons name="information-circle-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("This staff workspace shows only your assigned service, confirmed bookings, schedule and related student messages.", "此员工工作区只显示已分配的服务、已确认预订、日程及相关学生消息。", "此員工工作區只顯示已分配的服務、已確認預訂、日程及相關學生訊息。")}</Text></View>
+      </>}
+      {tab === "bookings" && <><Text style={styles.workspaceSectionTitle}>{t("Bookings & schedule", "预订与日程", "預訂及日程")}</Text><View style={{ flexDirection: "row", gap: 7, marginVertical: 8 }}>{(["upcoming", "calendar", "history"] as const).map((section) => <Pressable key={section} accessibilityRole="button" accessibilityState={{ selected: bookingSection === section }} style={[styles.marketCategory, { flex: 1 }, bookingSection === section && styles.marketCategoryActive]} onPress={() => { setBookingSection(section); if (section === "history") setScheduleView("history"); else if (section === "calendar") setScheduleView("month"); }}><Text style={[styles.marketCategoryText, { textAlign: "center" }, bookingSection === section && styles.marketCategoryTextActive]}>{section === "upcoming" ? t("Upcoming", "即将开始", "即將開始") : section === "calendar" ? t("Calendar", "日历", "日曆") : t("History", "历史", "歷史")}</Text></Pressable>)}</View></>}
+      {tab === "bookings" && bookingSection === "upcoming" && <>{activeBookings.map((booking) => <Pressable key={booking.id} accessibilityRole="button" style={styles.workspaceCard} onPress={() => openBooking(booking)}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{booking.title}</Text><Text style={styles.workspaceStatus}>{bookingStatusText(booking)}</Text></View><Text style={styles.workspaceCardText}>{booking.student} · {booking.date} · {booking.time}</Text><Text style={styles.workspaceCardText}>{booking.place}</Text><Text style={styles.workspaceCardLink}>{t("View booking", "查看预订", "查看預訂")} ›</Text></Pressable>)}{!activeBookings.length && <Text style={styles.workspaceHint}>{t("No upcoming bookings", "暂无即将开始的预订", "暫無即將開始的預訂")}</Text>}</>}
+      {tab === "bookings" && bookingSection !== "upcoming" && <>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 5 }}><Text style={styles.workspaceSectionTitle}>{t("Schedule", "日程", "日程")}</Text><Pressable accessibilityRole="button" accessibilityLabel={t("Edit availability", "编辑可工作日期", "編輯可工作日期")} style={{ padding: 8, borderRadius: 9, backgroundColor: "#EAF4FF" }} onPress={() => setScheduleManagerOpen(true)}><Ionicons name="create-outline" size={20} color={palette.blue} /></Pressable></View>
+        {bookingSection === "calendar" && <View style={{ flexDirection: "row", gap: 8, marginBottom: 14 }}>{(["day", "month"] as const).map((view) => <Pressable key={view} accessibilityRole="button" accessibilityState={{ selected: scheduleView === view }} onPress={() => setScheduleView(view)} style={[styles.marketCategory, scheduleView === view && styles.marketCategoryActive]}><Text style={[styles.marketCategoryText, scheduleView === view && styles.marketCategoryTextActive]}>{view === "day" ? t("Day", "按日", "按日") : t("Month", "按月", "按月")}</Text></Pressable>)}</View>}
+        {scheduleView !== "history" && <>
+        <View style={styles.workspaceCard}><View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}><Pressable accessibilityRole="button" accessibilityLabel={t("Previous month", "上个月", "上個月")} onPress={() => shiftCalendarMonth(-1)}><Ionicons name="chevron-back" size={20} color={palette.blue} /></Pressable><Text style={styles.workspaceCardTitle}>{new Date(calendarYear, calendarMonth, 1).toLocaleDateString(language === "EN" ? "en-GB" : "zh-CN", { month: "long", year: "numeric" })}</Text><Pressable accessibilityRole="button" accessibilityLabel={t("Next month", "下个月", "下個月")} onPress={() => shiftCalendarMonth(1)}><Ionicons name="chevron-forward" size={20} color={palette.blue} /></Pressable></View>
+          <View style={{ flexDirection: "row" }}>{["M", "T", "W", "T", "F", "S", "S"].map((weekday, index) => <Text key={`${weekday}-${index}`} style={{ width: "14.285%", textAlign: "center", color: palette.muted, fontSize: 10, fontWeight: "800", paddingVertical: 6 }}>{weekday}</Text>)}</View>
+          <View style={{ flexDirection: "row", flexWrap: "wrap" }}>{Array.from({ length: (new Date(calendarYear, calendarMonth, 1).getDay() + 6) % 7 }, (_, index) => <View key={`blank-${index}`} style={{ width: "14.285%", height: 43 }} />)}{Array.from({ length: new Date(calendarYear, calendarMonth + 1, 0).getDate() }, (_, index) => index + 1).map((day) => { const date = formatCalendarDate(day); const count = activeBookings.filter((booking) => booking.date === date).length; const unavailable = blockedDates[date]; const selected = selectedDay === date; const full = count >= 3; return <Pressable key={day} accessibilityRole="button" accessibilityLabel={`${date} · ${unavailable ? unavailable === "holiday" ? t("holiday", "休假", "休假") : unavailable === "emergency" ? t("emergency", "紧急情况", "緊急情況") : t("blocked", "已封锁", "已封鎖") : full ? t("fully booked", "已排满", "已排滿") : count ? `${count} ${t("bookings", "笔预订", "筆預訂")}` : t("available", "可预约", "可預約")}`} accessibilityState={{ selected }} onPress={() => { setSelectedDay(date); setScheduleView("day"); setScheduleError(""); }} style={{ width: "14.285%", height: 43, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: selected ? palette.blue : unavailable === "emergency" ? "#FFF0F0" : unavailable ? "#FFF5DF" : "transparent" }}><Text style={{ color: selected ? "#FFFFFF" : palette.navy, fontWeight: count || unavailable ? "900" : "500", fontSize: 12 }}>{day}</Text><View style={{ flexDirection: "row", gap: 2, minHeight: 4 }}>{unavailable ? <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: selected ? "#FFFFFF" : unavailable === "emergency" ? palette.coral : "#D48B16" }} /> : Array.from({ length: Math.min(count, 3) }, (_, dot) => <View key={dot} style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: selected ? "#FFFFFF" : full ? palette.green : palette.blue }} />)}</View></Pressable>; })}</View>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 11, marginTop: 8 }}><Text style={styles.workspaceHint}>● {t("Booking", "有预订", "有預訂")}</Text><Text style={[styles.workspaceHint, { color: palette.green }]}>● {t("Fully booked", "已排满", "已排滿")}</Text><Text style={[styles.workspaceHint, { color: "#B97913" }]}>● {t("Blocked / holiday", "封锁 / 休假", "封鎖 / 休假")}</Text><Text style={[styles.workspaceHint, { color: palette.coral }]}>● {t("Emergency", "紧急情况", "緊急情況")}</Text></View>
+        </View>
+        {scheduleView === "day" && <View style={[styles.workspaceCard, { marginTop: 10, marginBottom: 13 }]}><Text style={styles.workspaceCardTitle}>{t("Availability for", "日期安排", "日期安排")} {selectedDay}</Text><Text style={styles.workspaceCardText}>{blockedDates[selectedDay] === "emergency" ? t("Emergency · existing jobs need reassignment", "紧急情况 · 现有工作需要改派", "緊急情況 · 現有工作需要改派") : blockedDates[selectedDay] === "holiday" ? t("Holiday · unavailable for bookings", "休假 · 不接受预订", "休假 · 不接受預訂") : blockedDates[selectedDay] === "blocked" ? t("Blocked · unavailable for bookings", "已封锁 · 不接受预订", "已封鎖 · 不接受預訂") : activeBookings.filter((booking) => booking.date === selectedDay).length >= 3 ? t("Fully booked · 3 or more jobs", "已排满 · 至少 3 项服务", "已排滿 · 至少 3 項服務") : t("Available around scheduled jobs", "可在已有安排外接单", "可在已有安排外接單")}</Text><Pressable accessibilityRole="button" style={[styles.marketCategory, { alignSelf: "flex-start", marginTop: 8 }]} onPress={() => setScheduleManagerOpen(true)}><Ionicons name="create-outline" size={15} color={palette.blue} /><Text style={styles.marketCategoryText}>{t("Edit availability", "编辑可工作日期", "編輯可工作日期")}</Text></Pressable>{!!scheduleError && <Text style={[styles.workspaceHint, { color: palette.coral, marginTop: 8 }]}>{scheduleError}</Text>}</View>}
+        <Text style={styles.workspaceSectionTitle}>{scheduleView === "day" ? selectedDay : t("This month’s bookings", "本月预订", "本月預訂")}</Text>
+        {visibleSchedule.map((booking) => <Pressable key={booking.id} accessibilityRole="button" style={[styles.workspaceScheduleRow, { marginBottom: 10, alignItems: "flex-start" }]} onPress={() => openBooking(booking)}><View style={[styles.workspaceScheduleDate, { minWidth: 69, paddingHorizontal: 5 }]}><Text style={{ color: palette.blue, fontWeight: "900", fontSize: 12, textAlign: "center" }}>{booking.time.split("–")[0]}</Text></View><View style={{ flex: 1, gap: 3 }}><Text style={styles.workspaceCardTitle}>{booking.title}</Text><Text style={styles.workspaceCardText}>{booking.time} · {booking.student}</Text><View style={{ flexDirection: "row", alignItems: "flex-start", gap: 4 }}><Ionicons name="location-outline" size={13} color={palette.blue} /><Text style={[styles.workspaceCardText, { flex: 1 }]}>{booking.place}</Text></View>{bookingState[booking.id] === "cancel-requested" && <Text style={[styles.workspaceHint, { color: palette.coral }]}>{t("Cancellation requested", "已申请取消", "已申請取消")}</Text>}</View><Ionicons name="chevron-forward" size={17} color={palette.blue} /></Pressable>)}
+        {!visibleSchedule.length && <Text style={styles.workspaceHint}>{t("No bookings on this date", "此日期没有预订", "此日期沒有預訂")}</Text>}
+        </>}
+        {scheduleView === "history" && <>
+          <Text style={styles.workspaceSectionTitle}>{t("Previous & closed bookings", "过去及已结单预订", "過去及已結單預訂")}</Text>
+          <Text style={styles.workspaceHint}>{t("Completed work and closed bookings are kept here for reference.", "已完成服务和已结单预订在此留存以供查阅。", "已完成服務及已結單預訂在此留存以供查閱。")}</Text>
+          {completedForService.map((job) => <Pressable key={job.booking.id} accessibilityRole="button" style={[styles.workspaceCard, { marginTop: 10 }]} onPress={() => openBooking(job.booking)}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{job.booking.title}</Text><Text style={styles.workspaceStatus}>{t("Completed", "已完成", "已完成")}</Text></View><Text style={styles.workspaceCardText}>{job.booking.date} · {job.booking.time} · {job.booking.student}</Text><Text style={styles.workspaceCardText}>{job.booking.place}</Text><Text style={styles.workspaceCardLink}>{t("View job details", "查看工作详情", "查看工作詳情")} ›</Text></Pressable>)}
+          {staffBookingHistory[service].map((booking) => <Pressable key={booking.id} accessibilityRole="button" style={[styles.workspaceCard, { marginTop: 10 }]} onPress={() => openBooking(booking)}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{booking.title}</Text><Text style={styles.workspaceStatus}>{booking.outcome === "completed" ? t("Completed", "已完成", "已完成") : t("Closed", "已结单", "已結單")}</Text></View><Text style={styles.workspaceCardText}>{booking.date} · {booking.time} · {booking.student}</Text><Text style={styles.workspaceCardText}>{booking.place}</Text><Text style={styles.workspaceCardLink}>{t("View job history", "查看工作记录", "查看工作紀錄")} ›</Text></Pressable>)}
+        </>}
+      </>}
+      {tab === "invoices" && <>
+        <Text style={styles.workspaceSectionTitle}>{t("Invoices", "发票", "發票")}</Text>
+        <Text style={styles.workspaceHint}>{t("Track completed jobs, invoice status and payment due dates.", "查看已完成工作、发票状态及付款到期日。", "查看已完成工作、發票狀態及付款到期日。")}</Text>
+        <View style={{ flexDirection: "row", gap: 8, marginTop: 14, marginBottom: 13 }}>
+          <View style={[styles.workspaceCard, { flex: 1, backgroundColor: "#F8FBFF", borderLeftWidth: 3, borderLeftColor: "#D6A02D" }]}><Text style={styles.workspaceHint}>{t("Due", "待付款", "待付款")}</Text><Text style={[styles.workspaceCardTitle, { fontSize: 20 }]}>{invoiceRecords.filter((item) => item.status === "due").length}</Text></View>
+          <View style={[styles.workspaceCard, { flex: 1, backgroundColor: "#F8FBFF", borderLeftWidth: 3, borderLeftColor: palette.coral }]}><Text style={styles.workspaceHint}>{t("Overdue", "逾期", "逾期")}</Text><Text style={[styles.workspaceCardTitle, { fontSize: 20 }]}>{invoiceRecords.filter((item) => item.status === "overdue").length}</Text></View>
+          <View style={[styles.workspaceCard, { flex: 1, backgroundColor: "#F8FBFF", borderLeftWidth: 3, borderLeftColor: palette.blue }]}><Text style={styles.workspaceHint}>{t("Outstanding", "未付款", "未付款")}</Text><Text style={[styles.workspaceCardTitle, { fontSize: 17 }]}>£{invoiceOutstanding.toFixed(2)}</Text></View>
+        </View>
+        <View style={styles.search}><Ionicons name="search" size={18} color={palette.muted} /><TextInput accessibilityLabel={t("Search invoices", "搜索发票", "搜尋發票")} style={styles.searchInput} value={invoiceSearch} onChangeText={setInvoiceSearch} placeholder={t("Search invoice, job or client", "搜索发票、工作或客户", "搜尋發票、工作或客戶")} placeholderTextColor="#8B98AD" /></View>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 11, marginBottom: 15 }}>{(["all", "due", "overdue", "paid", "draft"] as const).map((status) => <Pressable key={status} accessibilityRole="button" accessibilityState={{ selected: invoiceFilter === status }} style={[styles.marketCategory, invoiceFilter === status && styles.marketCategoryActive]} onPress={() => setInvoiceFilter(status)}><Text style={[styles.marketCategoryText, invoiceFilter === status && styles.marketCategoryTextActive]}>{status === "all" ? t("All", "全部", "全部") : invoiceStatusText(status)} · {status === "all" ? invoiceRecords.length : invoiceRecords.filter((item) => item.status === status).length}</Text></Pressable>)}</View>
+        {shownInvoices.map((invoice) => <Pressable key={invoice.id} accessibilityRole="button" style={[styles.workspaceCard, { marginBottom: 9 }]} onPress={() => { setSelectedInvoice(invoice); setAccountPanel("invoice-detail"); }}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{invoice.amount === null ? t("Amount pending", "金额待定", "金額待定") : `£${invoice.amount.toFixed(2)}`}</Text><Text style={[styles.workspaceStatus, invoiceStatusStyle(invoice.status)]}>{invoiceStatusText(invoice.status)}</Text></View><Text style={[styles.workspaceCardText, { fontWeight: "700" }]}>{invoice.id} · {invoice.booking.title}</Text><Text style={styles.workspaceCardText}>{invoice.booking.student} · {t("Job", "工作", "工作")} {invoice.booking.id}</Text>{tipForBooking(invoice.booking.id) && <Text style={[styles.workspaceCardText, { color: palette.green, fontWeight: "700" }]}>{t("Customer tip recorded", "已记录客户小费", "已記錄客戶貼士")} · £{tipForBooking(invoice.booking.id)?.amount.toFixed(2)}</Text>}<Text style={styles.workspaceHint}>{t("Issued", "开具", "開具")}: {invoice.issued || t("Not issued", "尚未开具", "尚未開具")}  ·  {t("Due", "到期", "到期")}: {invoice.due || t("Not set", "未设置", "未設定")}</Text></Pressable>)}
+        {!shownInvoices.length && <Text style={styles.workspaceHint}>{t("No invoices match these filters.", "没有符合筛选条件的发票。", "沒有符合篩選條件的發票。")}</Text>}
+        <View style={[styles.workspaceNotice, { marginTop: 12 }]}><Ionicons name="information-circle-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("Sample invoice register only. No official invoice or payment is processed here.", "仅为示例发票登记。此处不会处理正式发票或付款。", "僅為示例發票登記。此處不會處理正式發票或付款。")}</Text></View>
+      </>}
+      {tab === "messages" && <>{!conversation && <DemoMessageRequests language={language} sender="Taylor Reed" context={service === "cleaning" ? t("Cleaning enquiry", "清洁服务咨询", "清潔服務查詢") : service === "moving" ? t("Moving enquiry", "搬家服务咨询", "搬屋服務查詢") : t("Airport transfer enquiry", "机场接送咨询", "機場接送查詢")} message={t("Hi, are you available next week? I'd like to ask about your service before booking.", "你好，下周有空吗？我想在预订前咨询一下服务。", "你好，下星期有空嗎？我想在預訂前查詢一下服務。")} status={demoRequestStatus} onDecision={setDemoRequestStatus} />}<WorkspaceMessages language={language} threads={staffMessageThreads} selected={conversation} onSelect={setConversation} draft={draft} onDraft={setDraft} onSend={sendDemoMessage} sent={localMessages} relatedBooking={bookings.find((booking) => booking.id === conversation)} onOpenBooking={openBooking} serviceCase={serviceChatCases.find((item) => item.bookingId === conversation && item.service === service)} statusUpdates={statusUpdates} onQuickUpdate={sendQuickUpdate} ownName={displayName} ownPhoto={staffPhoto} otherPhoto={bookings.find((booking) => booking.id === conversation)?.student === "Sophie Chen" || bookings.find((booking) => booking.id === conversation)?.student === "Student preview" ? studentProfilePhoto : undefined} /></>}
+      {tab === "profile" && <>
+        <View style={styles.workspaceProfileHero}><View style={styles.workspaceAvatarWrap}><View style={styles.workspaceAvatar}>{staffPhoto ? <Image source={{ uri: staffPhoto }} style={{ width: 88, height: 88, borderRadius: 44 }} /> : <Text style={styles.workspaceAvatarText}>{data.initials}</Text>}</View><View style={styles.profileAvatarBadge}><VerificationBadge kind="staff" language={language} /></View></View><Text style={styles.workspaceProfileName}>{displayName}</Text><Text style={styles.workspaceSubtitle}>{data.role} · {serviceArea}</Text><View style={styles.workspaceApprovedPill}><Ionicons name="checkmark" size={15} color="#FFFFFF" /><Text style={styles.workspaceApprovedText}>{t("UniMate approved", "UniMate 已批准", "UniMate 已批准")}</Text></View></View>
+        <View style={styles.workspaceMetricRow}><Pressable accessibilityRole="button" accessibilityLabel={t("View job history", "查看工作记录", "查看工作紀錄")} style={{ flex: 1 }} onPress={() => { setScheduleView("history"); setBookingSection("history"); setTab("bookings"); }}><WorkspaceMetric value={data.completed + completedForService.length} label={t("Completed jobs", "已完成服务", "已完成服務")} /></Pressable><View style={{ flex: 1 }}><WorkspaceMetric value={displayReviewRating} label={t("Rating", "评分", "評分")} /></View><View style={{ flex: 1 }}><WorkspaceMetric value={displayReviewCount} label={t("Reviews", "评价", "評價")} /></View></View>
+        <Pressable accessibilityRole="button" style={styles.viewProfileButton} onPress={() => setStaffPublicOpen(true)}><Ionicons name="eye-outline" size={17} color={palette.blue} /><Text style={styles.viewProfileButtonText}>{t("View public page as others see it", "查看他人看到的公开主页", "查看他人看到的公開主頁")}</Text></Pressable>
+        <View style={styles.workspaceCard}><Text style={styles.workspaceCardTitle}>{t("Your service", "您的服务", "您的服務")}</Text><Text style={styles.workspaceCardText}>{data.title}</Text><Text style={styles.workspaceCardText}>{data.completed + completedForService.length} {t("completed jobs", "次已完成服务", "次已完成服務")}</Text></View>
+        <View style={styles.profileMenuCard}>
+          <WorkspaceProfileRow icon="star-outline" title={t("Reviews & ratings", "评价与评分", "評價及評分")} description={`★ ${displayReviewRating} · ${displayReviewCount} ${t("reviews", "条评价", "條評價")}`} onPress={() => setStaffReviewsOpen(true)} />
+          <WorkspaceProfileRow icon="create-outline" title={t("Edit staff page", "编辑员工主页", "編輯員工主頁")} description={t("Display name, photo and introduction", "显示名称、照片及简介", "顯示名稱、相片及簡介")} onPress={() => setAccountPanel("edit")} />
+          <WorkspaceProfileRow icon="location-outline" title={t("Work areas", "工作区域", "工作區域")} description={t("Choose London areas for job assignment", "选择可分配工作的伦敦地区", "選擇可分派工作的倫敦地區")} onPress={() => setWorkAreaOpen(true)} />
+          <WorkspaceProfileRow icon="calendar-outline" title={t("Availability & holidays", "可工作日期与休假", "可工作日期及休假")} description={t("Manage blocked dates in your calendar", "在日历中管理封锁日期", "在日曆中管理封鎖日期")} onPress={() => { setTab("bookings"); setScheduleView("month"); }} />
+          <WorkspaceProfileRow icon="shield-checkmark-outline" title={t("Certifications & insurance", "资质与保险", "資質及保險")} onPress={() => setAccountPanel("credentials")} />
+          <WorkspaceProfileRow icon="wallet-outline" title={t("Payment method", "收款方式", "收款方式")} onPress={() => setAccountPanel("payouts")} />
+          <WorkspaceProfileRow icon="document-text-outline" title={t("Invoices & completed jobs", "发票与已完成工作", "發票及已完成工作")} onPress={() => setTab("invoices")} />
+          <WorkspaceProfileRow icon="settings-outline" title={t("Settings & notifications", "设置与通知", "設定及通知")} description={t("Appearance, language and booking alerts", "外观、语言及预订提醒", "外觀、語言及預訂提醒")} onPress={() => setAccountPanel("settings")} />
+          <WorkspaceProfileRow icon="help-circle-outline" title={t("Support", "支持", "支援")} onPress={() => openStaffSupport()} />
+        </View>
+      </>}
+    </ScrollView>
+    <WorkspaceTabs tabs={tabs} active={tab} onSelect={setTab} />
+    <Sheet visible={selectedBooking !== null} title={t("Booking details", "预订详情", "預訂詳情")} onClose={() => setSelectedBooking(null)}>{selectedBooking && <ScrollView contentContainerStyle={styles.modalBody}>
+      <View style={[styles.workspaceCard, { backgroundColor: "#F5F9FF", padding: 16, marginBottom: 15, gap: 11 }]}>
+        <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}><Text style={[styles.workspaceSectionTitle, { flex: 1, marginTop: 0 }]}>{selectedBooking.title}</Text><Text style={styles.workspaceStatus}>{bookingStatusText(selectedBooking)}</Text></View>
+        <Text style={[styles.workspaceHint, { marginTop: -5 }]}>{t("Booking reference", "预订编号", "預訂編號")} · {selectedBooking.id}</Text>
+        <View style={{ flexDirection: "row", gap: 9 }}><Ionicons name="person-outline" size={17} color={palette.blue} /><Text style={[styles.workspaceCardText, { flex: 1 }]}>{selectedBooking.student}</Text></View>
+        <View style={{ flexDirection: "row", gap: 9 }}><Ionicons name="calendar-outline" size={17} color={palette.blue} /><Text style={[styles.workspaceCardText, { flex: 1 }]}>{selectedBooking.date}</Text></View>
+        <View style={{ flexDirection: "row", gap: 9 }}><Ionicons name="time-outline" size={17} color={palette.blue} /><Text style={[styles.workspaceCardText, { flex: 1 }]}>{service === "airport" ? airportBookingTimeLabel(selectedBooking) : service === "moving" ? t("Pickup arrival window", "取件到达时间段", "取件到達時段") : t("Arrival window", "到达时间段", "到達時段")} · {selectedBooking.time}</Text></View>
+        {service === "moving" && <View style={{ flexDirection: "row", gap: 9 }}><Ionicons name="navigate-outline" size={17} color={palette.blue} /><Text style={[styles.workspaceCardText, { flex: 1 }]}>{t("Estimated arrival at drop-off", "预计到达送货地点", "預計到達送貨地點")} · {selectedBooking.dropoffEta || t("Not set", "未设置", "未設定")}</Text></View>}
+        <View style={{ flexDirection: "row", gap: 9 }}><Ionicons name="location-outline" size={17} color={palette.blue} /><Text style={[styles.workspaceCardText, { flex: 1 }]}>{selectedBooking.place}</Text></View>
+        {!!selectedBooking.detail && <View style={{ borderTopWidth: 1, borderTopColor: palette.line, paddingTop: 9 }}><Text style={styles.workspaceCardText}>{selectedBooking.detail}</Text></View>}
+      </View>
+      <Text style={[styles.workspaceSectionTitle, { marginBottom: 9 }]}>{t("Client booking details", "客户填写的预订详情", "客戶填寫的預訂詳情")}</Text>
+      <Text style={[styles.workspaceHint, { marginBottom: 9 }]}>{selectedBooking.id.startsWith("PV-") ? t("These fields mirror the student's submitted booking form.", "这些字段与学生提交的预订表单一致。", "這些欄位與學生提交的預訂表單一致。") : t("Illustrative sample booking; live student form data will appear here for real jobs.", "这是示例预订；真实工作会在此显示学生提交的表单资料。", "這是示例預訂；真實工作會在此顯示學生提交的表單資料。")}</Text>
+      <View style={[styles.workspaceCard, { marginBottom: 16, padding: 15 }]}>
+        {selectedBooking.intake?.fields.length ? <View style={{ flexDirection: "row", flexWrap: "wrap", columnGap: 12, rowGap: 14 }}>{selectedBooking.intake.fields.map((field) => <View key={field.label} style={{ width: "48%", minWidth: 130 }}><Text style={styles.workspaceDetailLabel}>{field.label}</Text><Text style={[styles.workspaceDetailValue, { marginTop: 3 }]}>{field.value}</Text></View>)}</View> : <Text style={styles.workspaceHint}>{t("No additional details were provided for this booking.", "此预订未提供更多资料。", "此預訂未提供更多資料。")}</Text>}
+        <View style={{ borderTopWidth: 1, borderTopColor: palette.line, marginTop: 16, paddingTop: 12 }}><Text style={styles.workspaceCardTitle}>{t("Client photos", "客户照片", "客戶相片")}</Text>{selectedBooking.intake?.photos.length ? <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>{selectedBooking.intake.photos.map((uri, index) => <Image key={`${uri}-${index}`} source={{ uri }} style={{ width: 82, height: 82, borderRadius: 9 }} />)}</View> : <Text style={styles.workspaceHint}>{t("No photos provided", "未提供照片", "未提供相片")}</Text>}</View>
+      </View>
+      {!historicalBooking(selectedBooking) && bookingState[selectedBooking.id] !== "cancel-requested" && bookingState[selectedBooking.id] !== "completed" && !completedIds.has(selectedBooking.id) && <>
+        {(service === "cleaning" || service === "moving") && <View style={[styles.workspaceCard, { marginBottom: 16 }]}><Text style={styles.workspaceCardTitle}>{t("1. Before-service photos · required", "1. 服务前照片 · 必填", "1. 服務前相片 · 必填")}</Text><Text style={styles.workspaceCardText}>{t("Document the condition before work starts. At least one photo is required together with completion photos for invoice review.", "工作开始前记录现场状况。发票审核要求至少一张服务前照片及完工照片。", "工作開始前記錄現場狀況。發票審核要求至少一張服務前相片及完工相片。")}</Text><Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 8 }]} onPress={() => pickJobPhoto("before")}><Ionicons name="camera-outline" size={17} color={palette.blue} /><Text style={styles.secondaryButtonText}>{t("Add before photos", "添加服务前照片", "加入服務前相片")}</Text></Pressable><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>{beforePhotosFor(selectedBooking).map((uri, index) => <Pressable key={`${uri}-${index}`} accessibilityRole="button" accessibilityLabel={t("Remove photo", "移除照片", "移除相片")} onPress={() => setBeforePhotos((current) => ({ ...current, [selectedBooking.id]: (current[selectedBooking.id] || []).filter((_, photoIndex) => photoIndex !== index) }))}><Image source={{ uri }} style={{ width: 76, height: 76, borderRadius: 9 }} /><Ionicons name="close-circle" size={19} color={palette.coral} style={{ position: "absolute", right: -5, top: -5 }} /></Pressable>)}</View></View>}
+        <Text style={[styles.workspaceSectionTitle, { marginBottom: 9 }]}>{t("Job progress", "服务进度", "服務進度")}</Text>
+        <View style={[styles.workspaceNotice, { marginBottom: 10 }]}><Ionicons name="chatbubble-ellipses-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("Travel and arrival updates now live in the customer conversation, alongside your messages.", "行程及到达通知现与客户消息一起显示在对话中。", "行程及到達通知現與客戶訊息一起顯示在對話中。")}</Text></View>
+        <Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginBottom: 17 }]} onPress={() => openStudentMessage(selectedBooking)}><Ionicons name="chatbubble-outline" size={17} color={palette.blue} /><Text style={styles.secondaryButtonText}>{t("Open customer chat & arrival updates", "打开客户聊天及到达通知", "開啟客戶聊天及到達通知")}</Text></Pressable>
+        <Text style={[styles.workspaceSectionTitle, { marginBottom: 9 }]}>{t("Finish the job", "完成服务", "完成服務")}</Text>
+        {(service === "cleaning" || service === "moving") && <View style={[styles.workspaceCard, { marginBottom: 10 }]}><Text style={styles.workspaceCardTitle}>{t("2. Completion photos · required", "2. 完工照片 · 必填", "2. 完工相片 · 必填")}</Text><Text style={styles.workspaceCardText}>{t("Show the finished work. Before and completion photos stay private as booking evidence; they do not guarantee customer satisfaction.", "展示完工成果。服务前与完工照片仅作私人订单凭证，不代表客户保证满意。", "展示完工成果。服務前與完工相片僅作私人訂單憑證，不代表客戶保證滿意。")}</Text><Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 8 }]} onPress={() => pickJobPhoto("after")}><Ionicons name="camera-outline" size={17} color={palette.blue} /><Text style={styles.secondaryButtonText}>{t("Add completion photos", "添加完工照片", "加入完工相片")}</Text></Pressable><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>{proofPhotosFor(selectedBooking).map((uri, index) => <Pressable key={`${uri}-${index}`} accessibilityRole="button" accessibilityLabel={t("Remove photo", "移除照片", "移除相片")} onPress={() => setCompletionPhotos((current) => ({ ...current, [selectedBooking.id]: (current[selectedBooking.id] || []).filter((_, photoIndex) => photoIndex !== index) }))}><Image source={{ uri }} style={{ width: 76, height: 76, borderRadius: 9 }} /><Ionicons name="close-circle" size={19} color={palette.coral} style={{ position: "absolute", right: -5, top: -5 }} /></Pressable>)}</View></View>}
+        {!!completionError && <Text style={styles.workspaceError}>{completionError}</Text>}
+        <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={completeBooking}><Text style={styles.primaryButtonText}>{t("Mark job complete", "标记服务完成", "標記服務完成")}</Text></Pressable>
+        <Text style={[styles.workspaceSectionTitle, { marginTop: 20, marginBottom: 9 }]}>{t("Manage booking", "管理预订", "管理預訂")}</Text>
+        <Pressable accessibilityRole="button" style={styles.secondaryButton} onPress={() => setEditingBooking((current) => !current)}><Text style={styles.secondaryButtonText}>{t("Change time slot", "更改时间段", "更改時段")}</Text></Pressable>
+        {editingBooking && <View style={[styles.workspaceCard, { marginTop: 10, gap: 12 }]}>
+          <SelectField label={t("Choose date", "选择日期", "選擇日期")} value={editDate} options={editDateOptions} onChange={(value) => { setEditDate(value); setBookingEditError(""); }} />
+          {service === "airport" ? <>
+            <Text style={styles.authFieldLabel}>{selectedBooking.intake?.fields.find((field) => field.label === "Journey")?.value === "Airport drop-off" || selectedBooking.title.toLowerCase().includes("drop-off") ? t("Airport arrival time (London time)", "到达机场时间（伦敦时间）", "到達機場時間（倫敦時間）") : t("Flight arrival time (London time)", "航班到达时间（伦敦时间）", "航班到達時間（倫敦時間）")}</Text>
+            <View style={{ flexDirection: "row", gap: 10 }}><View style={{ flex: 1 }}><SelectField label={t("Hour", "小时", "小時")} value={editTime.slice(0, 2)} options={airportTimeHours} onChange={(value) => { setEditTime(`${value}:${editTime.slice(3, 5) || "00"}`); setBookingEditError(""); }} /></View><View style={{ flex: 1 }}><SelectField label={t("Minute", "分钟", "分鐘")} value={editTime.slice(3, 5)} options={airportTimeMinutes} onChange={(value) => { setEditTime(`${editTime.slice(0, 2) || "00"}:${value}`); setBookingEditError(""); }} /></View></View>
+          </> : <SelectField label={service === "moving" ? t("Pickup arrival window", "取件到达时间段", "取件到達時段") : t("Arrival window", "到达时间段", "到達時段")} value={editTime} options={editSlotOptions} onChange={(value) => { setEditTime(value); setBookingEditError(""); }} schedule />}
+          {service === "moving" && <View><Text style={styles.authFieldLabel}>{t("Estimated arrival at drop-off", "预计到达送货地点", "預計到達送貨地點")}</Text><TextInput accessibilityLabel={t("Estimated arrival at drop-off", "预计到达送货地点", "預計到達送貨地點")} style={styles.authInput} value={editDropoffEta} onChangeText={(value) => { setEditDropoffEta(value); setBookingEditError(""); }} placeholder="HH:MM" keyboardType="numbers-and-punctuation" maxLength={5} /><Text style={styles.workspaceHint}>{t("Set an estimated same-day arrival time once the route is known. This is not a guaranteed delivery time.", "确定路线后设置当日预计到达时间；这不是保证送达时间。", "確定路線後設定當日預計到達時間；這不是保證送達時間。")}</Text></View>}
+          {!!bookingEditError && <Text style={styles.workspaceError}>{bookingEditError}</Text>}
+          <Pressable accessibilityRole="button" style={[styles.primaryButton, !editTime.trim() && { opacity: 0.4 }]} disabled={!editTime.trim()} onPress={saveBookingSlot}><Text style={styles.primaryButtonText}>{t("Save schedule change", "保存日程变更", "儲存日程變更")}</Text></Pressable>
+        </View>}
+        <Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 9, borderColor: palette.coral }]} onPress={() => { if (cancelArmed) { setBookingState((current) => ({ ...current, [selectedBooking.id]: "cancel-requested" })); setCancelArmed(false); } else setCancelArmed(true); }}><Text style={[styles.secondaryButtonText, { color: palette.coral }]}>{cancelArmed ? t("Confirm cancellation request", "确认取消申请", "確認取消申請") : t("Request cancellation", "申请取消", "申請取消")}</Text></Pressable>
+        <Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 9 }]} onPress={() => openStaffSupport(selectedBooking)}><Text style={styles.secondaryButtonText}>{t("Report a problem with this job", "报告此工作的问题", "報告此工作的問題")}</Text></Pressable>
+      </>}
+      {(bookingState[selectedBooking.id] === "completed" || completedIds.has(selectedBooking.id)) && <View style={[styles.workspaceCard, { marginTop: 14 }]}>
+        <Text style={styles.workspaceCardTitle}>{t("Completion recorded", "已记录完工", "已記錄完工")}</Text>
+        <Text style={styles.workspaceCardText}>{t("The customer can now leave a review. The direct customer chat has closed automatically; completion photos remain private booking evidence.", "客户现在可以评价服务。客户与员工的直接聊天已自动关闭；完工照片仅作私人订单凭证。", "客戶現在可以評價服務。客戶與員工的直接聊天已自動關閉；完工相片僅作私人訂單憑證。")}</Text>
+        <Text style={styles.workspaceHint}>{serviceReviews.some((review) => review.bookingId === selectedBooking.id) ? t("Customer review received", "已收到客户评价", "已收到客戶評價") : t("Customer review pending", "等待客户评价", "等待客戶評價")}</Text>
+        <Text style={[styles.workspaceCardText, { color: tipForBooking(selectedBooking.id) ? palette.green : palette.muted }]}>{tipForBooking(selectedBooking.id) ? `${t("Tip recorded for you", "已记录给您的小费", "已記錄給您的貼士")} · £${tipForBooking(selectedBooking.id)?.amount.toFixed(2)}` : t("No tip recorded for this job", "此工作尚无小费记录", "此工作尚無貼士記錄")}</Text>
+        {(service === "cleaning" || service === "moving") && <><Text style={styles.workspaceHint}>{t("Before photos", "服务前照片", "服務前相片")} · {beforePhotosFor(selectedBooking).length}</Text><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 5 }}>{beforePhotosFor(selectedBooking).map((uri, index) => <Image key={`${uri}-${index}`} source={{ uri }} style={{ width: 76, height: 76, borderRadius: 9 }} />)}</View><Text style={styles.workspaceHint}>{t("Completion photos", "完工照片", "完工相片")} · {proofPhotosFor(selectedBooking).length}</Text></>}
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 5 }}>{proofPhotosFor(selectedBooking).map((uri, index) => <Image key={`${uri}-${index}`} source={{ uri }} style={{ width: 76, height: 76, borderRadius: 9 }} />)}</View>
+        {serviceChatCases.some((item) => item.bookingId === selectedBooking.id && item.service === service) ? <Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 12 }]} onPress={() => openStudentMessage(selectedBooking)}><Text style={styles.secondaryButtonText}>{t("Open UniMate-supported case", "打开优你伴支持个案", "開啟優你伴支援個案")}</Text></Pressable> : <Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 12 }]} onPress={() => openStaffSupport(selectedBooking)}><Text style={styles.secondaryButtonText}>{t("Report lost property or a safety concern", "报告失物或安全问题", "報告失物或安全問題")}</Text></Pressable>}
+      </View>}
+      {historicalBooking(selectedBooking) && <View style={[styles.workspaceCard, { marginTop: 14 }]}><Text style={styles.workspaceCardTitle}>{t("Historical job", "历史工作", "歷史工作")}</Text><Text style={styles.workspaceCardText}>{t("This archived booking is read-only. Its original customer details are not available in this sample record.", "此归档预订只供查看。示例记录中没有原始客户资料。", "此封存預訂只供查看。示例記錄中沒有原始客戶資料。")}</Text></View>}
+      <View style={[styles.workspaceNotice, { marginTop: 14 }]}><Ionicons name="information-circle-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("Updates and photos stay on this device in the preview. Real changes need booking approval, secure storage and client notifications.", "此预览中的更新与照片仅保存在本机。真实变更需预订审批、安全存储及客户通知。", "此預覽中的更新與相片只儲存在本機。真實變更需預訂審批、安全儲存及客戶通知。")}</Text></View>
+    </ScrollView>}</Sheet>
+    <Sheet visible={scheduleManagerOpen} title={t("Edit availability", "编辑可工作日期", "編輯可工作日期")} onClose={() => setScheduleManagerOpen(false)}><ScrollView contentContainerStyle={styles.modalBody}>
+      <Text style={styles.workspaceHint}>{t("Manage days off for your service. Changes here are local and do not notify clients or dispatch.", "管理服务休假日期。此处更改仅保存在本机，不会通知客户或调度团队。", "管理服務休假日期。此處更改只儲存在本機，不會通知客戶或調度團隊。")}</Text>
+      <SelectField label={t("Choose date", "选择日期", "選擇日期")} value={selectedDay} options={Array.from({ length: new Date(calendarYear, calendarMonth + 1, 0).getDate() }, (_, index) => formatCalendarDate(index + 1))} onChange={(value) => { setSelectedDay(value); setScheduleError(""); }} schedule />
+      <View style={[styles.workspaceCard, { marginTop: 10 }]}><Text style={styles.workspaceCardTitle}>{selectedDay}</Text><Text style={styles.workspaceCardText}>{activeBookings.filter((booking) => booking.date === selectedDay).length} {t("scheduled jobs", "项已安排工作", "項已安排工作")}</Text><Text style={styles.workspaceHint}>{blockedDates[selectedDay] ? `${t("Marked", "已标记", "已標記")}: ${blockedDates[selectedDay]}` : t("Available unless the day is fully booked", "除排满外可以接单", "除排滿外可以接單")}</Text></View>
+      <View style={{ gap: 9, marginTop: 14 }}><Pressable accessibilityRole="button" style={styles.secondaryButton} onPress={() => markUnavailable("holiday")}><Ionicons name="sunny-outline" size={17} color={palette.blue} /><Text style={styles.secondaryButtonText}>{t("Mark holiday", "标记休假", "標記休假")}</Text></Pressable><Pressable accessibilityRole="button" style={styles.secondaryButton} onPress={() => markUnavailable("blocked")}><Ionicons name="calendar-outline" size={17} color={palette.blue} /><Text style={styles.secondaryButtonText}>{t("Block date", "封锁日期", "封鎖日期")}</Text></Pressable><Pressable accessibilityRole="button" style={[styles.secondaryButton, { borderColor: palette.coral }]} onPress={() => markUnavailable("emergency")}><Ionicons name="alert-circle-outline" size={17} color={palette.coral} /><Text style={[styles.secondaryButtonText, { color: palette.coral }]}>{t("Mark emergency", "标记紧急情况", "標記緊急情況")}</Text></Pressable>{blockedDates[selectedDay] && <Pressable accessibilityRole="button" style={styles.secondaryButton} onPress={() => { const next = { ...blockedDates }; delete next[selectedDay]; onAvailabilityChange({ ...availability, blockedDates: next }); setScheduleError(""); }}><Text style={styles.secondaryButtonText}>{t("Clear availability mark", "清除日期标记", "清除日期標記")}</Text></Pressable>}</View>
+      {!!scheduleError && <Text style={[styles.workspaceError, { marginTop: 10 }]}>{scheduleError}</Text>}
+    </ScrollView></Sheet>
+    <Sheet visible={staffReviewsOpen} title={t("Reviews & ratings", "评价与评分", "評價及評分")} onClose={() => { setStaffReviewsOpen(false); setReplyReviewId(null); }}><ScrollView contentContainerStyle={styles.modalBody}>
+      <View style={[styles.workspaceCard, { marginBottom: 12 }]}><Text style={[styles.workspaceCardTitle, { fontSize: 18 }]}>★ {displayReviewRating} <Text style={styles.workspaceCardText}>/ 5</Text></Text><Text style={styles.workspaceCardText}>{displayReviewCount} {t("service reviews", "条服务评价", "條服務評價")} · {data.completed + completedForService.length} {t("completed jobs", "次已完成服务", "次已完成服務")}</Text><Text style={styles.workspaceHint}>{t("The aggregate includes sample ratings; new preview reviews are shown below.", "综合分包含示例评分；新提交的预览评价显示在下方。", "綜合分包含示例評分；新提交的預覽評價顯示在下方。")}</Text></View>
+      <Text style={[styles.workspaceSectionTitle, { marginBottom: 8 }]}>{t("Rating categories", "评分维度", "評分維度")}</Text>
+      <View style={[styles.workspaceCard, { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 18 }]}>{reviewCategories.map((category) => { const ratings = activeReviews.map((review) => review.categories?.[category.id]).filter((value): value is number => typeof value === "number"); const score = ratings.length ? (ratings.reduce((sum, value) => sum + value, 0) / ratings.length).toFixed(1) : category.sample.toFixed(1); return <View key={category.id} style={{ width: "47%", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: palette.line }}><View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}><Ionicons name={category.icon as any} size={16} color={palette.blue} /><Text style={[styles.workspaceCardText, { flex: 1 }]}>{category.label}</Text></View><Text style={[styles.workspaceCardTitle, { color: "#C47C00", marginTop: 4 }]}>★ {score} <Text style={styles.workspaceHint}>({ratings.length ? ratings.length : t("sample", "示例", "示例")})</Text></Text></View>; })}</View>
+      <Text style={[styles.workspaceSectionTitle, { marginBottom: 8 }]}>{t("All reviews", "全部评价", "全部評價")}</Text>
+      {activeReviews.map((review) => {
+        const job = [...bookings, ...staffBookingHistory[service]].find((item) => item.id === review.bookingId);
+        const roundedStars = Math.round(review.rating);
+        return <View key={review.bookingId} style={[styles.workspaceCard, { marginBottom: 10, gap: 9 }]}>
+          <View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{job?.student || t("Client", "客户", "客戶")}</Text><Text style={{ color: "#C47C00", fontWeight: "800" }}>{"★".repeat(roundedStars)}{"☆".repeat(5 - roundedStars)} · {review.rating.toFixed(2)}</Text></View>
+          <Text style={styles.workspaceHint}>{t("Job", "工作", "工作")} {review.bookingId}{job ? ` · ${job.title}` : ""}</Text>
+          {!!review.comment && <Text style={styles.workspaceCardText}>{review.comment}</Text>}
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7 }}>{reviewCategories.map((category) => <Text key={category.id} style={[styles.workspaceHint, { backgroundColor: "#F1F6FD", padding: 7, borderRadius: 8 }]}>{category.label} ★ {review.categories[category.id]}</Text>)}</View>
+          {review.staffResponse ? <View style={styles.workspaceNotice}><Ionicons name="return-down-forward-outline" size={16} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("Your response", "您的回复", "您的回覆")}: {review.staffResponse}</Text></View> : replyReviewId === review.bookingId ? <><TextInput style={[styles.authInput, { minHeight: 74 }]} multiline value={replyDraft} onChangeText={setReplyDraft} placeholder={t("Write a professional response", "撰写专业回复", "撰寫專業回覆")} /><Pressable accessibilityRole="button" disabled={!replyDraft.trim()} style={[styles.primaryButton, !replyDraft.trim() && { opacity: 0.5 }]} onPress={() => { onRespondReview(review.bookingId, replyDraft.trim()); setReplyReviewId(null); setReplyDraft(""); }}><Text style={styles.primaryButtonText}>{t("Post response in preview", "在预览中发布回复", "在預覽中發佈回覆")}</Text></Pressable></> : <Pressable accessibilityRole="button" style={styles.secondaryButton} onPress={() => { setReplyReviewId(review.bookingId); setReplyDraft(""); }}><Text style={styles.secondaryButtonText}>{t("Respond to review", "回复评价", "回覆評價")}</Text></Pressable>}
+        </View>;
+      })}
+      {!activeReviews.length && <Text style={[styles.workspaceHint, { marginBottom: 12 }]}>{t("No customer reviews have been submitted in this preview yet.", "此预览中尚无客户提交的评价。", "此預覽中尚無客戶提交的評價。")}</Text>}
+      {publicReviewSamples.map((review, index) => <View key={index} style={[styles.workspaceCard, { marginBottom: 9 }]}><Text style={{ color: "#C47C00", fontWeight: "800" }}>{"★".repeat(review.rating)}{"☆".repeat(5 - review.rating)}</Text><Text style={styles.workspaceCardText}>{review.text}</Text><Text style={styles.workspaceHint}>{t("Illustrative review · no linked job", "示例评价 · 无关联工作", "示例評價 · 無關聯工作")}</Text></View>)}
+    </ScrollView></Sheet>
+    <Sheet visible={staffPublicOpen} title={t("Public staff page", "员工公开主页", "員工公開主頁")} onClose={() => setStaffPublicOpen(false)}>
+      <ScrollView contentContainerStyle={[styles.modalBody, { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 56, gap: 14 }]}>
+        <View style={styles.workspaceProfileHero}><View style={styles.workspaceAvatarWrap}><View style={styles.workspaceAvatar}>{staffPhoto ? <Image source={{ uri: staffPhoto }} style={{ width: 88, height: 88, borderRadius: 44 }} /> : <Text style={styles.workspaceAvatarText}>{data.initials}</Text>}</View><View style={styles.profileAvatarBadge}><VerificationBadge kind="staff" language={language} /></View></View><Text style={styles.workspaceProfileName}>{displayName}</Text><Text style={styles.workspaceSubtitle}>{data.role} · {serviceArea}</Text><View style={styles.workspaceApprovedPill}><Ionicons name="checkmark" size={15} color="#FFFFFF" /><Text style={styles.workspaceApprovedText}>{t("UniMate approved", "UniMate 已批准", "UniMate 已批准")}</Text></View></View>
+        <View style={styles.workspaceMetricRow}><WorkspaceMetric value={data.completed + completedForService.length} label={t("Completed jobs", "已完成服务", "已完成服務")} /></View>
+        <View style={[styles.workspaceCard, { alignItems: "center", marginTop: 12 }]}><Text style={{ color: "#E69B12", fontSize: 22, fontWeight: "900" }}>★ {displayReviewRating}</Text><Text style={styles.workspaceCardText}>{displayReviewCount} {t("service reviews", "条服务评价", "條服務評價")}</Text><Text style={styles.workspaceHint}>{t("Sample rating plus reviews submitted in this preview", "示例评分与此预览中提交的评价", "示例評分及此預覽中提交的評價")}</Text></View>
+        <Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 0 }]} onPress={() => { setStaffPublicOpen(false); setStaffReviewsOpen(true); }}><Ionicons name="star-outline" size={17} color={palette.blue} /><Text style={styles.secondaryButtonText}>{t("All reviews & ratings", "全部评价与评分", "全部評價及評分")}</Text></Pressable>
+        <Text style={styles.workspaceSectionTitle}>{t("About", "简介", "簡介")}</Text><View style={styles.workspaceCard}><Text style={styles.workspaceCardText}>{profileBio || t(`Approved ${data.role.toLowerCase()} serving students across ${serviceArea}.`, `已批准的${data.title}人员，为${serviceArea}的学生提供服务。`, `已批准的${data.title}人員，為${serviceArea}的學生提供服務。`)}</Text></View>
+        <Text style={styles.workspaceSectionTitle}>{t("Service & checks", "服务与审核", "服務及審核")}</Text><View style={styles.workspaceCard}><Text style={styles.workspaceCardTitle}>{data.title}</Text><Text style={styles.workspaceCardText}>{t("UniMate-approved staff badge. Service credentials are checked privately and are not exposed as identity documents on the public page.", "优你伴已批准员工标记。服务资质经私下审核，公开主页不会展示身份证件。", "優你伴已批准員工標記。服務資質經私下審核，公開主頁不會展示身分證件。")}</Text></View>
+        <Text style={styles.workspaceSectionTitle}>{t("Featured reviews", "精选评价", "精選評價")}</Text>
+        {[...activeReviews.filter((review) => review.comment).map((review) => ({ rating: review.rating, text: review.comment, source: t("Completed booking in this preview", "此预览中的已完成预订", "此預覽中的已完成預訂") })), ...publicReviewSamples].map((review, index) => <View key={`${review.source}-${index}`} style={styles.workspaceCard}><Text style={{ color: "#E69B12", fontSize: 16 }}>{"★".repeat(Math.round(review.rating))}{"☆".repeat(5 - Math.round(review.rating))} · {review.rating.toFixed(2)}</Text><Text style={styles.workspaceCardText}>“{review.text}”</Text><Text style={styles.workspaceHint}>{review.source}</Text></View>)}
+      </ScrollView>
+    </Sheet>
+    <Sheet visible={accountPanel !== null} title={accountPanel === "payouts" ? t("Payment method", "收款方式", "收款方式") : accountPanel === "invoices" ? t("Invoices & completed jobs", "发票与已完成工作", "發票及已完成工作") : accountPanel === "invoice-detail" ? t("Invoice details", "发票详情", "發票詳情") : accountPanel === "settings" ? t("Settings", "设置", "設定") : accountPanel === "edit" ? t("Edit staff page", "编辑员工主页", "編輯員工主頁") : accountPanel === "support" ? t("Support", "支持", "支援") : t("Certifications & insurance", "资质与保险", "資質及保險")} onClose={() => setAccountPanel(null)}>
+      <ScrollView contentContainerStyle={styles.modalBody} showsVerticalScrollIndicator={false}>
+        {accountPanel === "edit" ? <>
+          <View style={styles.workspaceNotice}><Ionicons name="information-circle-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("Your approved role and credential badge cannot be changed here. Profile edits stay on this device in the preview.", "已批准岗位及资质标记不可在此更改。预览中的资料更改仅保存在本机。", "已批准職位及資質標記不可在此更改。預覽中的資料變更只儲存在本機。")}</Text></View>
+          <Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginVertical: 12 }]} onPress={() => pickStaffPhoto()}><Text style={styles.secondaryButtonText}>{t("Change public profile photo", "更换公开头像", "更換公開頭像")}</Text></Pressable>
+          <Text style={styles.authFieldLabel}>{t("Display name", "显示名称", "顯示名稱")}</Text><TextInput style={styles.authInput} value={displayName} onChangeText={setDisplayName} />
+          <View style={styles.workspaceCard}><Text style={styles.workspaceCardTitle}>{t("Work areas", "工作区域", "工作區域")}</Text><Text style={styles.workspaceCardText}>{serviceArea}</Text><Pressable accessibilityRole="button" onPress={() => { setAccountPanel(null); setWorkAreaOpen(true); }}><Text style={styles.workspaceCardLink}>{t("Edit work areas", "编辑工作区域", "編輯工作區域")}  ›</Text></Pressable></View>
+          <Text style={styles.authFieldLabel}>{t("Introduction", "简介", "簡介")}</Text><TextInput style={[styles.authInput, { minHeight: 96 }]} multiline value={profileBio} onChangeText={setProfileBio} placeholder={t("Tell students about your experience", "向学生介绍您的经验", "向學生介紹您的經驗")} />
+          <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={() => setAccountPanel(null)}><Text style={styles.primaryButtonText}>{t("Save page", "保存主页", "儲存主頁")}</Text></Pressable>
+        </> : accountPanel === "credentials" ? <>
+          <View style={styles.workspaceNotice}><Ionicons name="information-circle-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("This is a requirements checklist, not proof of a live check. UniMate must inspect source documents, insurer details and expiry dates before marking any credential verified.", "这是审核清单，不代表已完成真实认证。优你伴必须核验原始证件、保险资料和有效期后才能标记为已认证。", "這是審核清單，不代表已完成真實認證。優你伴必須核實原始證件、保險資料及有效期後才能標記為已認證。")}</Text></View>
+          <Text style={[styles.workspaceSectionTitle, { marginTop: 17, marginBottom: 10 }]}>{data.title}</Text>
+          {staffCredentialChecklist[service].filter((item) => !item.drivingOnly || movingDriver).map((item) => <View key={item.title} style={[styles.workspaceCard, { marginBottom: 10 }]}><View style={styles.workspaceCardTop}><View style={{ flexDirection: "row", alignItems: "center", gap: 9, flex: 1 }}><Ionicons name={item.icon as any} size={21} color={palette.blue} /><Text style={[styles.workspaceCardTitle, { flex: 1 }]}>{item.title}</Text></View></View><Text style={styles.workspaceCardText}>{item.detail}</Text><Text style={styles.workspaceHint}>{t("Live review required", "需要正式审核", "需要正式審核")}</Text></View>)}
+          {service === "moving" && !movingDriver && <View style={styles.workspaceNotice}><Ionicons name="information-circle-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("This role is marked as non-driving. A driving licence check is required before taking any van-driving assignment.", "此岗位标记为不驾驶。接单驾驶货车前必须完成驾驶证核验。", "此職位標記為不駕駛。接單駕駛貨車前必須完成駕駛執照核實。")}</Text></View>}
+        </> : accountPanel === "payouts" ? <>
+          <View style={styles.workspaceNotice}><Ionicons name="shield-checkmark-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("Staff payouts must use UniMate's approved payment provider. Never share bank details in chat or accept off-platform payment for a booking.", "员工收款必须使用优你伴批准的支付服务商。请勿在聊天中分享银行资料，也勿接受平台外预订付款。", "員工收款必須使用優你伴批准的支付服務商。請勿在聊天中分享銀行資料，亦勿接受平台外預訂付款。")}</Text></View>
+          <View style={styles.workspaceCard}><Text style={styles.workspaceCardTitle}>{t("Payout account", "收款账号", "收款帳戶")}</Text><Text style={styles.workspaceCardText}>{t("Not connected", "尚未连接", "尚未連接")}</Text><Text style={styles.workspaceHint}>{t("Bank details would be collected by the approved provider, not in this app screen. No payment data is stored here.", "银行资料将由批准的服务商收集，而不是在此页面输入。这里不会保存付款资料。", "銀行資料將由批准的服務商收集，而不是在此頁面輸入。這裡不會儲存付款資料。")}</Text></View>
+          <View style={styles.workspaceCard}><Text style={styles.workspaceCardTitle}>{t("Payout status", "收款状态", "收款狀態")}</Text><Text style={styles.workspaceCardText}>{t("Setup required before payouts can be released", "完成设置后才能发放款项", "完成設定後才能發放款項")}</Text></View>
+          <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={() => Alert.alert(t("Secure setup not connected", "安全设置尚未连接", "安全設定尚未連接"), t("A verified payout provider and account backend must be connected before staff can add a real payment method.", "需先接入经过批准的收款服务商和账号后端，员工才能添加真实收款方式。", "需先接入經批准的收款服務商及帳戶後端，員工才能加入真實收款方式。"))}><Text style={styles.primaryButtonText}>{t("Set up payout method", "设置收款方式", "設定收款方式")}</Text></Pressable>
+        </> : accountPanel === "invoices" ? <>
+          <View style={styles.workspaceNotice}><Ionicons name="information-circle-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("Illustrative invoice register only. No invoice is issued, sent or payable from this preview; amounts and due dates require the real booking, contract and payment provider.", "仅为发票登记预览。此页面不会开具、发送或收取发票；金额和到期日须由真实订单、合同与支付服务商确定。", "僅為發票登記預覽。此頁面不會開具、傳送或收取發票；金額及到期日須由真實訂單、合約及支付服務商確定。")}</Text></View>
+          <View style={{ flexDirection: "row", gap: 8, marginTop: 16, marginBottom: 12 }}><View style={[styles.workspaceCard, { flex: 1, backgroundColor: "#F8FBFF", borderLeftWidth: 3, borderLeftColor: "#D6A02D" }]}><Text style={styles.workspaceHint}>{t("Open", "待处理", "待處理")}</Text><Text style={[styles.workspaceCardTitle, { fontSize: 19 }]}>{invoiceRecords.filter((item) => item.status === "due" || item.status === "overdue").length}</Text></View><View style={[styles.workspaceCard, { flex: 1, backgroundColor: "#F8FBFF", borderLeftWidth: 3, borderLeftColor: palette.coral }]}><Text style={styles.workspaceHint}>{t("Overdue", "逾期", "逾期")}</Text><Text style={[styles.workspaceCardTitle, { fontSize: 19 }]}>{invoiceRecords.filter((item) => item.status === "overdue").length}</Text></View><View style={[styles.workspaceCard, { flex: 1, backgroundColor: "#F8FBFF", borderLeftWidth: 3, borderLeftColor: palette.blue }]}><Text style={styles.workspaceHint}>{t("Outstanding", "未付款", "未付款")}</Text><Text style={[styles.workspaceCardTitle, { fontSize: 17 }]}>£{invoiceOutstanding.toFixed(2)}</Text></View></View>
+          <View style={styles.search}><Ionicons name="search" size={18} color={palette.muted} /><TextInput accessibilityLabel={t("Search invoices", "搜索发票", "搜尋發票")} style={styles.searchInput} value={invoiceSearch} onChangeText={setInvoiceSearch} placeholder={t("Search invoice, job or client", "搜索发票、工作或客户", "搜尋發票、工作或客戶")} placeholderTextColor="#8B98AD" /></View>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 11, marginBottom: 16 }}>{(["all", "due", "overdue", "paid", "draft"] as const).map((status) => <Pressable key={status} accessibilityRole="button" accessibilityState={{ selected: invoiceFilter === status }} style={[styles.marketCategory, invoiceFilter === status && styles.marketCategoryActive]} onPress={() => setInvoiceFilter(status)}><Text style={[styles.marketCategoryText, invoiceFilter === status && styles.marketCategoryTextActive]}>{status === "all" ? t("All", "全部", "全部") : invoiceStatusText(status)} · {status === "all" ? invoiceRecords.length : invoiceRecords.filter((item) => item.status === status).length}</Text></Pressable>)}</View>
+          <Text style={[styles.workspaceSectionTitle, { marginBottom: 9 }]}>{t("Invoices", "发票", "發票")}</Text>
+          {shownInvoices.map((invoice) => <Pressable key={invoice.id} accessibilityRole="button" style={[styles.workspaceCard, { marginBottom: 9 }]} onPress={() => { setSelectedInvoice(invoice); setAccountPanel("invoice-detail"); }}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{invoice.amount === null ? t("Amount pending", "金额待定", "金額待定") : `£${invoice.amount.toFixed(2)}`}</Text><Text style={[styles.workspaceStatus, invoiceStatusStyle(invoice.status)]}>{invoiceStatusText(invoice.status)}</Text></View><Text style={[styles.workspaceCardText, { fontWeight: "700" }]}>{invoice.id} · {invoice.booking.title}</Text><Text style={styles.workspaceCardText}>{invoice.booking.student} · {t("Job", "工作", "工作")} {invoice.booking.id}</Text><Text style={styles.workspaceHint}>{t("Issued", "开具", "開具")}: {invoice.issued || t("Not issued", "尚未开具", "尚未開具")}  ·  {t("Due", "到期", "到期")}: {invoice.due || t("Not set", "未设置", "未設定")}</Text></Pressable>)}
+          {!shownInvoices.length && <Text style={styles.workspaceHint}>{t("No invoices match these filters.", "没有符合筛选条件的发票。", "沒有符合篩選條件的發票。")}</Text>}
+        </> : accountPanel === "invoice-detail" && selectedInvoice ? <>
+          <Pressable accessibilityRole="button" style={[styles.workspaceBack, { alignSelf: "flex-start" }]} onPress={() => setAccountPanel(tab === "invoices" ? null : "invoices")}><Ionicons name="arrow-back" size={18} color={palette.blue} /><Text style={styles.workspaceBackText}>{t("All invoices", "所有发票", "所有發票")}</Text></Pressable>
+          <View style={[styles.workspaceCard, { marginTop: 10, marginBottom: 14 }]}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{selectedInvoice.id}</Text><Text style={[styles.workspaceStatus, invoiceStatusStyle(selectedInvoice.status)]}>{invoiceStatusText(selectedInvoice.status)}</Text></View><Text style={[styles.workspaceCardTitle, { fontSize: 24, marginTop: 8 }]}>{selectedInvoice.amount === null ? t("Amount pending", "金额待定", "金額待定") : `£${selectedInvoice.amount.toFixed(2)}`}</Text></View>
+          {[[t("Job", "工作", "工作"), `${selectedInvoice.booking.title} · ${selectedInvoice.booking.id}`], [t("Client", "客户", "客戶"), selectedInvoice.booking.student], [t("Completed", "完成日期", "完成日期"), selectedInvoice.booking.date], [t("Issued", "开具日期", "開具日期"), selectedInvoice.issued || t("Not issued", "尚未开具", "尚未開具")], [t("Payment due", "付款到期日", "付款到期日"), selectedInvoice.due || t("Not set", "未设置", "未設定")], [t("Status", "状态", "狀態"), invoiceStatusText(selectedInvoice.status)]].map(([label, value]) => <View key={label} style={styles.workspaceDetailRow}><Text style={styles.workspaceDetailLabel}>{label}</Text><Text style={styles.workspaceDetailValue}>{value}</Text></View>)}
+          {tipForBooking(selectedInvoice.booking.id) && <View style={styles.workspaceDetailRow}><Text style={styles.workspaceDetailLabel}>{t("Customer tip · 100% to staff", "客户小费 · 全额归员工", "客戶貼士 · 全額歸員工")}</Text><Text style={styles.workspaceDetailValue}>£{tipForBooking(selectedInvoice.booking.id)?.amount.toFixed(2)}</Text></View>}
+          {selectedInvoice.status === "draft" && <View style={styles.workspaceNotice}><Ionicons name="shield-checkmark-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("Draft only. The job and any tip are recorded in this preview, but neither invoice processing nor payout can occur here. Cleaning and moving require before and completion photos for review first.", "仅为草稿。此预览记录工作及小费，但不会处理发票或发放款项。清洁和搬家工作须先提供服务前及完工照片供审核。", "僅為草稿。此預覽記錄工作及貼士，但不會處理發票或發放款項。清潔及搬屋工作須先提供服務前及完工相片供審核。")}</Text></View>}
+          <Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 16 }]} onPress={() => { const booking = selectedInvoice.booking; setAccountPanel(null); openBooking(booking); }}><Text style={styles.secondaryButtonText}>{t("View related job", "查看相关工作", "查看相關工作")}</Text></Pressable>
+          <View style={[styles.workspaceNotice, { marginTop: 14 }]}><Ionicons name="information-circle-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("This is a sample record, not an official invoice or payment request. Payment status cannot be changed here.", "这是示例记录，不是正式发票或付款请求。无法在此更改付款状态。", "這是示例記錄，不是正式發票或付款要求。無法在此更改付款狀態。")}</Text></View>
+        </> : accountPanel === "support" ? <>
+          <View style={styles.workspaceNotice}><Ionicons name="shield-checkmark-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("If you are in immediate danger, call emergency services first. This preview does not contact UniMate or dispatch.", "如有即时危险，请先致电紧急服务。此预览不会联系优你伴或调度团队。", "如有即時危險，請先致電緊急服務。此預覽不會聯絡優你伴或調度團隊。")}</Text></View>
+          <Text style={[styles.workspaceSectionTitle, { marginTop: 16, marginBottom: 10 }]}>{t("Report a job issue", "报告工作问题", "報告工作問題")}</Text>
+          <SelectField label={t("Affected job", "相关工作", "相關工作")} value={supportJobId ? `${supportJobId} · ${[...bookings, ...staffBookingHistory[service]].find((item) => item.id === supportJobId)?.title || ""}` : t("Choose a job", "选择工作", "選擇工作")} options={[...bookings, ...staffBookingHistory[service]].map((item) => `${item.id} · ${item.title}`)} onChange={(value) => { setSupportJobId(value.split(" · ")[0]); setSupportError(""); }} />
+          <SelectField label={t("Issue type", "问题类型", "問題類型")} value={supportIssue || t("Choose issue type", "选择问题类型", "選擇問題類型")} options={[t("Lost property", "遗失物品", "遺失物品"), t("Harassment or threatening behaviour", "骚扰或威胁行为", "騷擾或威脅行為"), t("Unsafe property or working conditions", "房屋或工作环境不安全", "物業或工作環境不安全"), t("Property damage", "物品损坏", "物品損壞"), t("Problem with a client", "客户行为问题", "客戶行為問題"), t("Booking or schedule problem", "预订或排班问题", "預訂或排班問題"), t("Payment problem", "付款问题", "付款問題"), t("App or technical problem", "应用或技术问题", "應用程式或技術問題"), t("Other", "其他", "其他")]} onChange={(value) => { setSupportIssue(value); setSupportError(""); }} />
+          <Text style={styles.authFieldLabel}>{t("What happened?", "发生了什么？", "發生了甚麼事？")}</Text><TextInput style={[styles.authInput, { minHeight: 95 }]} multiline value={supportDescription} onChangeText={setSupportDescription} placeholder={t("Describe the issue without sharing passwords or ID numbers", "描述问题，但请勿分享密码或证件号码", "描述問題，但請勿分享密碼或證件號碼")} />
+          {!!supportError && <Text style={styles.workspaceError}>{supportError}</Text>}
+          <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={() => goToTechSupportChat()}><Text style={styles.primaryButtonText}>{t("Continue to support chat", "继续前往支持聊天", "繼續前往支援聊天")}</Text></Pressable>
+          <Text style={[styles.workspaceSectionTitle, { marginTop: 20, marginBottom: 8 }]}>{t("Technical help", "技术支持", "技術支援")}</Text>
+          <Pressable accessibilityRole="button" style={styles.secondaryButton} onPress={() => goToTechSupportChat(true)}><Ionicons name="headset-outline" size={17} color={palette.blue} /><Text style={styles.secondaryButtonText}>{t("Speak to the tech team", "联系技术团队", "聯絡技術團隊")}</Text></Pressable>
+          <Text style={[styles.workspaceHint, { marginTop: 12 }]}>{t("Chat opens with a draft only. Nothing is sent to a real support team.", "聊天只会打开消息草稿。不会发送给真实支持团队。", "聊天只會打開訊息草稿。不會傳送給真實支援團隊。")}</Text>
+        </> : accountPanel === "settings" ? <WorkspaceCommonSettings language={language} onLanguage={onLanguage} darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} notifications={bookingNotifications} onToggleNotifications={() => setBookingNotifications((current) => !current)} notificationDescription={t("Bookings, schedule and message updates", "预订、日程及消息更新", "預訂、日程及訊息更新")} onLogout={onLogout} /> : null}
+      </ScrollView>
+    </Sheet>
+    <Sheet visible={workAreaOpen} title={t("Work areas", "工作区域", "工作區域")} onClose={() => setWorkAreaOpen(false)}><ScrollView contentContainerStyle={styles.modalBody}><View style={styles.workspaceNotice}><Ionicons name="location-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("Select where you can accept jobs. Student requests outside these areas are not assigned to this demo staff member.", "选择可以接单的地区。学生在这些地区之外的请求不会分配给此示例员工。", "選擇可以接單的地區。學生在這些地區以外的要求不會分派給此示例員工。")}</Text></View><Text style={styles.workspaceSectionTitle}>{t("London & nearby areas", "伦敦及周边地区", "倫敦及周邊地區")}</Text><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 5 }}>{londonServiceAreas.map((area) => <Pressable key={area} accessibilityRole="checkbox" accessibilityState={{ checked: workAreas.includes(area) }} style={[styles.marketCategory, workAreas.includes(area) && styles.marketCategoryActive]} onPress={() => toggleWorkArea(area)}><Text style={[styles.marketCategoryText, workAreas.includes(area) && styles.marketCategoryTextActive]}>{area}</Text></Pressable>)}</View><Text style={styles.workspaceHint}>{t("Keep at least one area selected. Live assignment would also check staff qualifications, travel time and capacity.", "至少保留一个区域。正式分配还须核查资质、路程与接单容量。", "至少保留一個地區。正式分派還須核查資質、路程及接單容量。")}</Text><Pressable accessibilityRole="button" style={styles.primaryButton} onPress={() => setWorkAreaOpen(false)}><Text style={styles.primaryButtonText}>{t("Save work areas", "保存工作区域", "儲存工作區域")}</Text></Pressable></ScrollView></Sheet>
+  </SafeAreaView>;
+}
+
+function SellerWorkspace({ approvedPreview, initialCategories, language, onLanguage, darkMode, onToggleDarkMode, onLogout, marketplaceConversations, onSendMarketplaceMessage, onMarkMarketplaceSold, onDecideMarketplaceRequest, onOpenMarketplaceIssue, studentProfilePhoto }: { approvedPreview: boolean; initialCategories: string[]; language: Language; onLanguage: (language: Language) => void; darkMode: boolean; onToggleDarkMode: () => void; onLogout: () => void; marketplaceConversations: MarketplaceConversation[]; onSendMarketplaceMessage: (id: string, author: "buyer" | "seller", text: string, attachment?: ChatAttachment) => void; onMarkMarketplaceSold: (id: string) => void; onDecideMarketplaceRequest: (id: string, decision: "accepted" | "declined" | "blocked") => void; onOpenMarketplaceIssue: (id: string, reason: MarketplaceIssueReason, details: string, openedBy: "buyer" | "seller") => void; studentProfilePhoto: string }) {
+  const [tab, setTab] = useState<"market" | "listings" | "invoices" | "messages" | "profile">("market");
+  const [sellOpen, setSellOpen] = useState(false);
+  const [applicationOpen, setApplicationOpen] = useState(false);
+  const [sellerSettingsOpen, setSellerSettingsOpen] = useState(false);
+  const [sellerNotifications, setSellerNotifications] = useState(true);
+  const [sellerSupportOpen, setSellerSupportOpen] = useState(false);
+  const [selectedMessage, setSelectedMessage] = useState<string | null>(null);
+  const [messagePage, setMessagePage] = useState<"inbox" | "requests" | "closed">("inbox");
+  const [messageDraft, setMessageDraft] = useState("");
+  const [sellerInvoiceSearch, setSellerInvoiceSearch] = useState("");
+  const [sellerPaymentsOpen, setSellerPaymentsOpen] = useState(false);
+  const [payoutHolder, setPayoutHolder] = useState("");
+  const [payoutSortCode, setPayoutSortCode] = useState("");
+  const [payoutAccountNumber, setPayoutAccountNumber] = useState("");
+  const [payoutAccount, setPayoutAccount] = useState<{ holder: string; lastFour: string } | null>(null);
+  const [payoutError, setPayoutError] = useState("");
+  const [billingMethod, setBillingMethod] = useState<"invoice" | "card">("invoice");
+  const [localMessages, setLocalMessages] = useState<{ to: string; text: string; attachment?: ChatAttachment }[]>([]);
+  const [shopPreviewOpen, setShopPreviewOpen] = useState(false);
+  const [applicationStatus, setApplicationStatus] = useState<"unverified" | "pending" | "approved">(approvedPreview ? "approved" : "unverified");
+  const [shopName, setShopName] = useState(approvedPreview ? "Loop & Loom" : "");
+  const [shopCategories, setShopCategories] = useState<string[]>(initialCategories.length ? initialCategories : approvedPreview ? ["Handmade & crochet"] : []);
+  const [shopSellerType, setShopSellerType] = useState("Student maker / sole trader");
+  const [shopProductRole, setShopProductRole] = useState("I make these products");
+  const [shopContactName, setShopContactName] = useState("");
+  const [shopContactEmail, setShopContactEmail] = useState("");
+  const [shopLocation, setShopLocation] = useState("");
+  const [shopStory, setShopStory] = useState("");
+  const [shopProductExamples, setShopProductExamples] = useState("");
+  const [productSource, setProductSource] = useState("");
+  const [shopLinks, setShopLinks] = useState("");
+  const [shopPhotos, setShopPhotos] = useState<string[]>([]);
+  const [shopFulfilment, setShopFulfilment] = useState("");
+  const [shopReturns, setShopReturns] = useState("");
+  const [shopCosmeticEvidence, setShopCosmeticEvidence] = useState("");
+  const [shopDeclaration, setShopDeclaration] = useState(false);
+  const [shopApplicationError, setShopApplicationError] = useState("");
+  const [pendingListings, setPendingListings] = useState<PendingMarketListing[]>(approvedPreview ? [{ id: "SHOP-SAMPLE-1", name: "Hand-crocheted tote", price: "£28", quantity: 8, sold: 3, status: "live" }] : []);
+  const t = (en: string, simplified: string, traditional = simplified) => tr(language, en, simplified, traditional);
+  const approved = applicationStatus === "approved";
+  const sellerConversations = marketplaceConversations.filter((item) => item.sellerHandle === (approved ? "@loopandloom" : "@marketplace_seller") && item.messages.length > 0);
+  const completedSellerOrders = sellerConversations.filter((item) => item.status === "received" && `${item.productName} ${item.id} ${item.buyerName}`.toLowerCase().includes(sellerInvoiceSearch.trim().toLowerCase()));
+  const selectedMarketConversation = sellerConversations.find((item) => selectedMessage === `market:${item.id}`);
+  const sellerThreads: WorkspaceThread[] = [
+    ...sellerConversations.map((item) => ({ id: `market:${item.id}`, name: item.buyerName, type: `${item.productName} · ${item.id}`, preview: item.messages.at(-1)?.text || item.productName, time: item.issue ? t("Support case", "支持个案", "支援個案") : item.requestStatus === "pending" ? t("Request", "请求", "請求") : item.status === "received" || item.requestStatus === "declined" || item.requestStatus === "blocked" ? t("Closed", "已关闭", "已關閉") : t("Today", "今天", "今天"), initials: item.buyerName.split(" ").map((part) => part[0]).join("").slice(0, 2), color: palette.blue, photo: item.buyerName === "Sophie Chen" ? studentProfilePhoto : undefined })),
+    { id: "UniMate operations", name: t("UniMate operations", "优你伴运营", "優你伴營運"), type: t("Shop approval & listings", "小店审核与商品", "小店審核及商品"), preview: t("Questions about your shop or listing review?", "对小店或商品审核有疑问吗？", "對小店或商品審核有疑問嗎？"), time: t("Support", "支持", "支援"), initials: "UM", color: palette.green },
+    { id: "UniMate tech", name: t("UniMate tech team", "优你伴技术团队", "優你伴技術團隊"), type: t("Account & app support", "账号与应用支持", "帳戶及應用程式支援"), preview: t("Ask us about sign-in or technical issues.", "可咨询登录或技术问题。", "可查詢登入或技術問題。"), time: t("Support", "支持", "支援"), initials: "TS", color: palette.blue },
+  ];
+  const requestConversations = sellerConversations.filter((item) => item.requestStatus === "pending" && !item.issue);
+  const inboxThreads = sellerThreads.filter((thread) => { const conversation = sellerConversations.find((item) => thread.id === `market:${item.id}`); return !conversation || !!conversation.issue || conversation.requestStatus === "accepted" && conversation.status !== "received"; });
+  const closedConversations = sellerConversations.filter((item) => !item.issue && (item.status === "received" || item.requestStatus === "declined" || item.requestStatus === "blocked"));
+  const savePayoutPreview = () => {
+    const sortCode = payoutSortCode.replace(/\D/g, "");
+    const accountNumber = payoutAccountNumber.replace(/\D/g, "");
+    if (!payoutHolder.trim() || sortCode.length !== 6 || accountNumber.length !== 8) { setPayoutError(t("Enter an account holder, 6-digit sort code and 8-digit account number for this preview.", "请输入账户持有人、6位银行代码和8位账号用于此预览。", "請輸入帳戶持有人、6位銀行代碼及8位帳號用於此預覽。")); return; }
+    setPayoutAccount({ holder: payoutHolder.trim(), lastFour: accountNumber.slice(-4) });
+    setPayoutSortCode(""); setPayoutAccountNumber(""); setPayoutError("");
+  };
+  const shopExternalLinks = shopLinks.split(/\n/).map((link) => link.trim()).filter(Boolean);
+  const addShopPhotos = async (source?: PhotoSource) => { if (!source) { askPhotoSource(language, addShopPhotos); return; } const uris = await selectPhotoUris(language, source, { multiple: source === "library", limit: Math.max(1, 6 - shopPhotos.length), quality: 0.8 }); if (uris.length) { setShopPhotos((current) => [...current, ...uris].slice(0, 6)); setShopApplicationError(""); } };
+  const submitShopApplication = () => {
+    if (!shopName.trim() || !shopCategories.length || !shopContactName.trim() || !/^\S+@\S+\.\S+$/.test(shopContactEmail.trim()) || !shopLocation.trim() || !shopStory.trim() || !shopProductExamples.trim() || !productSource.trim() || !shopFulfilment.trim() || !shopReturns.trim() || !shopPhotos.length || !shopDeclaration || shopCategories.includes("Fragrance & beauty") && !shopCosmeticEvidence.trim()) { setShopApplicationError(t("Complete the required details, add at least one product photo and confirm the declaration.", "请填写必填资料、添加至少一张商品照片并确认声明。", "請填寫必填資料、加入至少一張商品相片並確認聲明。")); return; }
+    if (shopExternalLinks.length > 3 || shopExternalLinks.some((link) => { try { return !["http:", "https:"].includes(new URL(link).protocol); } catch { return true; } })) { setShopApplicationError(t("Add up to three full http:// or https:// shop links, one per line.", "请每行填写一个完整的 http:// 或 https:// 店铺链接，最多三个。", "請每行填寫一個完整的 http:// 或 https:// 店舖連結，最多三個。")); return; }
+    setShopApplicationError(""); setApplicationStatus("pending");
+  };
+  const tabs = [
+    { id: "market" as const, label: t("Market", "市场", "市場"), icon: "bag-handle-outline" },
+    { id: "listings" as const, label: t("My listings", "我的商品", "我的商品"), icon: "pricetags-outline" },
+    { id: "invoices" as const, label: t("Invoices", "发票", "發票"), icon: "document-text-outline" },
+    { id: "messages" as const, label: t("Messages", "消息", "訊息"), icon: "chatbubbles-outline", badge: requestConversations.length },
+    { id: "profile" as const, label: t("Profile", "资料", "資料"), icon: "person-outline" },
+  ];
+  return <SafeAreaView style={styles.safe}>
+    <AuthPreferences language={language} onLanguage={onLanguage} darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} />
+    <View style={styles.workspaceHeading}><View style={{ flex: 1 }}><Text style={styles.workspaceEyebrow}>{t("MARKETPLACE SELLER", "市场卖家", "市場賣家")}</Text><Text style={styles.workspaceTitle}>{approved ? shopName : t("Your shop", "您的小店", "您的小店")}</Text><Text style={styles.workspaceSubtitle}>{approved ? t("Approved small shop", "已批准小店", "已批准小店") : t("Marketplace access only", "仅限市场功能", "只限市場功能")}</Text></View><WorkspaceHeadingBadge kind={approved ? "seller" : "unverified"} language={language} /></View>
+    {tab === "market" ? <Marketplace language={language} onSell={() => setSellOpen(true)} pendingListings={pendingListings.filter((item) => item.status === "pending")} /> : <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.workspaceBody}>
+      {tab === "listings" && <><Text style={styles.workspaceSectionTitle}>{t("My marketplace listings", "我的市场商品", "我的市場商品")}</Text><Text style={styles.workspaceHint}>{t("Track the quantity, units sold and remaining stock for each item. Submitted items stay pending until reviewed.", "追踪每件商品的数量、已售件数及剩余库存。提交商品须经审核。", "追蹤每件商品的數量、已售件數及剩餘庫存。提交商品須經審核。")}</Text><Pressable accessibilityRole="button" style={styles.primaryButton} onPress={() => setSellOpen(true)}><Text style={styles.primaryButtonText}>{t("Post an item", "发布商品", "發佈商品")}</Text></Pressable><PendingListings listings={pendingListings} language={language} onUpdate={(listing) => setPendingListings((current) => current.map((item) => item.id === listing.id ? listing : item))} /></>}
+      {tab === "invoices" && <>
+        <Text style={styles.workspaceSectionTitle}>{t("Invoices", "发票", "發票")}</Text>
+        <Text style={styles.workspaceHint}>{t("Track marketplace sale documents and payout records. Available to every seller account, including unverified sellers.", "查看市场销售文件及结算记录。所有卖家账号均可使用，包括未认证卖家。", "查看市場銷售文件及結算記錄。所有賣家帳戶均可使用，包括未認證賣家。")}</Text>
+        <Pressable accessibilityRole="button" style={[styles.workspaceCard, { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 14 }]} onPress={() => setSellerPaymentsOpen(true)}><Ionicons name="wallet-outline" size={24} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{t("Payouts & payment method", "结算与付款方式", "結算及付款方式")}</Text><Text style={styles.workspaceHint}>{payoutAccount ? `${payoutAccount.holder} · •••• ${payoutAccount.lastFour}` : t("Add bank details for future payouts", "添加银行资料以备日后结算", "加入銀行資料以備日後結算")}</Text></View><Ionicons name="chevron-forward" size={18} color={palette.blue} /></Pressable>
+        <View style={[styles.workspaceMetricRow, { marginTop: 14, marginBottom: 15 }]}><WorkspaceMetric value={0} label={t("Issued", "已开具", "已開具")} /><WorkspaceMetric value={0} label={t("Pending payout", "待结算", "待結算")} /><WorkspaceMetric value="£0.00" label={t("Outstanding", "未结算", "未結算")} /></View>
+        <View style={styles.search}><Ionicons name="search" size={18} color={palette.muted} /><TextInput accessibilityLabel={t("Search seller invoices", "搜索卖家发票", "搜尋賣家發票")} style={styles.searchInput} value={sellerInvoiceSearch} onChangeText={setSellerInvoiceSearch} placeholder={t("Search item, order or buyer", "搜索商品、订单或买家", "搜尋商品、訂單或買家")} placeholderTextColor="#8B98AD" /></View>
+        <View style={[styles.workspaceCard, { alignItems: "center", gap: 7, paddingVertical: 25, marginTop: 15 }]}><Ionicons name="document-text-outline" size={28} color={palette.blue} /><Text style={styles.workspaceCardTitle}>{t("No invoices issued yet", "尚未开具发票", "尚未開具發票")}</Text><Text style={[styles.workspaceHint, { textAlign: "center" }]}>{t("Sale documents appear after an order is completed, the buyer confirms receipt and UniMate reconciles the payment, commission and payout.", "订单完成、买家确认收货且优你伴核对付款、佣金及结算后，销售文件才会显示。", "訂單完成、買家確認收貨且優你伴核對付款、佣金及結算後，銷售文件才會顯示。")}</Text></View>
+        {!!completedSellerOrders.length && <><Text style={[styles.workspaceSectionTitle, { marginTop: 18 }]}>{t("Completed orders awaiting documents", "等待文件的已完成订单", "等待文件的已完成訂單")}</Text>{completedSellerOrders.map((order) => <View key={order.id} style={[styles.workspaceCard, { marginBottom: 9, gap: 5 }]}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{order.productName}</Text><Text style={[styles.workspaceStatus, { color: palette.blue, backgroundColor: "#EAF4FF" }]}>{t("Pending reconciliation", "等待对账", "等待對賬")}</Text></View><Text style={styles.workspaceCardText}>{order.id} · {order.buyerName} · {order.productPrice}</Text><Text style={styles.workspaceHint}>{t("Receipt confirmed in preview; this is not an issued invoice.", "预览中已确认收货；这不是已开具发票。", "預覽中已確認收貨；這不是已開具發票。")}</Text></View>)}</>}
+        <View style={[styles.workspaceNotice, { marginTop: 12 }]}><Ionicons name="information-circle-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("Local preview only. No official invoice, payment or payout is processed here.", "仅为本地预览。此处不会处理正式发票、付款或结算。", "只供本機預覽。此處不會處理正式發票、付款或結算。")}</Text></View>
+      </>}
+      {tab === "messages" && (selectedMarketConversation ? <MarketplaceConversationView language={language} conversation={selectedMarketConversation} viewer="seller" buyerPhoto={selectedMarketConversation.buyerName === "Sophie Chen" ? studentProfilePhoto : undefined} onBack={() => setSelectedMessage(null)} onSend={(text, attachment) => onSendMarketplaceMessage(selectedMarketConversation.id, "seller", text, attachment)} onMarkSold={() => { onMarkMarketplaceSold(selectedMarketConversation.id); setPendingListings((current) => current.map((item) => item.name === selectedMarketConversation.productName && item.status === "live" && item.sold < item.quantity ? { ...item, sold: item.sold + 1 } : item)); }} onConfirmReceived={() => {}} onOpenIssue={(reason, details) => onOpenMarketplaceIssue(selectedMarketConversation.id, reason, details, "seller")} onDecision={(decision) => { onDecideMarketplaceRequest(selectedMarketConversation.id, decision); setSelectedMessage(null); setMessagePage(decision === "accepted" ? "inbox" : "requests"); }} /> : messagePage === "requests" || messagePage === "closed" ? <>
+        <Pressable accessibilityRole="button" style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 14 }} onPress={() => setMessagePage("inbox")}><Ionicons name="arrow-back" size={20} color={palette.blue} /><Text style={styles.workspaceCardLink}>{t("Back to inbox", "返回收件箱", "返回收件匣")}</Text></Pressable>
+        <Text style={styles.workspaceSectionTitle}>{messagePage === "requests" ? t("Message requests", "消息请求", "訊息請求") : t("Closed conversations", "已关闭对话", "已關閉對話")}</Text>
+        <Text style={[styles.workspaceHint, { marginBottom: 14 }]}>{messagePage === "requests" ? t("Open an enquiry to read it, then accept or decline inside the chat. Customers are not told when you view a request in this preview.", "打开咨询查看内容，再在聊天中接受或拒绝。此预览不会通知客户您已查看请求。", "開啟查詢查看內容，再在聊天中接受或拒絕。此預覽不會通知客戶您已查看請求。") : t("Completed, declined and blocked conversations remain available to review or raise a support case.", "已完成、已拒绝和已屏蔽的对话仍可供查看或提交支持个案。", "已完成、已拒絕及已封鎖的對話仍可供查看或提交支援個案。")}</Text>
+        {(messagePage === "requests" ? requestConversations : closedConversations).map((item) => <Pressable key={item.id} accessibilityRole="button" style={[styles.workspaceCard, { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 9 }]} onPress={() => setSelectedMessage(`market:${item.id}`)}><ChatPersonAvatar name={item.buyerName} photo={item.buyerName === "Sophie Chen" ? studentProfilePhoto : undefined} size={44} /><View style={{ flex: 1 }}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{item.buyerName}</Text>{messagePage === "requests" && <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: palette.blue }} />}</View><Text style={styles.workspaceHint}>{item.productName} · {item.productPrice}</Text><Text style={styles.workspaceCardText} numberOfLines={1}>{item.messages.at(-1)?.text || t("Product enquiry", "商品咨询", "商品查詢")}</Text></View><Ionicons name="chevron-forward" size={18} color={palette.muted} /></Pressable>)}
+        {!(messagePage === "requests" ? requestConversations : closedConversations).length && <View style={[styles.workspaceCard, { alignItems: "center", gap: 8, paddingVertical: 28 }]}><Ionicons name={messagePage === "requests" ? "mail-open-outline" : "archive-outline"} size={28} color={palette.blue} /><Text style={styles.workspaceCardTitle}>{messagePage === "requests" ? t("No new message requests", "没有新的消息请求", "沒有新的訊息請求") : t("No closed conversations", "没有已关闭对话", "沒有已關閉對話")}</Text></View>}
+      </> : <>
+        <Pressable accessibilityRole="button" style={[styles.workspaceCard, { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16, backgroundColor: "#F3F8FF" }]} onPress={() => { setSelectedMessage(null); setMessagePage("requests"); }}><View style={{ width: 40, height: 40, borderRadius: 13, backgroundColor: "#E4F0FF", alignItems: "center", justifyContent: "center" }}><Ionicons name="mail-unread-outline" size={21} color={palette.blue} /></View><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{t("Message requests", "消息请求", "訊息請求")}</Text><Text style={styles.workspaceHint}>{requestConversations.length ? t("Open and decide in the chat", "打开聊天后决定", "開啟聊天後決定") : t("No new customer enquiries", "没有新的客户咨询", "沒有新的客戶查詢")}</Text></View>{!!requestConversations.length && <View style={{ minWidth: 25, height: 25, paddingHorizontal: 6, borderRadius: 13, backgroundColor: palette.blue, alignItems: "center", justifyContent: "center" }}><Text style={{ color: "#FFFFFF", fontWeight: "800" }}>{requestConversations.length}</Text></View>}<Ionicons name="chevron-forward" size={18} color={palette.blue} /></Pressable>
+        <WorkspaceMessages language={language} threads={inboxThreads} selected={selectedMessage} onSelect={setSelectedMessage} draft={messageDraft} onDraft={setMessageDraft} onSend={(attachment) => { if (!selectedMessage || !messageDraft.trim() && !attachment) return; setLocalMessages((current) => [...current, { to: selectedMessage, text: messageDraft.trim(), attachment }]); setMessageDraft(""); }} sent={localMessages} ownName={shopName || t("Marketplace seller", "市场卖家", "市場賣家")} />
+        {!!closedConversations.length && <Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 16 }]} onPress={() => { setSelectedMessage(null); setMessagePage("closed"); }}><Ionicons name="archive-outline" size={18} color={palette.blue} /><Text style={styles.secondaryButtonText}>{t("Closed conversations", "已关闭对话", "已關閉對話")} · {closedConversations.length}</Text></Pressable>}
+      </>)}
+      {tab === "profile" && <>
+        <View style={styles.workspaceProfileHero}><View style={styles.workspaceAvatarWrap}><View style={styles.workspaceAvatar}><Text style={styles.workspaceAvatarText}>{approved ? "LL" : "MS"}</Text></View><View style={styles.profileAvatarBadge}><VerificationBadge kind={approved ? "seller" : "unverified"} language={language} /></View></View><Text style={styles.workspaceProfileName}>{approved ? shopName : t("Marketplace seller", "市场卖家", "市場賣家")}</Text><Text style={styles.workspaceSubtitle}>{approved ? t("UniMate approved · Handmade & crochet", "优你伴已批准 · 手工与钩织", "優你伴已批准 · 手工及鉤織") : applicationStatus === "pending" ? t("Shop application pending team review", "小店申请等待团队审核", "小店申請等待團隊審核") : t("Apply to become an approved small shop", "申请成为已批准小店", "申請成為已批准小店")}</Text></View>
+        {approved && <Pressable accessibilityRole="button" style={styles.viewProfileButton} onPress={() => setShopPreviewOpen(true)}><Ionicons name="eye-outline" size={17} color={palette.blue} /><Text style={styles.viewProfileButtonText}>{t("View public shop as others see it", "查看他人看到的小店", "查看他人看到的小店")}</Text></Pressable>}
+        <View style={styles.workspaceCard}><Text style={styles.workspaceCardTitle}>{t("Product categories", "商品类别", "商品類別")}</Text><Text style={styles.workspaceCardText}>{shopCategories.length ? shopCategories.join(" · ") : t("Choose categories in your shop application", "在小店申请中选择类别", "在小店申請中選擇類別")}</Text></View>
+        <View style={styles.profileMenuCard}>
+          {!approved && <WorkspaceProfileRow icon="shield-checkmark-outline" title={applicationStatus === "pending" ? t("Shop application status", "小店申请状态", "小店申請狀態") : t("Apply for shop approval", "申请小店审核", "申請小店審核")} description={t("Identity, products, photos and safety review", "身份、商品、照片与安全审核", "身分、商品、相片及安全審核")} onPress={() => setApplicationOpen(true)} />}
+          <WorkspaceProfileRow icon="pricetags-outline" title={t("My listings", "我的商品", "我的商品")} description={t("Pending and reviewed products", "待审核及已审核商品", "待審核及已審核商品")} onPress={() => setTab("listings")} />
+          <WorkspaceProfileRow icon="document-text-outline" title={t("Invoices", "发票", "發票")} description={t("Sale documents and payout records", "销售文件及结算记录", "銷售文件及結算記錄")} onPress={() => setTab("invoices")} />
+          <WorkspaceProfileRow icon="wallet-outline" title={t("Payouts & payment method", "结算与付款方式", "結算及付款方式")} description={t("Bank account and billing preference", "银行账户与收费偏好", "銀行帳戶及收費偏好")} onPress={() => setSellerPaymentsOpen(true)} />
+          {approved && <WorkspaceProfileRow icon="star-outline" title={t("Product reviews & ratings", "商品评价与评分", "商品評價及評分")} description={t("Ratings are linked to individual products", "评价与具体商品关联", "評價與具體商品關聯")} onPress={() => setShopPreviewOpen(true)} />}
+          <WorkspaceProfileRow icon="settings-outline" title={t("Settings & notifications", "设置与通知", "設定及通知")} description={t("Appearance, language and listing alerts", "外观、语言及商品提醒", "外觀、語言及商品提醒")} onPress={() => setSellerSettingsOpen(true)} />
+          <WorkspaceProfileRow icon="help-circle-outline" title={t("Support", "支持", "支援")} description={t("Account, approval or technical help", "账号、审核或技术帮助", "帳戶、審核或技術協助")} onPress={() => { setSelectedMessage("UniMate tech"); setTab("messages"); }} />
+        </View>
+      </>}
+    </ScrollView>}
+    <WorkspaceTabs tabs={tabs} active={tab} onSelect={setTab} />
+    <SellItemForm visible={sellOpen} language={language} allowSmallShop={approved} onClose={() => setSellOpen(false)} onSubmitted={(listing) => { setPendingListings((current) => [listing, ...current]); setTab("listings"); }} />
+    <Sheet visible={sellerSettingsOpen} title={t("Settings", "设置", "設定")} onClose={() => setSellerSettingsOpen(false)}><ScrollView contentContainerStyle={styles.settingsBody}><WorkspaceCommonSettings language={language} onLanguage={onLanguage} darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} notifications={sellerNotifications} onToggleNotifications={() => setSellerNotifications((current) => !current)} notificationDescription={t("Listings, shop review and support updates", "商品、小店审核及支持更新", "商品、店舖審核及支援更新")} onLogout={onLogout} /></ScrollView></Sheet>
+    <Sheet visible={sellerPaymentsOpen} title={t("Payouts & payment method", "结算与付款方式", "結算及付款方式")} onClose={() => setSellerPaymentsOpen(false)}><ScrollView contentContainerStyle={styles.modalBody}>
+      <View style={styles.workspaceNotice}><Ionicons name="shield-checkmark-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("Demo only. Do not enter real bank details. This screen is not connected to a payment provider; saving keeps only the account name and last four digits in memory.", "仅供演示。请勿输入真实银行资料。此页面未连接支付服务；保存后仅在内存中保留账户名称和末四位。", "只供示範。請勿輸入真實銀行資料。此頁面未連接付款服務；儲存後僅在記憶體中保留帳戶名稱及末四位。")}</Text></View>
+      <Text style={styles.workspaceSectionTitle}>{t("Payout bank account", "收款银行账户", "收款銀行帳戶")}</Text>
+      {payoutAccount && <View style={[styles.workspaceCard, { marginBottom: 14 }]}><Text style={styles.workspaceCardTitle}>{payoutAccount.holder}</Text><Text style={styles.workspaceCardText}>{t("Account ending", "账号末四位", "帳號末四位")} •••• {payoutAccount.lastFour}</Text><Text style={styles.workspaceHint}>{t("Preview record only · not verified for payouts", "仅为预览记录 · 未验证结算资格", "只供預覽記錄 · 未驗證結算資格")}</Text></View>}
+      <Text style={styles.authFieldLabel}>{t("Account holder", "账户持有人", "帳戶持有人")}</Text><TextInput accessibilityLabel={t("Account holder", "账户持有人", "帳戶持有人")} style={styles.authInput} value={payoutHolder} onChangeText={setPayoutHolder} placeholder={t("Demo account name", "演示账户名称", "示範帳戶名稱")} />
+      <Text style={styles.authFieldLabel}>{t("Sort code", "银行代码", "銀行代碼")}</Text><TextInput accessibilityLabel={t("Sort code", "银行代码", "銀行代碼")} style={styles.authInput} value={payoutSortCode} onChangeText={setPayoutSortCode} keyboardType="number-pad" maxLength={8} placeholder="00-00-00" />
+      <Text style={styles.authFieldLabel}>{t("Account number", "银行账号", "銀行帳號")}</Text><TextInput accessibilityLabel={t("Account number", "银行账号", "銀行帳號")} style={styles.authInput} value={payoutAccountNumber} onChangeText={setPayoutAccountNumber} keyboardType="number-pad" maxLength={8} placeholder="00000000" />
+      {!!payoutError && <Text style={styles.workspaceError}>{payoutError}</Text>}
+      <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={savePayoutPreview}><Text style={styles.primaryButtonText}>{t("Save demo payout account", "保存演示收款账户", "儲存示範收款帳戶")}</Text></Pressable>
+      <Text style={[styles.workspaceSectionTitle, { marginTop: 24 }]}>{t("How you pay UniMate fees", "支付优你伴费用的方式", "支付優你伴費用的方式")}</Text>
+      <View style={[styles.workspaceCard, { gap: 10 }]}>{(["invoice", "card"] as const).map((method) => <Pressable key={method} accessibilityRole="radio" accessibilityState={{ checked: billingMethod === method }} style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 7 }} onPress={() => setBillingMethod(method)}><Ionicons name={billingMethod === method ? "radio-button-on" : "radio-button-off"} size={21} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{method === "invoice" ? t("Invoice / bank transfer", "发票／银行转账", "發票／銀行轉帳") : t("Card via secure provider", "通过安全服务使用银行卡", "經安全服務使用銀行卡")}</Text><Text style={styles.workspaceHint}>{method === "invoice" ? t("Pay agreed fees against an issued invoice", "根据已开具发票支付约定费用", "按已開具發票支付約定費用") : t("Requires a payment-provider connection before launch", "上线前需要连接支付服务", "上線前須連接付款服務")}</Text></View></Pressable>)}</View>
+      <Text style={styles.workspaceHint}>{t("No card details, bank verification, invoices or payouts are processed in this preview.", "此预览不会处理银行卡资料、银行验证、发票或结算。", "此預覽不會處理銀行卡資料、銀行驗證、發票或結算。")}</Text>
+    </ScrollView></Sheet>
+    <Sheet visible={sellerSupportOpen} title={t("Seller support", "卖家支持", "賣家支援")} onClose={() => setSellerSupportOpen(false)}><View style={styles.modalBody}><View style={styles.workspaceNotice}><Ionicons name="information-circle-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("This preview cannot contact UniMate. For a real seller account, the support channel would connect you to the operations or tech team.", "此预览无法联系优你伴。真实卖家账号的支持渠道将连接运营或技术团队。", "此預覽無法聯絡優你伴。真實賣家帳戶的支援渠道將連接營運或技術團隊。")}</Text></View><View style={styles.workspaceCard}><Text style={styles.workspaceCardTitle}>{t("What we can help with", "可协助的问题", "可協助的問題")}</Text><Text style={styles.workspaceCardText}>{t("Application status · product listings · account access · technical problems", "申请状态 · 商品上架 · 账号访问 · 技术问题", "申請狀態 · 商品上架 · 帳戶存取 · 技術問題")}</Text></View></View></Sheet>
+    <Sheet visible={shopPreviewOpen} title={t("Public shop preview", "小店公开预览", "小店公開預覽")} onClose={() => setShopPreviewOpen(false)}><SellerPublicProfile seller={{ name: "@loopandloom", label: t("UniMate approved maker", "优你伴已批准手作店", "優你伴已批准手作店"), badge: "seller", initial: "LL" }} displayName={shopName} listingIndices={[12]} language={language} /></Sheet>
+    <Sheet visible={applicationOpen} title={t("Small-shop application", "小店申请", "小店申請")} onClose={() => setApplicationOpen(false)}><ScrollView contentContainerStyle={styles.modalBody}>
+      {applicationStatus === "pending" ? <><View style={styles.workspaceNotice}><Ionicons name="time-outline" size={19} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("Application saved in this preview for team review. No real application was sent or approval granted.", "申请已保存在此预览中供团队审核。未实际提交申请或获得批准。", "申請已儲存在此預覽中供團隊審核。未實際提交申請或獲得批准。")}</Text></View><View style={styles.workspaceCard}><Text style={styles.workspaceCardTitle}>{shopName}</Text><Text style={styles.workspaceCardText}>{shopCategories.join(", ")} · {shopProductRole}</Text><Text style={styles.workspaceCardText}>{shopProductExamples}</Text><Text style={styles.workspaceHint}>{shopPhotos.length} {t("product photos attached", "张商品照片已添加", "張商品相片已加入")} · {shopExternalLinks.length} {t("shop links", "个店铺链接", "個店舖連結")}</Text></View></> : <>
+        <Text style={styles.workspaceHint}>{t("Tell us what you make or sell. Approval requires real identity, sourcing and safety checks; no real application is sent from this preview.", "介绍您的商品。批准需要真实身份、货源及安全审核；此预览不会提交真实申请。", "介紹您的商品。批准需要真實身分、貨源及安全審核；此預覽不會提交真實申請。")}</Text>
+        <Text style={styles.workspaceSectionTitle}>{t("Seller & shop", "卖家与小店", "賣家與小店")}</Text>
+        <Text style={styles.authFieldLabel}>{t("Shop or brand name *", "小店或品牌名称 *", "小店或品牌名稱 *")}</Text><TextInput style={styles.authInput} value={shopName} onChangeText={setShopName} placeholder={t("e.g. Loop & Loom", "例如：Loop & Loom", "例如：Loop & Loom")} />
+        <SelectField label={t("Seller type *", "卖家类型 *", "賣家類型 *")} value={shopSellerType} options={["Student maker / sole trader", "Registered business", "Other independent seller"]} onChange={setShopSellerType} />
+        <Text style={styles.authFieldLabel}>{t("Contact name *", "联系人姓名 *", "聯絡人姓名 *")}</Text><TextInput style={styles.authInput} value={shopContactName} onChangeText={setShopContactName} autoCapitalize="words" placeholder={t("Legal contact for review", "审核联系人", "審核聯絡人")} />
+        <Text style={styles.authFieldLabel}>{t("Contact email *", "联系邮箱 *", "聯絡電郵 *")}</Text><TextInput style={styles.authInput} value={shopContactEmail} onChangeText={setShopContactEmail} keyboardType="email-address" autoCapitalize="none" placeholder="name@example.com" />
+        <Text style={styles.authFieldLabel}>{t("Where are you based? *", "经营所在地 *", "經營所在地 *")}</Text><TextInput style={styles.authInput} value={shopLocation} onChangeText={setShopLocation} placeholder={t("City or London area", "城市或伦敦地区", "城市或倫敦地區")} />
+        <Text style={styles.workspaceHint}>{t("Contact details stay private in this preview and are not shown on a public shop page.", "联系信息在此预览中保密，不会显示在公开店铺页面。", "聯絡資料在此預覽中保密，不會顯示在公開店舖頁面。")}</Text>
+        <Text style={styles.workspaceSectionTitle}>{t("Products & evidence", "商品与证明", "商品與證明")}</Text>
+        <Text style={styles.authFieldLabel}>{t("What do you sell? · choose all that apply *", "售卖什么商品？可多选 *", "售賣甚麼商品？可多選 *")}</Text><View style={styles.authRoleChoices}>{sellerCategoryOptions.map((category) => <Pressable key={category} accessibilityRole="checkbox" accessibilityState={{ checked: shopCategories.includes(category) }} style={[styles.authRoleChoice, shopCategories.includes(category) && styles.authRoleChoiceActive]} onPress={() => setShopCategories((current) => current.includes(category) ? current.filter((item) => item !== category) : [...current, category])}><Ionicons name={shopCategories.includes(category) ? "checkbox" : "square-outline"} size={17} color={palette.blue} /><Text style={styles.authRoleChoiceText}>{category}</Text></Pressable>)}</View>
+        <SelectField label={t("Your role in making/selling *", "您在生产销售中的角色 *", "您在生產銷售中的角色 *")} value={shopProductRole} options={["I make these products", "I resell products from suppliers", "I import products into the UK", "A mix of these"]} onChange={setShopProductRole} />
+        <Text style={styles.authFieldLabel}>{t("Your brand story *", "品牌介绍 *", "品牌介紹 *")}</Text><TextInput style={[styles.authInput, { minHeight: 86 }]} multiline value={shopStory} onChangeText={setShopStory} placeholder={t("Who makes the products and what makes them distinctive?", "谁制作这些商品？有什么特色？", "誰製作這些商品？有甚麼特色？")} />
+        <Text style={styles.authFieldLabel}>{t("Example products & price range *", "商品示例与价格范围 *", "商品例子與價格範圍 *")}</Text><TextInput style={[styles.authInput, { minHeight: 82 }]} multiline value={shopProductExamples} onChangeText={setShopProductExamples} placeholder={t("e.g. crochet bags £15–£35", "例如：钩织包 £15–£35", "例如：鉤織袋 £15–£35")} />
+        <Text style={styles.authFieldLabel}>{t("Sourcing and safety *", "货源与安全 *", "貨源及安全 *")}</Text><TextInput style={[styles.authInput, { minHeight: 86 }]} multiline value={productSource} onChangeText={setProductSource} placeholder={t("Materials, suppliers, labels and safety evidence", "材料、供应商、标签及安全证明", "材料、供應商、標籤及安全證明")} />
+        <Text style={styles.authFieldLabel}>{t("Product photos *", "商品照片 *", "商品相片 *")}</Text><Text style={styles.workspaceHint}>{t("Add 1–6 clear photos of products you intend to sell. Photos remain on this device in the preview.", "添加 1–6 张拟售商品的清晰照片。预览中的照片仅保留在本机。", "加入 1–6 張擬售商品的清晰相片。預覽中的相片只保留在本機。")}</Text><Pressable accessibilityRole="button" style={styles.secondaryButton} onPress={() => addShopPhotos()}><Ionicons name="images-outline" size={17} color={palette.blue} /><Text style={styles.secondaryButtonText}>{t("Add product photos", "添加商品照片", "加入商品相片")}</Text></Pressable>
+        {!!shopPhotos.length && <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 9 }}>{shopPhotos.map((uri, index) => <Pressable key={`${uri}-${index}`} accessibilityRole="button" accessibilityLabel={t("Remove product photo", "移除商品照片", "移除商品相片")} onPress={() => setShopPhotos((current) => current.filter((_, photoIndex) => photoIndex !== index))}><Image source={{ uri }} style={{ width: 76, height: 76, borderRadius: 10 }} /><View style={{ position: "absolute", top: 3, right: 3, backgroundColor: "#FFFFFF", borderRadius: 12 }}><Ionicons name="close-circle" size={20} color={palette.coral} /></View></Pressable>)}</View>}
+        <Text style={styles.authFieldLabel}>{t("Existing shop or website links (optional)", "现有店铺或网站链接（选填）", "現有店舖或網站連結（選填）")}</Text><TextInput style={[styles.authInput, { minHeight: 75 }]} multiline value={shopLinks} onChangeText={setShopLinks} autoCapitalize="none" keyboardType="url" placeholder={t("https://… (one link per line, up to three)", "https://…（每行一个，最多三个）", "https://…（每行一個，最多三個）")} />
+        {shopCategories.includes("Fragrance & beauty") && <><View style={styles.workspaceNotice}><Ionicons name="alert-circle-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("Cosmetics need product-by-product review. Shop approval alone does not approve these items.", "化妆品需逐件审核；店铺获批不代表商品获批。", "化妝品需逐件審核；店舖獲批不代表商品獲批。")}</Text></View><Text style={styles.authFieldLabel}>{t("Cosmetic compliance evidence *", "化妆品合规资料 *", "化妝品合規資料 *")}</Text><TextInput style={[styles.authInput, { minHeight: 88 }]} multiline value={shopCosmeticEvidence} onChangeText={setShopCosmeticEvidence} placeholder={t("Responsible person, safety assessment, product information file, notification and labels", "责任人、安全评估、产品信息档案、通报和标签", "責任人、安全評估、產品資訊檔案、通報及標籤")} /></>}
+        <Text style={styles.workspaceSectionTitle}>{t("Fulfilment & customer care", "配送与售后", "配送與售後")}</Text>
+        <Text style={styles.authFieldLabel}>{t("Dispatch and delivery plan *", "发货与配送安排 *", "發貨與配送安排 *")}</Text><TextInput style={[styles.authInput, { minHeight: 75 }]} multiline value={shopFulfilment} onChangeText={setShopFulfilment} placeholder={t("Where items ship from and expected times", "发货地点及预计时间", "發貨地點及預計時間")} />
+        <Text style={styles.authFieldLabel}>{t("Returns and customer issues *", "退货与客户问题 *", "退貨與客戶問題 *")}</Text><TextInput style={[styles.authInput, { minHeight: 75 }]} multiline value={shopReturns} onChangeText={setShopReturns} placeholder={t("How will you handle returns, damage or complaints?", "如何处理退货、损坏或投诉？", "如何處理退貨、損壞或投訴？")} />
+        <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: shopDeclaration }} style={{ flexDirection: "row", alignItems: "flex-start", gap: 10, marginTop: 12 }} onPress={() => setShopDeclaration((current) => !current)}><Ionicons name={shopDeclaration ? "checkbox" : "square-outline"} size={23} color={palette.blue} /><Text style={[styles.workspaceCardText, { flex: 1 }]}>{t("I confirm these details and photos are mine to submit, and understand UniMate must review identity, sourcing and safety before approval. *", "我确认有权提交这些资料和照片，并了解优你伴批准前须审核身份、货源与安全。*", "我確認有權提交這些資料及相片，並了解優你伴批准前須審核身分、貨源與安全。*")}</Text></Pressable>
+        {!!shopApplicationError && <Text style={styles.workspaceError}>{shopApplicationError}</Text>}
+        <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={submitShopApplication}><Text style={styles.primaryButtonText}>{t("Submit for team review", "提交团队审核", "提交團隊審核")}</Text></Pressable>
+      </>}
+    </ScrollView></Sheet>
+  </SafeAreaView>;
+}
+
+type OrganisationEventStatus = "draft" | "pending" | "live" | "past" | "cancelled";
+type OrganisationEvent = { id: string; title: string; date: string; dateKey?: string; venue: string; capacity: number; price: number; voucher: string; status: OrganisationEventStatus; ticketsSold: number; signUps?: number; refundStatus?: "review" | "processing" | "completed"; ticketReleaseDate?: string; ticketReleaseTime?: string; category?: string; coverUri?: string | null; startTime?: string; endTime?: string; lastEntryTime?: string; summary?: string; isSample?: boolean };
+type OrganisationOffer = { id: string; code: string; discount: number; target: string; area?: "events" | "restaurant"; occasion?: string; startDate?: string; endDate?: string };
+type OrganisationReview = { id: string; student: string; rating: number; text: string; reply: string };
+
+function OrganisationEventCard({ event, language, onOpen }: { event: OrganisationEvent; language: Language; onOpen: () => void }) {
+  const t = (en: string, simplified: string, traditional = simplified) => tr(language, en, simplified, traditional);
+  const isFree = event.price === 0;
+  const bookings = isFree ? event.signUps || 0 : event.ticketsSold;
+  const statusLabel = event.status === "draft" ? t("Draft · not submitted", "草稿 · 尚未提交", "草稿 · 尚未提交") : event.status === "pending" ? t("Awaiting UniMate approval", "等待优你伴审核", "等待優你伴審核") : event.status === "live" ? t("Live · listed to students", "已上线 · 学生可见", "已上線 · 學生可見") : event.status === "cancelled" ? event.refundStatus === "completed" ? t("Cancelled · refund review complete", "已取消 · 退款审核完成", "已取消 · 退款審核完成") : event.refundStatus === "processing" ? t("Cancelled · refunds in progress", "已取消 · 退款处理中", "已取消 · 退款處理中") : t("Cancelled · refund review needed", "已取消 · 待退款审核", "已取消 · 待退款審核") : t("Past event · booking closed", "往期活动 · 已停止报名", "過往活動 · 已停止報名");
+  const releaseTitle = event.status === "draft" ? t("Draft · not published", "草稿 · 尚未发布", "草稿 · 尚未發佈") : event.status === "pending" ? t("Awaiting UniMate review", "等待优你伴审核", "等待優你伴審核") : event.status === "live" ? isFree ? t("Free sign-up open", "免费报名开放", "免費報名開放") : t("Tickets on sale", "门票售卖中", "門票發售中") : event.status === "cancelled" ? t("Cancelled · bookings stopped", "已取消 · 停止报名", "已取消 · 停止報名") : t("Bookings closed", "报名已结束", "報名已結束");
+  const releaseText = event.status === "draft" ? t("Save a release plan, then request review before students can book.", "保存开放计划，再申请审核；审核前学生无法报名。", "儲存開放計劃，再申請審核；審核前學生無法報名。") : event.status === "pending" ? t("Student bookings wait for approval and the planned release time.", "学生报名须待审核通过及到达预定开放时间。", "學生報名須待審核通過及到達預定開放時間。") : event.status === "live" ? isFree ? t("Students can sign up for a free place on the events forum. Counts are sample data in this preview.", "学生可在活动论坛免费报名。此预览中的人数为示例数据。", "學生可在活動論壇免費報名。此預覽中的人數為示例資料。") : t("Students can buy tickets on the events forum. Sales are sample data in this preview.", "学生可在活动论坛购买门票。此预览中的销量为示例数据。", "學生可在活動論壇購買門票。此預覽中的銷量為示例資料。") : event.status === "cancelled" ? t("Ticket holders need a refund review. No refunds are processed in this demo.", "持票者需要退款审核。本演示不会实际处理退款。", "持票者需要退款審核。本示範不會實際處理退款。") : t("Bookings and entry have ended. View the settlement in Finance.", "报名及入场已结束。可在财务页面查看结算。", "報名及入場已結束。可在財務頁面查看結算。");
+  const facts = [
+    { icon: "calendar-outline", label: t("Date", "日期", "日期"), value: event.date },
+    { icon: "time-outline", label: t("Time", "时间", "時間"), value: event.startTime && event.endTime ? `${event.startTime}–${event.endTime}` : t("To be confirmed", "待确认", "待確認") },
+    { icon: "enter-outline", label: t("Last entry", "最晚入场", "最晚入場"), value: event.lastEntryTime || t("To be confirmed", "待确认", "待確認") },
+    { icon: "location-outline", label: t("Location", "地点", "地點"), value: event.venue },
+  ];
+  return <Pressable accessibilityRole="button" accessibilityLabel={`${t("Manage event", "管理活动", "管理活動")}: ${event.title}`} style={styles.eventCard} onPress={onOpen}>
+    {event.coverUri ? <Image source={{ uri: event.coverUri }} style={styles.eventImage} resizeMode="cover" /> : <View style={[styles.eventImage, { backgroundColor: "#EAF4FF", alignItems: "center", justifyContent: "center", gap: 5 }]}><Ionicons name="image-outline" size={28} color={palette.blue} /><Text style={styles.workspaceHint}>{t("Add an event cover", "添加活动封面", "加入活動封面")}</Text></View>}
+    <View style={[styles.eventTag, { backgroundColor: event.status === "live" ? "#16824A" : event.status === "pending" ? "#A86A10" : event.status === "cancelled" ? "#C83942" : event.status === "past" ? "#52627B" : "#6D3EEB" }]}><Text style={styles.eventTagText}>{statusLabel} · {event.isSample ? t("sample", "示例", "示例") : t("preview", "预览", "預覽")}</Text></View>
+    <View style={styles.eventBody}>
+      <View style={styles.eventTitleLine}><Text style={styles.eventTitle}>{event.title}</Text><Text style={styles.categoryBadge}>{categoryLabel(language, event.category || "Other")}</Text></View>
+      <View style={styles.eventFacts}>{facts.map((fact) => <View key={fact.label} style={styles.eventFact}><Ionicons name={fact.icon as any} size={15} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.eventFactLabel}>{fact.label}</Text><Text style={styles.eventFactValue} numberOfLines={1}>{fact.value}</Text></View></View>)}</View>
+      {!!event.summary && <Text style={[styles.workspaceCardText, { marginTop: 5 }]} numberOfLines={2}>{event.summary}</Text>}
+      <View style={styles.eventReleaseCard}><Ionicons name={event.status === "live" ? "ticket-outline" : "time-outline"} size={17} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.eventReleaseTitle}>{releaseTitle}</Text><Text style={styles.eventReleaseText}>{releaseText}</Text></View></View>
+      <View style={styles.eventAttendance}><View style={styles.eventAttendanceItem}><Ionicons name="people-outline" size={18} color={palette.blue} /><View><Text style={styles.eventAttendanceValue}>{bookings}</Text><Text style={styles.eventAttendanceLabel}>{event.status === "cancelled" ? t("Tickets affected · sample", "受影响门票 · 示例", "受影響門票 · 示例") : isFree ? t("Free sign-ups · preview", "免费报名 · 预览", "免費報名 · 預覽") : t("Tickets sold · preview", "已售门票 · 预览", "已售門票 · 預覽")}</Text></View></View><View style={styles.eventAttendanceDivider} /><View style={styles.eventAttendanceItem}><Ionicons name="ticket-outline" size={18} color={palette.blue} /><View><Text style={styles.eventAttendanceValue}>{event.status === "draft" || event.status === "pending" || event.status === "cancelled" ? event.capacity : Math.max(0, event.capacity - bookings)}</Text><Text style={styles.eventAttendanceLabel}>{event.status === "draft" || event.status === "pending" ? t("Planned capacity", "计划名额", "計劃名額") : event.status === "cancelled" ? t("Event capacity", "活动人数上限", "活動人數上限") : event.status === "past" ? t("Unbooked spots", "未报名名额", "未報名名額") : t("Spots left", "剩余名额", "剩餘名額")}</Text></View></View></View>
+      <View style={styles.eventFooter}><Text style={styles.price}>{isFree ? t("Free", "免费", "免費") : `£${event.price.toFixed(2)}`}</Text><View style={styles.viewEventHint}><Text style={styles.viewEventHintText}>{t("Manage event", "管理活动", "管理活動")}</Text><Ionicons name="chevron-forward" size={14} color={palette.blue} /></View></View>
+    </View>
+  </Pressable>;
+}
+
+function OrganisationWorkspace({ kind, language, onLanguage, darkMode, onToggleDarkMode, onLogout, submittedPlaceReviews, placeReviewReplies, onReplyToPlaceReview, restaurantProfile, onSaveRestaurantProfile }: { kind: OrganisationType; language: Language; onLanguage: (language: Language) => void; darkMode: boolean; onToggleDarkMode: () => void; onLogout: () => void; submittedPlaceReviews: PlaceReview[]; placeReviewReplies: Record<string, string>; onReplyToPlaceReview: (id: string, reply: string) => void; restaurantProfile: RestaurantPublicProfile; onSaveRestaurantProfile: (profile: RestaurantPublicProfile) => void }) {
+  const [tab, setTab] = useState<"overview" | "events" | "finance" | "menu" | "offers" | "messages" | "profile">("overview");
+  const [demoRequestStatus, setDemoRequestStatus] = useState<DemoRequestStatus>("pending");
+  const [combinedView, setCombinedView] = useState<"events" | "restaurant">("events");
+  const [profileReviewsOpen, setProfileReviewsOpen] = useState(false);
+  const [eventsList, setEventsList] = useState<OrganisationEvent[]>([
+    { id: "EV-SAMPLE-FREE", title: "Campus Community Picnic", date: "10 October 2026", dateKey: "2026-10-10", venue: "Regent's Park, London", capacity: 200, price: 0, voucher: "", status: "live", ticketsSold: 0, signUps: 74, ticketReleaseDate: "2026-09-22", ticketReleaseTime: "10:00", category: "Culture", coverUri: events[1].image, startTime: "14:00", endTime: "17:00", lastEntryTime: "15:00", summary: "A free sample event listed for students to sign up ahead of the event date.", isSample: true },
+    { id: "EV-SAMPLE-503", title: "Autumn Thames Social", date: "12 October 2026", dateKey: "2026-10-12", venue: "London Eye Pier", capacity: 180, price: 25, voucher: "", status: "live", ticketsSold: 68, ticketReleaseDate: "2026-09-22", ticketReleaseTime: "10:00", category: "Trips", coverUri: events[0].image, startTime: "14:00", endTime: "17:00", lastEntryTime: "13:45", summary: "A sample posted event showing how ticket sales and availability appear to organisers.", isSample: true },
+    { id: "EV-SAMPLE-502", title: "Welcome Dinner", date: "15 October 2026", dateKey: "2026-10-15", venue: "Student Table, London", capacity: 120, price: 12, voucher: "", status: "pending", ticketsSold: 0, ticketReleaseDate: "2026-10-01", ticketReleaseTime: "10:00", category: "Parties", coverUri: events[2].image, startTime: "18:00", endTime: "21:00", lastEntryTime: "19:00", summary: "A sample event awaiting venue, safety and ticket-release review.", isSample: true },
+    { id: "EV-501", title: "Student Night at the Venue", date: "30 September 2026", dateKey: "2026-09-30", venue: "London venue", capacity: 300, price: 18, voucher: "STUDENT15", status: "draft", ticketsSold: 0, ticketReleaseDate: "2026-09-25", ticketReleaseTime: "10:00", category: "Parties", coverUri: events[2].image, startTime: "18:00", endTime: "21:00", lastEntryTime: "19:00", summary: "An official student night with music, food and space to meet new friends.", isSample: true },
+    { id: "EV-SAMPLE-500", title: "Summer Student Social", date: "20 June 2026", dateKey: "2026-06-20", venue: "London venue", capacity: 180, price: 15, voucher: "", status: "past", ticketsSold: 126, ticketReleaseDate: "2026-05-20", ticketReleaseTime: "10:00", category: "Parties", coverUri: events[2].image, startTime: "18:00", endTime: "21:00", lastEntryTime: "19:00", summary: "An illustrative past event with a sample ticket-sales record.", isSample: true },
+    { id: "EV-SAMPLE-499", title: "Campus Film Night", date: "5 October 2026", dateKey: "2026-10-05", venue: "Regent's Park", capacity: 150, price: 8, voucher: "", status: "cancelled", ticketsSold: 42, refundStatus: "processing", ticketReleaseDate: "2026-09-20", ticketReleaseTime: "18:00", category: "Culture", coverUri: events[1].image, startTime: "19:30", endTime: "22:30", lastEntryTime: "20:00", summary: "A sample cancelled event illustrating ticket-holder refund review.", isSample: true },
+  ]);
+  const [eventFilter, setEventFilter] = useState<"all" | OrganisationEventStatus>("all");
+  const [financeView, setFinanceView] = useState<"overview" | "invoices">("overview");
+  const [organiserInvoiceSearch, setOrganiserInvoiceSearch] = useState("");
+  const [invoiceEventId, setInvoiceEventId] = useState<string | null>(null);
+  const [billingMethod, setBillingMethod] = useState<"card" | "bank" | null>(null);
+  const [payoutMethod, setPayoutMethod] = useState<"bank" | "provider" | null>(null);
+  const [selectedFinanceDocument, setSelectedFinanceDocument] = useState<"invoice" | "settlement" | null>(null);
+  const [offers, setOffers] = useState<OrganisationOffer[]>([{ id: "OF-1", code: kind === "events" ? "STUDENT15" : "LUNCH10", discount: kind === "events" ? 15 : 10, target: kind === "events" ? "Event tickets" : "Restaurant menu", area: kind === "events" ? "events" : "restaurant" }]);
+  const [reviews, setReviews] = useState<OrganisationReview[]>([
+    { id: "RV-1", student: "Sophie C.", rating: 5, text: "Friendly team and a great student experience.", reply: "" },
+    { id: "RV-2", student: "Emma C.", rating: 4, text: "Good value and easy to book.", reply: "" },
+  ]);
+  const [showEventForm, setShowEventForm] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<OrganisationEvent | null>(null);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  const [eventTitle, setEventTitle] = useState("");
+  const [eventDate, setEventDate] = useState(() => bookingDateFromToday(7));
+  const [eventVenue, setEventVenue] = useState("");
+  const [eventCapacity, setEventCapacity] = useState("300");
+  const [eventPrice, setEventPrice] = useState("");
+  const [eventVoucher, setEventVoucher] = useState("");
+  const [eventCategory, setEventCategory] = useState("Parties");
+  const [eventCover, setEventCover] = useState<string | null>(null);
+  const [eventStartTime, setEventStartTime] = useState("18:00");
+  const [eventEndTime, setEventEndTime] = useState("21:00");
+  const [eventLastEntry, setEventLastEntry] = useState("19:00");
+  const [eventSummary, setEventSummary] = useState("");
+  const [eventReleaseDate, setEventReleaseDate] = useState(() => bookingDateFromToday(2));
+  const [eventReleaseTime, setEventReleaseTime] = useState("10:00");
+  const [showOfferForm, setShowOfferForm] = useState(false);
+  const [offerCode, setOfferCode] = useState("");
+  const [offerDiscount, setOfferDiscount] = useState("");
+  const [offerTarget, setOfferTarget] = useState("");
+  const [offerArea, setOfferArea] = useState<"events" | "restaurant">("events");
+  const [offerScope, setOfferScope] = useState<"menu" | "items">("menu");
+  const [offerItems, setOfferItems] = useState<string[]>([]);
+  const [offerOccasion, setOfferOccasion] = useState("");
+  const [offerStartDate, setOfferStartDate] = useState("");
+  const [offerEndDate, setOfferEndDate] = useState("");
+  const [menuItems, setMenuItems] = useState(kind === "restaurant" ? restaurantProfile.menuItems : ["Lunch bowl", "Veggie wrap", "Iced tea"]);
+  const [newMenuItem, setNewMenuItem] = useState("");
+  const [coverUri, setCoverUri] = useState<string | null>(kind === "restaurant" ? restaurantProfile.coverUri : null);
+  const [menuFile, setMenuFile] = useState<{ name: string; uri: string; mimeType?: string } | null>(kind === "restaurant" ? restaurantProfile.menuFile : null);
+  useEffect(() => {
+    if (kind === "restaurant") onSaveRestaurantProfile({ ...restaurantProfile, menuItems, menuFile });
+  }, [kind, menuItems, menuFile]);
+  const [publicPageOpen, setPublicPageOpen] = useState(false);
+  const [editPublicPageOpen, setEditPublicPageOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activityNotifications, setActivityNotifications] = useState(true);
+  const [eventIntroduction, setEventIntroduction] = useState("");
+  const [eventProfileUri, setEventProfileUri] = useState<string | null>(null);
+  const [eventGalleryUris, setEventGalleryUris] = useState<string[]>([]);
+  const [eventInstagram, setEventInstagram] = useState("");
+  const [eventFacebook, setEventFacebook] = useState("");
+  const [eventTikTok, setEventTikTok] = useState("");
+  const [restaurantIntroduction, setRestaurantIntroduction] = useState(kind === "restaurant" ? restaurantProfile.introduction : "");
+  const managedPlaceName = kind === "restaurant" ? "Haidilao Hot Pot" : "Student Table";
+  const [eventAccountName, setEventAccountName] = useState(kind === "events" ? "UniMate Events" : managedPlaceName);
+  const [restaurantAccountName, setRestaurantAccountName] = useState(kind === "restaurant" ? restaurantProfile.name : managedPlaceName);
+  const [restaurantCuisine, setRestaurantCuisine] = useState(kind === "restaurant" ? restaurantProfile.cuisine : "Student-friendly dining");
+  const [restaurantAddress, setRestaurantAddress] = useState(kind === "restaurant" ? restaurantProfile.address : "London");
+  const [restaurantHours, setRestaurantHours] = useState(kind === "restaurant" ? restaurantProfile.hours : "");
+  const [restaurantWebsite, setRestaurantWebsite] = useState(kind === "restaurant" ? restaurantProfile.website : "");
+  const [restaurantPhone, setRestaurantPhone] = useState(kind === "restaurant" ? restaurantProfile.phone : "");
+  const [restaurantPriceLevel, setRestaurantPriceLevel] = useState(kind === "restaurant" ? restaurantProfile.priceLevel : "££");
+  const [organisationArea, setOrganisationArea] = useState("London");
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [reviewFilter, setReviewFilter] = useState<"all" | "5" | "4" | "3-below" | "unanswered" | "answered">("all");
+  const [reviewSearch, setReviewSearch] = useState("");
+  const [selectedMessage, setSelectedMessage] = useState<string | null>(null);
+  const [messageDraft, setMessageDraft] = useState("");
+  const [localMessages, setLocalMessages] = useState<{ to: string; text: string; attachment?: ChatAttachment }[]>([]);
+  const [formError, setFormError] = useState("");
+  const t = (en: string, simplified: string, traditional = simplified) => tr(language, en, simplified, traditional);
+  const isEvents = kind === "events" || kind === "both" && combinedView === "events";
+  const isRestaurant = kind === "restaurant" || kind === "both" && combinedView === "restaurant";
+  const accountName = isRestaurant ? restaurantAccountName : eventAccountName;
+  const setAccountName = (value: string) => isRestaurant ? setRestaurantAccountName(value) : setEventAccountName(value);
+  const profileIntroduction = isRestaurant ? restaurantIntroduction : eventIntroduction;
+  const setProfileIntroduction = (value: string) => isRestaurant ? setRestaurantIntroduction(value) : setEventIntroduction(value);
+  const accountInitials = accountName.split(/\s+/).filter(Boolean).map((part) => part[0]).join("").slice(0, 2).toUpperCase() || "U";
+  const sampleEventRatings = [
+    { id: "ER-SAMPLE-1", student: "Emma C.", rating: 5, event: "Summer Student Social", text: "A welcoming evening and a well-organised venue." },
+    { id: "ER-SAMPLE-2", student: "Daniel P.", rating: 4, event: "Summer Student Social", text: "Easy entry and a great chance to meet people." },
+  ];
+  const publicPastPhotos = [...eventsList.filter((event) => event.status === "past" && !!event.coverUri).map((event) => ({ uri: event.coverUri!, title: event.title, sample: !!event.isSample })), ...eventGalleryUris.map((uri, index) => ({ uri, title: t("Past event photo", "往期活动照片", "過往活動相片") + ` ${index + 1}`, sample: false }))];
+  const validSocialLink = (value: string, domains: string[]) => { try { const parsed = new URL(value.trim()); return parsed.protocol === "https:" && domains.some((domain) => parsed.hostname === domain || parsed.hostname.endsWith(`.${domain}`)); } catch { return false; } };
+  const publicSocialLinks = [
+    { name: "Instagram", value: eventInstagram.trim(), icon: "logo-instagram", domains: ["instagram.com"] },
+    { name: "Facebook", value: eventFacebook.trim(), icon: "logo-facebook", domains: ["facebook.com", "fb.com"] },
+    { name: "TikTok", value: eventTikTok.trim(), icon: "musical-notes-outline", domains: ["tiktok.com"] },
+  ].filter((item) => item.value && validSocialLink(item.value, item.domains));
+  const restaurantCoverSource = coverUri || (kind === "restaurant" ? restaurants[0].image : "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=900");
+  const customerPlaceReviews: OrganisationReview[] = submittedPlaceReviews.filter((review) => review.placeName === managedPlaceName && !review.friendsOnly).map((review) => ({ id: review.id, student: review.author, rating: review.average, text: review.text || t("Rated across five categories", "已按五项标准评分", "已按五項標準評分"), reply: placeReviewReplies[review.id] || "" }));
+  const allReviews = [...reviews, ...customerPlaceReviews];
+  const visibleReviews = allReviews.filter((review) => (reviewFilter === "all" || reviewFilter === "5" && Math.round(review.rating) === 5 || reviewFilter === "4" && Math.round(review.rating) === 4 || reviewFilter === "3-below" && Math.round(review.rating) <= 3 || reviewFilter === "unanswered" && !review.reply || reviewFilter === "answered" && !!review.reply) && `${review.student} ${review.text}`.toLowerCase().includes(reviewSearch.trim().toLowerCase()));
+  const baselinePlace = kind === "restaurant" ? restaurants[0] : null;
+  const publicReviewCount = baselinePlace ? Number(baselinePlace.reviews) + customerPlaceReviews.length : allReviews.length;
+  const averageReviewRating = baselinePlace ? ((Number(baselinePlace.rating) * Number(baselinePlace.reviews) + customerPlaceReviews.reduce((total, review) => total + review.rating, 0)) / publicReviewCount).toFixed(2).replace(/0$/, "") : allReviews.length ? (allReviews.reduce((total, review) => total + review.rating, 0) / allReviews.length).toFixed(1) : "0.0";
+  const visibleOffers = offers.filter((offer) => offer.area === (isEvents ? "events" : "restaurant"));
+  const liveEvents = eventsList.filter((event) => event.status === "live");
+  const shownEvents = eventsList.filter((event) => eventFilter === "all" || event.status === eventFilter);
+  const ticketsSold = eventsList.filter((event) => event.status !== "cancelled").reduce((total, event) => total + event.ticketsSold, 0);
+  const sampleGross = eventsList.filter((event) => event.status !== "cancelled").reduce((total, event) => total + event.ticketsSold * event.price, 0);
+  const pastSampleEvent = eventsList.find((event) => event.status === "past" && event.isSample);
+  const cancelledEvents = eventsList.filter((event) => event.status === "cancelled");
+  const invoiceEvent = eventsList.find((event) => event.id === invoiceEventId);
+  const invoiceCandidateEvents = eventsList.filter((event) => (event.status === "live" || event.status === "pending") && `${event.title} ${event.id}`.toLowerCase().includes(organiserInvoiceSearch.trim().toLowerCase()));
+  const offerForEvents = isEvents && (!isRestaurant || offerArea === "events");
+  const accountDescription = isEvents ? t("Event organiser & venue account", "活动主办方与场馆账号", "活動主辦方與場館帳戶") : t("Restaurant owner account", "餐厅商家账号", "餐廳商戶帳戶");
+  const tabs = [
+    { id: "overview" as const, label: t("Home", "首页", "首頁"), icon: "home-outline" },
+    ...(isEvents ? [{ id: "events" as const, label: t("Events", "活动", "活動"), icon: "calendar-outline" }] : []),
+    ...(isRestaurant ? [{ id: "menu" as const, label: t("Menu", "菜单", "餐單"), icon: "restaurant-outline" }] : []),
+    ...(isEvents ? [{ id: "finance" as const, label: t("Finance", "财务", "財務"), icon: "wallet-outline" }] : [{ id: "offers" as const, label: t("Offers", "优惠", "優惠"), icon: "pricetag-outline" }]),
+    { id: "messages" as const, label: t("Messages", "消息", "訊息"), icon: "chatbubbles-outline", badge: demoRequestStatus === "pending" ? 1 : 0 },
+    { id: "profile" as const, label: t("Profile", "资料", "資料"), icon: "person-outline" },
+  ];
+  const editEventDraft = (event: OrganisationEvent) => {
+    setEditingEventId(event.id);
+    setEventTitle(event.title);
+    setEventDate(event.dateKey || dateKey(new Date(event.date)));
+    setEventVenue(event.venue);
+    setEventCapacity(String(event.capacity));
+    setEventPrice(String(event.price));
+    setEventVoucher(event.voucher);
+    setEventCategory(event.category || "Other");
+    setEventCover(event.coverUri || null);
+    setEventStartTime(event.startTime || "18:00");
+    setEventEndTime(event.endTime || "21:00");
+    setEventLastEntry(event.lastEntryTime || "19:00");
+    setEventSummary(event.summary || "");
+    setEventReleaseDate(event.ticketReleaseDate || bookingDateFromToday(2));
+    setEventReleaseTime(event.ticketReleaseTime || "10:00");
+    setFormError("");
+    setSelectedEvent(null);
+    setShowEventForm(true);
+  };
+  const addEvent = () => {
+    const capacity = Number(eventCapacity);
+    const price = Number(eventPrice);
+    if (!eventTitle.trim() || !eventDate.trim() || !eventVenue.trim() || !eventSummary.trim() || !eventPrice.trim() || !Number.isInteger(capacity) || capacity < 20 || capacity > 350 || !Number.isFinite(price) || price < 0 || eventEndTime <= eventStartTime || eventLastEntry < eventStartTime || eventLastEntry > eventEndTime) { setFormError(t("Add a name, date, address, summary, valid times, 20–350 spots and a price (enter 0 for free sign-up).", "请填写名称、日期、地址、简介、有效时间、20–350 人容量及价格（免费报名填 0）。", "請填寫名稱、日期、地址、簡介、有效時間、20–350 人容量及價格（免費報名填 0）。")); return; }
+    if (!eventReleaseDate || eventReleaseDate > eventDate || eventReleaseDate === eventDate && eventReleaseTime >= eventStartTime) { setFormError(t("Choose a ticket-release date and time before the event starts.", "请选择活动开始前的门票开售日期和时间。", "請選擇活動開始前的門票開售日期及時間。")); return; }
+    const previous = eventsList.find((item) => item.id === editingEventId);
+    const savedEvent: OrganisationEvent = { id: editingEventId || `EV-${Date.now()}`, title: eventTitle.trim(), date: formatBookingDate(eventDate, language), dateKey: eventDate, venue: eventVenue.trim(), capacity, price, voucher: eventVoucher.trim().toUpperCase(), status: previous?.status || "draft", ticketsSold: previous?.ticketsSold || 0, signUps: previous?.signUps || 0, ticketReleaseDate: eventReleaseDate, ticketReleaseTime: eventReleaseTime, category: eventCategory, coverUri: eventCover, startTime: eventStartTime, endTime: eventEndTime, lastEntryTime: eventLastEntry, summary: eventSummary.trim(), isSample: previous?.isSample };
+    setEventsList((current) => editingEventId ? current.map((item) => item.id === editingEventId ? savedEvent : item) : [savedEvent, ...current]);
+    setEventTitle(""); setEventDate(bookingDateFromToday(7)); setEventVenue(""); setEventCapacity("300"); setEventPrice(""); setEventVoucher(""); setEventCover(null); setEventSummary(""); setEventReleaseDate(bookingDateFromToday(2)); setEventReleaseTime("10:00"); setEditingEventId(null); setFormError(""); setShowEventForm(false);
+  };
+  const addOffer = () => {
+    const discount = Number(offerDiscount);
+    const target = offerForEvents ? offerTarget.trim() : offerScope === "items" ? offerItems.join(", ") : t("Entire menu", "全菜单", "全餐單");
+    if (!/^[A-Z0-9]{4,20}$/.test(offerCode.trim().toUpperCase()) || !Number.isInteger(discount) || discount < 1 || discount > 90 || !target || (!!offerStartDate !== !!offerEndDate)) { setFormError(t("Enter a 4–20 character code, a 1–90% discount, eligible items and both dates if scheduling an offer.", "请输入 4–20 位优惠码、1–90% 折扣、适用商品；如设置日期，请填写开始和结束日期。", "請輸入 4–20 位優惠碼、1–90% 折扣、適用商品；如設定日期，請填寫開始及結束日期。")); return; }
+    setOffers((current) => [{ id: `OF-${Date.now()}`, code: offerCode.trim().toUpperCase(), discount, target, area: offerForEvents ? "events" : "restaurant", occasion: offerOccasion.trim(), startDate: offerStartDate.trim(), endDate: offerEndDate.trim() }, ...current]);
+    setOfferCode(""); setOfferDiscount(""); setOfferTarget(""); setOfferItems([]); setOfferScope("menu"); setOfferOccasion(""); setOfferStartDate(""); setOfferEndDate(""); setFormError(""); setShowOfferForm(false);
+  };
+  const chooseCover = async () => { const uris = await selectPhotoUris(language, "library", { multiple: false, limit: 1, quality: 0.8 }); if (uris[0]) setCoverUri(uris[0]); };
+  const chooseEventProfilePhoto = async () => { const uris = await selectPhotoUris(language, "library", { allowsEditing: true, aspect: [1, 1], quality: 0.8 }); if (uris[0]) setEventProfileUri(uris[0]); };
+  const addEventGalleryPhotos = async () => { const remaining = 6 - eventGalleryUris.length; if (remaining <= 0) return; const uris = await selectPhotoUris(language, "library", { multiple: true, limit: remaining, quality: 0.8 }); if (uris.length) setEventGalleryUris((current) => [...new Set([...current, ...uris])].slice(0, 6)); };
+  const chooseMenu = async () => { const result = await DocumentPicker.getDocumentAsync({ type: ["application/pdf", "image/*"], multiple: false, copyToCacheDirectory: true }); if (!result.canceled && result.assets[0]) { const file = result.assets[0]; setMenuFile({ name: file.name, uri: file.uri, mimeType: file.mimeType }); } };
+  const saveReply = (id: string) => { const reply = replyDrafts[id]?.trim(); if (reply) { if (id.startsWith("PR-")) onReplyToPlaceReview(id, reply); else setReviews((current) => current.map((review) => review.id === id ? { ...review, reply } : review)); setReplyDrafts((current) => ({ ...current, [id]: "" })); } };
+  const sendMessage = (attachment?: ChatAttachment) => { if (selectedMessage && (messageDraft.trim() || attachment)) { setLocalMessages((current) => [...current, { to: selectedMessage, text: messageDraft.trim(), attachment }]); setMessageDraft(""); } };
+  return <SafeAreaView style={styles.safe}>
+    <AuthPreferences language={language} onLanguage={onLanguage} darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} />
+    <View style={styles.workspaceHeading}><View style={{ flex: 1 }}><Text style={styles.workspaceEyebrow}>{t("OFFICIAL ORGANISATION", "官方机构", "官方機構")}</Text><Text style={styles.workspaceTitle}>{isEvents ? t("Event organiser", "活动主办方", "活動主辦方") : t("Restaurant owner", "餐厅商家", "餐廳商戶")}</Text><Text style={styles.workspaceSubtitle}>{accountName}</Text></View><WorkspaceHeadingBadge kind="organisation" language={language} /></View>
+    {kind === "both" && <View style={{ flexDirection: "row", gap: 8, paddingHorizontal: 18, paddingBottom: 10 }}><Pressable accessibilityRole="button" accessibilityState={{ selected: combinedView === "events" }} style={[styles.marketCategory, { flex: 1, justifyContent: "center" }, combinedView === "events" && styles.marketCategoryActive]} onPress={() => { setCombinedView("events"); setTab("overview"); setProfileReviewsOpen(false); }}><Ionicons name="calendar-outline" size={16} color={combinedView === "events" ? "#FFFFFF" : palette.blue} /><Text style={[styles.marketCategoryText, combinedView === "events" && styles.marketCategoryTextActive]}>{t("Events account", "活动账号", "活動帳戶")}</Text></Pressable><Pressable accessibilityRole="button" accessibilityState={{ selected: combinedView === "restaurant" }} style={[styles.marketCategory, { flex: 1, justifyContent: "center" }, combinedView === "restaurant" && styles.marketCategoryActive]} onPress={() => { setCombinedView("restaurant"); setTab("overview"); setProfileReviewsOpen(false); }}><Ionicons name="restaurant-outline" size={16} color={combinedView === "restaurant" ? "#FFFFFF" : palette.blue} /><Text style={[styles.marketCategoryText, combinedView === "restaurant" && styles.marketCategoryTextActive]}>{t("Restaurant account", "餐厅账号", "餐廳帳戶")}</Text></Pressable></View>}
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.workspaceBody} keyboardShouldPersistTaps="handled">
+      {tab === "overview" && <>
+        <Text style={styles.workspaceSectionTitle}>{isEvents ? t("Event dashboard", "活动概览", "活動概覽") : t("Restaurant dashboard", "餐厅概览", "餐廳概覽")}</Text>
+        <Text style={styles.workspaceHint}>{isEvents ? t("See events listed for students, including paid tickets and free sign-ups, plus those awaiting approval.", "查看面向学生开放的付费购票及免费报名活动，以及等待审核的活动。", "查看面向學生開放的付費購票及免費報名活動，以及等待審核的活動。") : t("A quick view of your student-facing page and the work that needs attention.", "一览面向学生的主页及待办事项。", "一覽面向學生的主頁及待辦事項。")}</Text>
+        <View style={[styles.workspaceMetricRow, { marginTop: 14 }]}>{isEvents ? <><WorkspaceMetric value={liveEvents.length} label={t("Live events", "已上线活动", "已上線活動")} /><WorkspaceMetric value={eventsList.filter((event) => event.status === "pending").length} label={t("Awaiting approval", "等待审核", "等待審核")} /><WorkspaceMetric value={eventsList.filter((event) => event.status === "draft").length} label={t("Drafts", "草稿", "草稿")} /></> : <><WorkspaceMetric value={`★ ${averageReviewRating}`} label={t("Student rating", "学生评分", "學生評分")} /><WorkspaceMetric value={allReviews.filter((review) => !review.reply).length} label={t("Needs reply", "待回复", "待回覆")} /><WorkspaceMetric value={visibleOffers.length} label={t("Offers", "优惠", "優惠")} /></>}</View>
+        {isEvents ? <><Pressable accessibilityRole="button" style={[styles.workspaceCard, { gap: 7 }]} onPress={() => setTab("events")}><Text style={styles.workspaceCardTitle}>{t("Manage events", "管理活动", "管理活動")}</Text><Text style={styles.workspaceCardText}>{eventsList.length} {t("events · status and history", "场活动 · 状态与历史", "場活動 · 狀態及記錄")}</Text><Text style={styles.workspaceCardLink}>{t("Open events", "查看活动", "查看活動")}  ›</Text></Pressable><Pressable accessibilityRole="button" style={[styles.workspaceCard, { gap: 7 }]} onPress={() => setTab("finance")}><Text style={styles.workspaceCardTitle}>{t("Tickets & finance", "门票与财务", "門票及財務")}</Text><Text style={styles.workspaceCardText}>{t("Release plans, payment preferences and invoice records", "开售计划、付款偏好及发票记录", "開售計劃、付款偏好及發票記錄")}</Text><Text style={styles.workspaceCardLink}>{t("Open finance", "查看财务", "查看財務")}  ›</Text></Pressable>{!!cancelledEvents.length && <Pressable accessibilityRole="button" style={[styles.workspaceCard, { gap: 6, borderColor: "#F2C8CC" }]} onPress={() => { setEventFilter("cancelled"); setTab("events"); }}><Text style={styles.workspaceCardTitle}>{t("Cancelled events & refunds", "已取消活动与退款", "已取消活動及退款")}</Text><Text style={styles.workspaceCardText}>{cancelledEvents.length} {t("sample event needs refund tracking", "场示例活动需要跟进退款", "場示例活動需要跟進退款")}</Text><Text style={styles.workspaceCardLink}>{t("View cancelled events", "查看已取消活动", "查看已取消活動")}  ›</Text></Pressable>}</> : <>
+          <View style={[styles.workspaceCard, { gap: 8, padding: 16 }]}><Text style={styles.workspaceCardTitle}>{t("Student reviews to answer", "待回复的学生评价", "待回覆的學生評價")}</Text>{allReviews.find((review) => !review.reply) ? <><Text style={styles.workspaceCardText}>{allReviews.find((review) => !review.reply)?.student} · ★ {allReviews.find((review) => !review.reply)?.rating.toFixed(1)}</Text><Text style={styles.workspaceCardText} numberOfLines={2}>{allReviews.find((review) => !review.reply)?.text}</Text></> : <Text style={styles.workspaceCardText}>{t("All visible reviews have a response.", "所有可见评价均已回复。", "所有可見評價均已回覆。")}</Text>}<Pressable accessibilityRole="button" onPress={() => { setTab("profile"); setProfileReviewsOpen(true); setReviewFilter("unanswered"); }}><Text style={styles.workspaceCardLink}>{t("Reply in Profile", "前往资料回复", "前往個人資料回覆")}  ›</Text></Pressable></View>
+          <View style={[styles.workspaceCard, { gap: 8, padding: 16 }]}><Text style={styles.workspaceCardTitle}>{t("Menu & public page", "菜单与公开主页", "餐單及公開主頁")}</Text><Text style={styles.workspaceCardText}>{menuFile ? `${t("Menu uploaded", "菜单已上传", "餐單已上載")}: ${menuFile.name}` : t("No official menu uploaded yet", "尚未上传官方菜单", "尚未上載官方餐單")} · {menuItems.length} {t("highlights", "道精选菜品", "款精選菜式")}</Text><Text style={styles.workspaceCardText}>{restaurantHours.trim() ? `${t("Hours", "营业时间", "營業時間")}: ${restaurantHours}` : t("Opening hours need adding", "请补充营业时间", "請補充營業時間")}</Text><Pressable accessibilityRole="button" onPress={() => setTab("menu")}><Text style={styles.workspaceCardLink}>{t("Manage menu", "管理菜单", "管理餐單")}  ›</Text></Pressable></View>
+          <View style={[styles.workspaceCard, { gap: 8, padding: 16 }]}><Text style={styles.workspaceCardTitle}>{t("Student offer", "学生优惠", "學生優惠")}</Text>{visibleOffers[0] ? <Text style={styles.workspaceCardText}>{visibleOffers[0].discount}% {t("off", "折扣", "折扣")} · {visibleOffers[0].code} · {visibleOffers[0].target}</Text> : <Text style={styles.workspaceCardText}>{t("No restaurant offer in this preview", "此预览中尚无餐厅优惠", "此預覽中尚無餐廳優惠")}</Text>}<Pressable accessibilityRole="button" onPress={() => setTab("offers")}><Text style={styles.workspaceCardLink}>{t("Manage offers", "管理优惠", "管理優惠")}  ›</Text></Pressable></View>
+          <Pressable accessibilityRole="button" style={[styles.workspaceCard, { flexDirection: "row", alignItems: "center", gap: 12 }]} onPress={() => setTab("messages")}><Ionicons name="chatbubbles-outline" size={22} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{t("Messages & support", "消息与支持", "訊息及支援")}</Text><Text style={styles.workspaceCardText}>{t("Contact UniMate operations or tech support", "联系优你伴运营或技术支持", "聯絡優你伴營運或技術支援")}</Text></View><Ionicons name="chevron-forward" size={18} color={palette.blue} /></Pressable>
+        </>}
+        <View style={styles.workspaceNotice}><Ionicons name="information-circle-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("This official-account workspace is a local preview. Events, replies, vouchers and messages are not published or sent.", "此官方账号工作区仅供本地预览。活动、回复、优惠码及消息不会发布或发送。", "此官方帳戶工作區只供本機預覽。活動、回覆、優惠碼及訊息不會發佈或傳送。")}</Text></View>
+      </>}
+      {tab === "events" && isEvents && <>
+        <View style={styles.workspaceSectionHead}>
+          <Text style={styles.workspaceSectionTitle}>{t("Your events", "您的活动", "您的活動")}</Text>
+          <Pressable accessibilityRole="button" style={styles.workspaceSmallAction} onPress={() => { setFormError(""); setEditingEventId(null); setEventTitle(""); setEventDate(bookingDateFromToday(7)); setEventVenue(""); setEventCapacity("300"); setEventPrice(""); setEventVoucher(""); setEventCategory("Parties"); setEventCover(null); setEventStartTime("18:00"); setEventEndTime("21:00"); setEventLastEntry("19:00"); setEventSummary(""); setEventReleaseDate(bookingDateFromToday(2)); setEventReleaseTime("10:00"); setShowEventForm(true); }}><Ionicons name="add" size={16} color="#FFFFFF" /><Text style={styles.workspaceSmallActionText}>{t("Create event", "创建活动", "建立活動")}</Text></Pressable>
+        </View>
+        <Text style={styles.workspaceHint}>{t("Live means listed on the student events forum for paid tickets or free sign-up—not happening now. Sample records are labelled; real publication needs UniMate approval.", "“已上线”指活动在学生论坛开放购票或免费报名，并非正在举行。示例记录均有标注；正式发布须经优你伴审核。", "「已上線」指活動在學生論壇開放購票或免費報名，並非正在舉行。示例記錄均有標示；正式發佈須經優你伴審核。")}</Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7, marginVertical: 15 }}>
+          {(["all", "live", "pending", "draft", "past", "cancelled"] as const).map((status) => <Pressable key={status} accessibilityRole="button" accessibilityState={{ selected: eventFilter === status }} style={[styles.marketCategory, eventFilter === status && styles.marketCategoryActive]} onPress={() => setEventFilter(status)}><Text style={[styles.marketCategoryText, eventFilter === status && styles.marketCategoryTextActive]}>{status === "all" ? t("All events", "全部活动", "全部活動") : status === "live" ? t("Live events", "已上线活动", "已上線活動") : status === "pending" ? t("Awaiting approval", "等待审核", "等待審核") : status === "draft" ? t("Drafts", "草稿", "草稿") : status === "past" ? t("Past events", "往期活动", "過往活動") : t("Cancelled", "已取消", "已取消")} · {status === "all" ? eventsList.length : eventsList.filter((event) => event.status === status).length}</Text></Pressable>)}
+        </View>
+        {shownEvents.map((event) => <OrganisationEventCard key={event.id} event={event} language={language} onOpen={() => setSelectedEvent(event)} />)}
+        {!shownEvents.length && <View style={[styles.workspaceCard, { alignItems: "center", gap: 7, paddingVertical: 28 }]}><Ionicons name="calendar-outline" size={25} color={palette.blue} /><Text style={styles.workspaceCardTitle}>{eventFilter === "live" ? t("No live events", "尚无已上线活动", "尚無已上線活動") : t("No events in this stage", "此阶段暂无活动", "此階段暫無活動")}</Text><Text style={styles.workspaceHint}>{eventFilter === "live" ? t("Approved events appear here when students can buy tickets or sign up for free.", "获批活动在学生可购票或免费报名时显示于此。", "獲批活動在學生可購票或免費報名時顯示於此。") : t("New events begin as private drafts.", "新活动会先保存为私人草稿。", "新活動會先儲存為私人草稿。")}</Text></View>}
+        <Pressable accessibilityRole="button" style={[styles.workspaceCard, { flexDirection: "row", alignItems: "center", gap: 11, marginTop: 8 }]} onPress={() => setTab("finance")}><Ionicons name="wallet-outline" size={22} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{t("Tickets, payouts & invoices", "门票、结算与发票", "門票、結算及發票")}</Text><Text style={styles.workspaceHint}>{t("Release plans, sample sales and payment setup", "开售计划、示例销售及付款设置", "開售計劃、示例銷售及付款設定")}</Text></View><Ionicons name="chevron-forward" size={18} color={palette.blue} /></Pressable>
+      </>}
+      {tab === "finance" && isEvents && <>
+        <Text style={styles.workspaceSectionTitle}>{t("Tickets & finance", "门票与财务", "門票及財務")}</Text>
+        <Text style={styles.workspaceHint}>{t("Track ticket income, organiser payouts and event invoices in one place.", "集中查看票款收入、主办方结算及活动发票。", "集中查看票款收入、主辦方結算及活動發票。")}</Text>
+        <View style={{ flexDirection: "row", gap: 8, marginTop: 13, marginBottom: 14 }}>{(["overview", "invoices"] as const).map((view) => <Pressable key={view} accessibilityRole="tab" accessibilityState={{ selected: financeView === view }} style={[styles.marketCategory, { flex: 1, justifyContent: "center" }, financeView === view && styles.marketCategoryActive]} onPress={() => setFinanceView(view)}><Ionicons name={view === "overview" ? "wallet-outline" : "document-text-outline"} size={16} color={financeView === view ? "#FFFFFF" : palette.blue} /><Text style={[styles.marketCategoryText, financeView === view && styles.marketCategoryTextActive]}>{view === "overview" ? t("Overview", "概览", "概覽") : t("Event invoices", "活动发票", "活動發票")}</Text></Pressable>)}</View>
+        {financeView === "overview" ? <>
+        <View style={[styles.workspaceMetricRow, { marginTop: 15, marginBottom: 12 }]}><WorkspaceMetric value={ticketsSold} label={t("Sample tickets", "示例门票", "示例門票")} /><WorkspaceMetric value={`£${sampleGross.toFixed(2)}`} label={t("Sample gross", "示例总额", "示例總額")} /></View>
+        <View style={styles.workspaceNotice}><Ionicons name="information-circle-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("Preview data only. No tickets are sold, card payments taken, invoices issued or payouts made here.", "仅为预览数据。此处不会售票、收取银行卡款项、开具发票或结算打款。", "只供預覽資料。此處不會售票、收取銀行卡款項、開具發票或結算付款。")}</Text></View>
+        {!!cancelledEvents.length && <><Text style={[styles.workspaceSectionTitle, { marginTop: 18 }]}>{t("Cancelled events & refunds", "已取消活动与退款", "已取消活動及退款")}</Text>{cancelledEvents.map((event) => <Pressable key={event.id} accessibilityRole="button" style={[styles.workspaceCard, { flexDirection: "row", alignItems: "center", gap: 11, borderColor: "#F2C8CC" }]} onPress={() => setSelectedEvent(event)}><Ionicons name="alert-circle-outline" size={23} color={palette.coral} /><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{event.title} · {t("sample", "示例", "示例")}</Text><Text style={styles.workspaceCardText}>{event.ticketsSold} {t("ticket holders affected", "名持票者受影响", "名持票者受影響")} · {event.refundStatus === "processing" ? t("Refund review processing", "退款审核处理中", "退款審核處理中") : event.refundStatus === "completed" ? t("Refund review completed", "退款审核已完成", "退款審核已完成") : t("Awaiting refund review", "等待退款审核", "等待退款審核")}</Text></View><Ionicons name="chevron-forward" size={17} color={palette.blue} /></Pressable>)}</>}
+        <Text style={[styles.workspaceSectionTitle, { marginTop: 18 }]}>{t("How ticket money moves", "票款流程", "票款流程")}</Text>
+        <View style={[styles.workspaceCard, { gap: 12 }]}>
+          <View style={{ flexDirection: "row", gap: 10 }}><Ionicons name="ticket-outline" size={21} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{t("1. Student bookings open", "1. 学生报名开放", "1. 學生報名開放")}</Text><Text style={styles.workspaceCardText}>{t("After approval and the planned release time, paid events offer ticket checkout through UniMate; free events offer sign-up without payment.", "审核通过并到达预定开放时间后，付费活动通过优你伴购票；免费活动可直接报名，无须付款。", "審核通過並到達預定開放時間後，付費活動透過優你伴購票；免費活動可直接報名，毋須付款。")}</Text></View></View>
+          <View style={{ flexDirection: "row", gap: 10 }}><Ionicons name="receipt-outline" size={21} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{t("2. Commission & adjustments", "2. 佣金及调整", "2. 佣金及調整")}</Text><Text style={styles.workspaceCardText}>{t("UniMate's event-specific agreed commission, refunds and other agreed adjustments are shown on the settlement statement. Organiser event fees are negotiated privately; there is no standard public price.", "优你伴按每场活动约定的佣金、退款及其他约定调整在结算单中列明。主办方活动费用私下商议，没有统一公开价格。", "優你伴按每場活動約定的佣金、退款及其他約定調整在結算單中列明。主辦方活動費用私下商議，沒有統一公開價格。")}</Text></View></View>
+          <View style={{ flexDirection: "row", gap: 10 }}><Ionicons name="wallet-outline" size={21} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{t("3. Organiser payout", "3. 主办方结算", "3. 主辦方結算")}</Text><Text style={styles.workspaceCardText}>{t("The remaining agreed balance is paid to a verified payout account under the organiser's contract. Net payout stays pending until terms and adjustments are confirmed.", "剩余约定款项依主办方合同支付至已验证的收款账户。条款及调整确认前，净结算金额为待定。", "餘下約定款項依主辦方合約支付至已驗證的收款帳戶。條款及調整確認前，淨結算金額為待定。")}</Text></View></View>
+        </View>
+        <Text style={[styles.workspaceSectionTitle, { marginTop: 18 }]}>{t("Payment methods", "付款方式", "付款方式")}</Text>
+        <View style={[styles.workspaceCard, { gap: 9 }]}><Text style={styles.workspaceCardTitle}>{t("Pay UniMate invoices", "支付优你伴发票", "支付優你伴發票")}</Text><Text style={styles.workspaceHint}>{t("Choose a preferred method for future privately agreed organiser fees.", "选择日后支付私下约定主办方费用的偏好方式。", "選擇日後支付私下約定主辦方費用的偏好方式。")}</Text><View style={{ flexDirection: "row", gap: 8 }}>{([["card", t("Card checkout", "银行卡结账", "銀行卡結賬")], ["bank", t("Bank transfer", "银行转账", "銀行轉賬")]] as const).map(([method, label]) => <Pressable key={method} accessibilityRole="button" accessibilityState={{ selected: billingMethod === method }} style={[styles.marketCategory, { flex: 1, justifyContent: "center" }, billingMethod === method && styles.marketCategoryActive]} onPress={() => setBillingMethod(method)}><Text style={[styles.marketCategoryText, billingMethod === method && styles.marketCategoryTextActive]}>{label}</Text></Pressable>)}</View><Text style={styles.workspaceHint}>{billingMethod ? t("Selected for this preview. No card or bank details are collected.", "仅为此预览选择；不会收集银行卡或银行账户资料。", "僅為此預覽選擇；不會收集銀行卡或銀行戶口資料。") : t("No billing method selected.", "尚未选择付款方式。", "尚未選擇付款方式。")}</Text></View>
+        <View style={[styles.workspaceCard, { gap: 9 }]}><Text style={styles.workspaceCardTitle}>{t("Receive ticket payouts", "接收票款结算", "接收票款結算")}</Text><Text style={styles.workspaceHint}>{t("Select how you would like to receive organiser payouts. A real account must be verified through secure onboarding.", "选择接收主办方票款结算的方式。正式账户须通过安全入驻流程验证。", "選擇接收主辦方票款結算的方式。正式帳戶須透過安全入駐流程驗證。")}</Text><View style={{ flexDirection: "row", gap: 8 }}>{([["bank", t("Bank account", "银行账户", "銀行戶口")], ["provider", t("Payment provider", "支付服务商", "支付服務商")]] as const).map(([method, label]) => <Pressable key={method} accessibilityRole="button" accessibilityState={{ selected: payoutMethod === method }} style={[styles.marketCategory, { flex: 1, justifyContent: "center" }, payoutMethod === method && styles.marketCategoryActive]} onPress={() => setPayoutMethod(method)}><Text style={[styles.marketCategoryText, payoutMethod === method && styles.marketCategoryTextActive]}>{label}</Text></Pressable>)}</View><Text style={styles.workspaceHint}>{payoutMethod ? t("Selected for this preview · not connected or verified.", "仅为此预览选择 · 尚未连接或验证。", "僅為此預覽選擇 · 尚未連接或驗證。") : t("Payout account not connected.", "收款账户尚未连接。", "收款帳戶尚未連接。")}</Text></View>
+        <Text style={[styles.workspaceSectionTitle, { marginTop: 18 }]}>{t("Invoices & statements", "发票与结算单", "發票及結算單")}</Text>
+        <Pressable accessibilityRole="button" style={[styles.workspaceCard, { flexDirection: "row", alignItems: "center", gap: 11 }]} onPress={() => setSelectedFinanceDocument("invoice")}><Ionicons name="document-text-outline" size={23} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{t("Organiser fee invoices", "主办方费用发票", "主辦方費用發票")}</Text><Text style={styles.workspaceCardText}>{t("Awaiting privately agreed amount · no invoice issued", "等待私下约定金额 · 尚未开具发票", "等待私下約定金額 · 尚未開具發票")}</Text></View><Ionicons name="chevron-forward" size={17} color={palette.blue} /></Pressable>
+        {!!pastSampleEvent && <Pressable accessibilityRole="button" style={[styles.workspaceCard, { flexDirection: "row", alignItems: "center", gap: 11 }]} onPress={() => setSelectedFinanceDocument("settlement")}><Ionicons name="receipt-outline" size={23} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{t("Sample ticket settlement", "示例门票结算单", "示例門票結算單")}</Text><Text style={styles.workspaceCardText}>{pastSampleEvent.title} · {pastSampleEvent.ticketsSold} {t("tickets", "张门票", "張門票")} · £{(pastSampleEvent.ticketsSold * pastSampleEvent.price).toFixed(2)} {t("gross", "总额", "總額")}</Text></View><Ionicons name="chevron-forward" size={17} color={palette.blue} /></Pressable>}
+        <Text style={styles.workspaceHint}>{t("Official invoices and payout statements will appear here after private terms, verified payments and reconciliation are complete.", "私下条款、付款验证及对账完成后，正式发票与结算单才会显示于此。", "私下條款、付款驗證及對賬完成後，正式發票及結算單才會顯示於此。")}</Text>
+        </> : <>
+          <Text style={styles.workspaceHint}>{t("A separate invoice register for organiser fees agreed privately for each event. Ticket settlement statements are shown in Overview, not counted as invoices.", "各场活动私下约定主办方费用的独立发票登记。门票结算单显示在概览中，不计作发票。", "各場活動私下約定主辦方費用的獨立發票登記。門票結算單顯示在概覽中，不計作發票。")}</Text>
+          <View style={[styles.workspaceMetricRow, { marginTop: 14, marginBottom: 15 }]}><WorkspaceMetric value={0} label={t("Issued", "已开具", "已開具")} /><WorkspaceMetric value={0} label={t("Due", "待付款", "待付款")} /><WorkspaceMetric value="£0.00" label={t("Outstanding", "未付款", "未付款")} /></View>
+          <View style={styles.search}><Ionicons name="search" size={18} color={palette.muted} /><TextInput accessibilityLabel={t("Search event invoices", "搜索活动发票", "搜尋活動發票")} style={styles.searchInput} value={organiserInvoiceSearch} onChangeText={setOrganiserInvoiceSearch} placeholder={t("Search event or invoice", "搜索活动或发票", "搜尋活動或發票")} placeholderTextColor="#8B98AD" /></View>
+          <View style={[styles.workspaceCard, { marginTop: 15, gap: 6, alignItems: "center", paddingVertical: 24 }]}><Ionicons name="document-text-outline" size={28} color={palette.blue} /><Text style={styles.workspaceCardTitle}>{t("No invoices issued yet", "尚未开具发票", "尚未開具發票")}</Text><Text style={[styles.workspaceHint, { textAlign: "center" }]}>{t("UniMate will add each numbered event-fee invoice after the private fee, tax treatment and due date are agreed.", "优你伴将在私下商定费用、税务处理及到期日后，添加每张带编号的活动费用发票。", "優你伴將在私下商定費用、稅務處理及到期日後，加入每張有編號的活動費用發票。")}</Text></View>
+          <Text style={[styles.workspaceSectionTitle, { marginTop: 19 }]}>{t("Events awaiting invoice terms", "等待发票条款的活动", "等待發票條款的活動")}</Text>
+          {invoiceCandidateEvents.map((event) => <Pressable key={event.id} accessibilityRole="button" style={[styles.workspaceCard, { marginBottom: 9, gap: 5 }]} onPress={() => { setInvoiceEventId(event.id); setSelectedFinanceDocument("invoice"); }}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{event.title}</Text><Text style={[styles.workspaceStatus, { color: palette.blue, backgroundColor: "#EAF4FF" }]}>{t("Not issued", "未开具", "未開具")}</Text></View><Text style={styles.workspaceCardText}>{event.date} · {event.id}</Text><Text style={styles.workspaceHint}>{t("Agreed fee, invoice number and payment due date pending", "约定费用、发票编号及付款到期日待确认", "約定費用、發票編號及付款到期日待確認")}</Text></Pressable>)}
+          {!invoiceCandidateEvents.length && <Text style={styles.workspaceHint}>{t("No events match this search.", "没有符合搜索条件的活动。", "沒有符合搜尋條件的活動。")}</Text>}
+          <View style={[styles.workspaceNotice, { marginTop: 9 }]}><Ionicons name="information-circle-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("Preview only. No official invoice is generated or payment collected here.", "仅为预览。此处不会生成正式发票或收取款项。", "只供預覽。此處不會產生正式發票或收取款項。")}</Text></View>
+        </>}
+      </>}
+      {tab === "profile" && profileReviewsOpen && isRestaurant && <>
+        <Pressable accessibilityRole="button" style={[styles.marketCategory, { alignSelf: "flex-start", marginBottom: 12 }]} onPress={() => setProfileReviewsOpen(false)}><Ionicons name="arrow-back" size={16} color={palette.blue} /><Text style={styles.marketCategoryText}>{t("Back to profile", "返回资料", "返回資料")}</Text></Pressable>
+        <Text style={styles.workspaceSectionTitle}>{t("All reviews", "全部评价", "全部評價")}</Text>
+        <Text style={styles.workspaceHint}>{t("Read student ratings and comments, then reply as the restaurant owner. Replies remain local in this preview.", "查看学生评分和评论，并以餐厅商家身份回复。回复仅保存在此预览中。", "查看學生評分和評論，並以餐廳商戶身分回覆。回覆只保存在此預覽中。")}</Text>
+        <View style={[styles.workspaceCard, { marginTop: 14, marginBottom: 15, flexDirection: "row", alignItems: "center", gap: 13 }]}><Text style={[styles.workspaceReviewStars, { fontSize: 25 }]}>★ {averageReviewRating}</Text><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{publicReviewCount} {t("student ratings", "条学生评分", "條學生評分")}</Text><Text style={styles.workspaceHint}>{allReviews.length} {t("comments shown", "条评论可查看", "條評論可查看")} · {allReviews.filter((review) => !review.reply).length} {t("awaiting a reply", "条待回复", "條待回覆")}</Text></View></View>
+        <View style={styles.search}><Ionicons name="search" size={18} color={palette.muted} /><TextInput accessibilityLabel={t("Search reviews", "搜索评价", "搜尋評價")} style={styles.searchInput} value={reviewSearch} onChangeText={setReviewSearch} placeholder={t("Search student or comment", "搜索学生或评论", "搜尋學生或評論")} placeholderTextColor="#8B98AD" /></View>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7, marginVertical: 12 }}>{(["all", "5", "4", "3-below", "unanswered", "answered"] as const).map((filter) => <Pressable key={filter} accessibilityRole="button" accessibilityState={{ selected: reviewFilter === filter }} style={[styles.marketCategory, reviewFilter === filter && styles.marketCategoryActive]} onPress={() => setReviewFilter(filter)}><Text style={[styles.marketCategoryText, reviewFilter === filter && styles.marketCategoryTextActive]}>{filter === "all" ? t("All", "全部", "全部") : filter === "5" ? "5 ★" : filter === "4" ? "4 ★" : filter === "3-below" ? t("3 ★ & below", "3 星及以下", "3 星及以下") : filter === "unanswered" ? t("Needs reply", "待回复", "待回覆") : t("Replied", "已回复", "已回覆")}</Text></Pressable>)}</View>
+        {visibleReviews.map((review) => <View key={review.id} style={[styles.workspaceCard, { marginBottom: 10 }]}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{review.student}</Text><Text style={styles.workspaceReviewStars}>{"★".repeat(Math.round(review.rating))}{"☆".repeat(5 - Math.round(review.rating))} <Text style={styles.workspaceCardText}>{review.rating.toFixed(1)}/5</Text></Text></View><Text style={styles.workspaceCardText}>{review.text}</Text>{review.reply ? <View style={styles.workspaceOwnerReply}><Text style={styles.workspaceCardTitle}>{t("Owner response", "商家回复", "商戶回覆")}</Text><Text style={styles.workspaceCardText}>{review.reply}</Text></View> : <><TextInput style={[styles.workspaceInput, { marginTop: 11 }]} value={replyDrafts[review.id] || ""} onChangeText={(value) => setReplyDrafts((current) => ({ ...current, [review.id]: value }))} placeholder={t("Write a response…", "撰写回复…", "撰寫回覆…")} placeholderTextColor="#68778F" multiline /><Pressable accessibilityRole="button" disabled={!replyDrafts[review.id]?.trim()} style={[styles.workspaceInlineAction, !replyDrafts[review.id]?.trim() && { opacity: 0.45 }]} onPress={() => saveReply(review.id)}><Text style={styles.workspaceCardLink}>{t("Post response in preview", "在预览中回复", "在預覽中回覆")}</Text></Pressable></>}</View>)}
+        {!visibleReviews.length && <Text style={styles.workspaceHint}>{t("No reviews match these filters.", "没有符合筛选条件的评价。", "沒有符合篩選條件的評價。")}</Text>}
+      </>}
+      {tab === "menu" && isRestaurant && <>
+        <View style={{ gap: 5 }}><Text style={[styles.workspaceSectionTitle, { marginBottom: 0 }]}>{t("Menu management", "菜单管理", "餐單管理")}</Text><Text style={[styles.workspaceCardText, { color: palette.muted, lineHeight: 18 }]}>{t("Keep one official menu and a short list of highlights for students browsing your public page.", "维护一份官方菜单和精简的精选菜品，供学生在公开主页浏览。", "維護一份官方餐單及精簡的精選菜式，供學生在公開主頁瀏覽。")}</Text></View>
+        <View style={[styles.workspaceCard, { padding: 18, borderRadius: 17, gap: 14, marginTop: 20 }]}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 11 }}><View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: "#EAF4FF", alignItems: "center", justifyContent: "center" }}><Ionicons name="document-text-outline" size={21} color={palette.blue} /></View><View style={{ flex: 1 }}><Text style={[styles.workspaceCardTitle, { fontSize: 14 }]}>{t("Official menu", "官方菜单", "官方餐單")}</Text><Text style={[styles.workspaceHint, { marginTop: 2 }]}>{t("PDF or image · visible on your public page preview", "PDF 或图片 · 显示于公开主页预览", "PDF 或圖片 · 顯示於公開主頁預覽")}</Text></View></View>
+          {menuFile ? <View style={{ gap: 9 }}><Text style={[styles.workspaceCardText, { fontSize: 13 }]} numberOfLines={1}>{menuFile.name}</Text>{menuFile.mimeType?.startsWith("image/") ? <Image source={{ uri: menuFile.uri }} style={[styles.restaurantMenuImage, { height: 185, marginTop: 0 }]} resizeMode="contain" /> : <Pressable accessibilityRole="button" style={[styles.viewProfileButton, { marginTop: 0 }]} onPress={() => Linking.openURL(menuFile.uri).catch(() => Alert.alert(t("Could not open file", "无法打开文件", "無法開啟檔案")))}><Ionicons name="open-outline" size={17} color={palette.blue} /><Text style={styles.viewProfileButtonText}>{t("Preview menu PDF", "预览菜单 PDF", "預覽餐單 PDF")}</Text></Pressable>}</View> : <View style={{ alignItems: "center", justifyContent: "center", gap: 5, paddingVertical: 12, backgroundColor: "#F7FAFE", borderRadius: 13 }}><Ionicons name="images-outline" size={25} color={palette.blue} /><Text style={[styles.workspaceCardTitle, { fontSize: 12 }]}>{t("No official menu yet", "尚无官方菜单", "尚無官方餐單")}</Text><Text style={[styles.workspaceHint, { textAlign: "center" }]}>{t("Add your latest menu so students know what to expect.", "添加最新菜单，让学生了解您的餐品。", "加入最新餐單，讓學生了解您的餐品。")}</Text></View>}
+          <Pressable accessibilityRole="button" style={[styles.primaryButton, { marginTop: 0 }]} onPress={chooseMenu}><Ionicons name="cloud-upload-outline" size={18} color="#FFFFFF" /><Text style={styles.primaryButtonText}>{menuFile ? t("Replace official menu", "更换官方菜单", "更換官方餐單") : t("Upload official menu", "上传官方菜单", "上載官方餐單")}</Text></Pressable>
+          <Text style={[styles.workspaceHint, { textAlign: "center" }]}>{t("Local preview only · no file is published", "仅供本机预览 · 文件不会发布", "只供本機預覽 · 檔案不會發佈")}</Text>
+        </View>
+        <View style={[styles.workspaceCard, { padding: 18, borderRadius: 17, gap: 13, marginTop: 2 }]}>
+          <View style={{ gap: 3 }}><Text style={[styles.workspaceCardTitle, { fontSize: 14 }]}>{t("Menu highlights", "菜单精选", "餐單精選")}</Text><Text style={styles.workspaceHint}>{t("Feature a few dishes students can recognise at a glance.", "展示几道学生一眼就能认识的特色菜品。", "展示幾款學生一眼就能認識的特色菜式。")}</Text></View>
+          <View>{menuItems.map((item) => <View key={item} style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 11, borderBottomWidth: 1, borderBottomColor: palette.line }}><Ionicons name="restaurant-outline" size={18} color={palette.blue} /><Text style={[styles.workspaceCardText, { flex: 1, fontSize: 12, color: palette.navy }]}>{item}</Text><Pressable accessibilityRole="button" accessibilityLabel={`${t("Remove", "移除", "移除")} ${item}`} onPress={() => setMenuItems((current) => current.filter((name) => name !== item))}><Ionicons name="close-circle-outline" size={19} color={palette.muted} /></Pressable></View>)}</View>
+          <View style={[styles.workspaceComposer, { alignItems: "center", gap: 8 }]}><TextInput style={[styles.workspaceInput, { flex: 1, marginBottom: 0, minHeight: 46 }]} value={newMenuItem} onChangeText={setNewMenuItem} placeholder={t("Add a menu highlight", "添加精选菜品", "加入精選菜式")} placeholderTextColor="#68778F" /><Pressable accessibilityRole="button" accessibilityLabel={t("Add highlight", "添加精选菜品", "加入精選菜式")} disabled={!newMenuItem.trim()} style={[styles.workspaceSend, { width: 46, height: 46 }, !newMenuItem.trim() && { opacity: 0.45 }]} onPress={() => { const item = newMenuItem.trim(); if (!menuItems.some((existing) => existing.toLowerCase() === item.toLowerCase())) setMenuItems((current) => [...current, item]); setNewMenuItem(""); }}><Ionicons name="add" size={20} color="#FFFFFF" /></Pressable></View>
+        </View>
+        <Pressable accessibilityRole="button" style={[styles.viewProfileButton, { marginTop: 8, minHeight: 50 }]} onPress={() => setEditPublicPageOpen(true)}><Ionicons name="create-outline" size={17} color={palette.blue} /><Text style={styles.viewProfileButtonText}>{t("Edit opening hours, address and public page", "编辑营业时间、地址及公开主页", "編輯營業時間、地址及公開主頁")}</Text></Pressable>
+      </>}
+      {tab === "offers" && <>
+        <View style={styles.workspaceSectionHead}><Text style={styles.workspaceSectionTitle}>{t("Discounts & vouchers", "折扣与优惠码", "折扣與優惠碼")}</Text><Pressable accessibilityRole="button" style={styles.workspaceSmallAction} onPress={() => { setFormError(""); setShowOfferForm(!showOfferForm); }}><Ionicons name="add" size={16} color="#FFFFFF" /><Text style={styles.workspaceSmallActionText}>{t("Add offer", "添加优惠", "加入優惠")}</Text></Pressable></View>
+        {showOfferForm && <View style={styles.workspaceForm}>
+          <Text style={styles.workspaceCardTitle}>{t("New student offer", "新学生优惠", "新學生優惠")}</Text>
+          <TextInput style={styles.workspaceInput} value={offerCode} onChangeText={setOfferCode} autoCapitalize="characters" placeholder={t("Coupon code, e.g. STUDENT20", "优惠码，例如 STUDENT20", "優惠碼，例如 STUDENT20")} placeholderTextColor="#68778F" />
+          <TextInput style={styles.workspaceInput} value={offerDiscount} onChangeText={setOfferDiscount} keyboardType="number-pad" placeholder={t("Discount percentage", "折扣百分比", "折扣百分比")} placeholderTextColor="#68778F" />
+          {isEvents && isRestaurant && <View style={styles.authRoleChoices}>{([ ["events", t("Event tickets", "活动门票", "活動門票")], ["restaurant", t("Restaurant menu", "餐厅菜单", "餐廳餐單")] ] as const).map(([value, label]) => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: offerArea === value }} style={[styles.authRoleChoice, offerArea === value && styles.authRoleChoiceActive]} onPress={() => setOfferArea(value)}><Text style={styles.authRoleChoiceText}>{label}</Text></Pressable>)}</View>}
+          {offerForEvents ? <TextInput style={styles.workspaceInput} value={offerTarget} onChangeText={setOfferTarget} placeholder={t("Eligible event", "适用活动", "適用活動")} placeholderTextColor="#68778F" /> : <>
+            <Text style={styles.workspaceCardText}>{t("Apply offer to", "优惠适用于", "優惠適用於")}</Text>
+            <View style={styles.authRoleChoices}>{([["menu", t("Entire menu", "全菜单", "全餐單")], ["items", t("Selected items", "指定商品", "指定商品")]] as const).map(([value, label]) => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: offerScope === value }} style={[styles.authRoleChoice, offerScope === value && styles.authRoleChoiceActive]} onPress={() => setOfferScope(value)}><Text style={styles.authRoleChoiceText}>{label}</Text></Pressable>)}</View>
+            {offerScope === "items" && <View style={styles.authRoleChoices}>{menuItems.map((item) => <Pressable key={item} accessibilityRole="button" accessibilityState={{ selected: offerItems.includes(item) }} style={[styles.authRoleChoice, offerItems.includes(item) && styles.authRoleChoiceActive]} onPress={() => setOfferItems((current) => current.includes(item) ? current.filter((name) => name !== item) : [...current, item])}><Ionicons name={offerItems.includes(item) ? "checkbox" : "square-outline"} size={16} color={palette.blue} /><Text style={styles.authRoleChoiceText}>{item}</Text></Pressable>)}</View>}
+            <TextInput style={styles.workspaceInput} value={offerOccasion} onChangeText={setOfferOccasion} placeholder={t("Occasion, e.g. Valentine's Day (optional)", "节日主题，例如情人节（选填）", "節日主題，例如情人節（選填）")} placeholderTextColor="#68778F" />
+            <View style={styles.workspaceFormRow}><TextInput style={[styles.workspaceInput, { flex: 1 }]} value={offerStartDate} onChangeText={setOfferStartDate} placeholder={t("Start date", "开始日期", "開始日期")} placeholderTextColor="#68778F" /><TextInput style={[styles.workspaceInput, { flex: 1 }]} value={offerEndDate} onChangeText={setOfferEndDate} placeholder={t("End date", "结束日期", "結束日期")} placeholderTextColor="#68778F" /></View>
+          </>}
+          {!!formError && <Text style={styles.workspaceError}>{formError}</Text>}
+          <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={addOffer}><Text style={styles.primaryButtonText}>{t("Save offer draft", "保存优惠草稿", "儲存優惠草稿")}</Text></Pressable>
+        </View>}
+        {visibleOffers.map((offer) => <View key={offer.id} style={styles.workspaceCard}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{offer.code}</Text><Text style={styles.workspaceStatus}>{offer.discount}% {t("off", "折扣", "折扣")}</Text></View><Text style={styles.workspaceCardText}>{offer.target}</Text>{!!offer.occasion && <Text style={styles.workspaceCardText}>{offer.occasion}</Text>}{!!offer.startDate && <Text style={styles.workspaceCardText}>{offer.startDate} – {offer.endDate}</Text>}<Text style={styles.workspaceHint}>{t("Not redeemable in this preview", "此预览中不可兑换", "此預覽中不可兌換")}</Text></View>)}
+      </>}
+      {tab === "messages" && <>{!selectedMessage && <DemoMessageRequests language={language} sender="Ava Patel" context={isEvents ? t("Event enquiry", "活动咨询", "活動查詢") : t("Restaurant enquiry", "餐厅咨询", "餐廳查詢")} message={isEvents ? t("Hi, could you tell me more about the next event before I book?", "你好，预订前能介绍一下下一场活动吗？", "你好，預訂前可以介紹一下下一場活動嗎？") : t("Hi, do you have space for a group this weekend?", "你好，这个周末能接待一组客人吗？", "你好，這個週末可以接待一組客人嗎？")} status={demoRequestStatus} onDecision={setDemoRequestStatus} />}<WorkspaceMessages language={language} threads={[
+        ...(isEvents ? eventsList.filter((event) => event.ticketsSold > 0 || (event.signUps || 0) > 0).map((event) => ({ id: `attendees-${event.id}`, name: `${event.title} · ${t("group", "群聊", "群聊")}`, type: `${t("Event attendee group", "活动参加者群聊", "活動參加者群聊")} · ${event.price === 0 ? event.signUps || 0 : event.ticketsSold} ${event.price === 0 ? t("signed up", "人已报名", "人已報名") : t("ticket holders", "名持票者", "名持票者")}`, preview: event.status === "cancelled" ? t("Cancellation and refund updates for ticket holders.", "向持票者发布取消及退款进展。", "向持票者發佈取消及退款進展。") : t("Share event updates with attendees in this group.", "在此群聊中向参加者发送活动更新。", "在此群聊中向參加者傳送活動更新。"), time: t("Event group", "活动群聊", "活動群聊"), initials: "EV", color: palette.blue })) : []),
+        { id: "UniMate operations", name: t("UniMate operations", "优你伴运营团队", "優你伴營運團隊"), type: t("UniMate staff", "优你伴员工", "優你伴員工"), preview: t("Contact UniMate about your account, events or restaurant operations.", "就账号、活动或餐厅运营联系优你伴。", "就帳戶、活動或餐廳營運聯絡優你伴。"), time: t("Support", "支持", "支援"), initials: "UM", color: palette.blue },
+        { id: "UniMate tech", name: t("UniMate tech team", "优你伴技术团队", "優你伴技術團隊"), type: t("Account & technical support", "账号及技术支持", "帳戶及技術支援"), preview: t("Get help with sign-in, your page or app issues.", "获取登录、主页或应用问题的帮助。", "取得登入、主頁或應用程式問題的協助。"), time: t("Support", "支持", "支援"), initials: "IT", color: palette.green },
+      ]} selected={selectedMessage} onSelect={setSelectedMessage} draft={messageDraft} onDraft={setMessageDraft} onSend={sendMessage} sent={localMessages} /></>}
+      {tab === "profile" && !profileReviewsOpen && <>
+        <View style={styles.workspaceProfileHero}><View style={styles.workspaceAvatarWrap}><View style={styles.workspaceAvatar}>{isEvents && eventProfileUri ? <Image source={{ uri: eventProfileUri }} style={{ width: 88, height: 88, borderRadius: 44 }} /> : <Text style={styles.workspaceAvatarText}>{accountInitials}</Text>}</View><View style={styles.profileAvatarBadge}><VerificationBadge kind="organisation" language={language} /></View></View><Text style={styles.workspaceProfileName}>{accountName}</Text><Text style={styles.workspaceSubtitle}>{accountDescription} · {organisationArea}</Text><View style={styles.workspaceOfficialPill}><Ionicons name="star" size={14} color="#17213A" /><Text style={styles.workspaceOfficialText}>{t("Official page", "官方主页", "官方主頁")}</Text></View></View>
+        <Pressable accessibilityRole="button" style={styles.viewProfileButton} onPress={() => setPublicPageOpen(true)}><Ionicons name="eye-outline" size={17} color={palette.blue} /><Text style={styles.viewProfileButtonText}>{t("View public page as others see it", "查看他人看到的公开主页", "查看他人看到的公開主頁")}</Text></Pressable>
+        <View style={styles.profileMenuCard}>
+          <WorkspaceProfileRow icon="create-outline" title={t("Edit public page", "编辑公开主页", "編輯公開主頁")} description={isEvents ? t("Photo, location, past events and social links", "照片、地点、往期活动及社交链接", "相片、地點、過往活動及社交連結") : t("Introduction, area and page content", "简介、地区及主页内容", "簡介、地區及主頁內容")} onPress={() => setEditPublicPageOpen(true)} />
+          {isEvents && <WorkspaceProfileRow icon="calendar-outline" title={t("Events & bookings", "活动与预订", "活動與預訂")} description={t("Dates, tickets and attendee capacity", "日期、门票及参加人数", "日期、門票及參加人數")} onPress={() => setTab("events")} />}
+          {isRestaurant && <WorkspaceProfileRow icon="star-outline" title={t("Reviews & ratings", "评价与评分", "評價及評分")} description={t("Student comments and owner replies", "学生评论与商家回复", "學生評論及商戶回覆")} onPress={() => setProfileReviewsOpen(true)} />}
+          <WorkspaceProfileRow icon="pricetag-outline" title={t("Offers & vouchers", "优惠与代金券", "優惠及禮券")} onPress={() => setTab("offers")} />
+          <WorkspaceProfileRow icon="chatbubbles-outline" title={t("Messages", "消息", "訊息")} description={isEvents ? t("Attendee groups and UniMate support", "参加者群聊及优你伴支持", "參加者群聊及優你伴支援") : t("UniMate operations and tech support", "优你伴运营及技术支持", "優你伴營運及技術支援")} onPress={() => setTab("messages")} />
+          <WorkspaceProfileRow icon="settings-outline" title={t("Settings & notifications", "设置与通知", "設定及通知")} description={t("Appearance, language and alerts", "外观、语言及提醒", "外觀、語言及提醒")} onPress={() => setSettingsOpen(true)} />
+          <WorkspaceProfileRow icon="help-circle-outline" title={t("Support", "支持", "支援")} description={t("Account or technical help", "账号或技术帮助", "帳戶或技術協助")} onPress={() => { setSelectedMessage(null); setTab("messages"); }} />
+        </View>
+      </>}
+    </ScrollView>
+    <WorkspaceTabs tabs={tabs} active={tab} onSelect={setTab} />
+    <Sheet visible={!!selectedEvent && isEvents} title={t("Event details", "活动详情", "活動詳情")} onClose={() => setSelectedEvent(null)}>
+      {selectedEvent && <ScrollView contentContainerStyle={styles.modalBody} showsVerticalScrollIndicator={false}>
+        {selectedEvent.coverUri ? <Image source={{ uri: selectedEvent.coverUri }} style={{ width: "100%", height: 190, borderRadius: 15 }} resizeMode="cover" /> : <View style={{ height: 150, borderRadius: 15, backgroundColor: "#EAF4FF", alignItems: "center", justifyContent: "center" }}><Ionicons name="image-outline" size={30} color={palette.blue} /></View>}
+        <Text style={[styles.workspaceTitle, { marginTop: 14 }]}>{selectedEvent.title}</Text>
+        <Text style={styles.workspaceHint}>{categoryLabel(language, selectedEvent.category || "Other")} · {selectedEvent.status === "draft" ? t("Draft · not submitted", "草稿 · 尚未提交", "草稿 · 尚未提交") : selectedEvent.status === "pending" ? t("Awaiting UniMate approval", "等待优你伴审核", "等待優你伴審核") : selectedEvent.status === "live" ? t("Live · listed to students", "已上线 · 学生可见", "已上線 · 學生可見") : selectedEvent.status === "cancelled" ? t("Cancelled · refund review", "已取消 · 退款审核", "已取消 · 退款審核") : t("Past event · bookings closed", "往期活动 · 已停止报名", "過往活動 · 已停止報名")}{selectedEvent.isSample ? ` · ${t("sample record", "示例记录", "示例記錄")}` : ` · ${t("preview", "预览", "預覽")}`}</Text>
+        {!!selectedEvent.summary && <Text style={[styles.workspaceCardText, { marginTop: 10 }]}>{selectedEvent.summary}</Text>}
+        <View style={[styles.workspaceCard, { gap: 9, marginTop: 15 }]}><Text style={styles.workspaceCardText}>{t("Date", "日期", "日期")}: {selectedEvent.date}</Text><Text style={styles.workspaceCardText}>{t("Time", "时间", "時間")}: {selectedEvent.startTime || "—"}–{selectedEvent.endTime || "—"}</Text><Text style={styles.workspaceCardText}>{t("Last entry", "最晚入场", "最晚入場")}: {selectedEvent.lastEntryTime || "—"}</Text><Text style={styles.workspaceCardText}>{t("Venue", "场地", "場地")}: {selectedEvent.venue}</Text><Text style={styles.workspaceCardText}>{t("Capacity", "人数上限", "人數上限")}: {selectedEvent.capacity}</Text><Text style={styles.workspaceCardText}>{t("Entry", "入场", "入場")}: {selectedEvent.price === 0 ? t("Free sign-up", "免费报名", "免費報名") : `£${selectedEvent.price.toFixed(2)}`}</Text>{!!selectedEvent.voucher && <Text style={styles.workspaceCardText}>{t("Voucher", "优惠码", "優惠碼")}: {selectedEvent.voucher}</Text>}</View>
+        <View style={[styles.workspaceCard, { gap: 8 }]}><Text style={styles.workspaceCardTitle}>{t("Booking opens", "报名开放时间", "報名開放時間")}</Text><Text style={styles.workspaceCardText}>{selectedEvent.ticketReleaseDate ? `${formatBookingDate(selectedEvent.ticketReleaseDate, language)} · ${selectedEvent.ticketReleaseTime || "10:00"}` : t("Not scheduled", "尚未安排", "尚未安排")}</Text><Text style={styles.workspaceHint}>{selectedEvent.status === "live" ? selectedEvent.price === 0 ? t("Free sign-up is open in this sample record.", "此示例记录显示免费报名已开放。", "此示例記錄顯示免費報名已開放。") : t("Tickets are on sale in this sample record.", "此示例记录显示门票售卖中。", "此示例記錄顯示門票發售中。") : selectedEvent.status === "past" ? t("Bookings closed for this past event.", "此往期活动已停止报名。", "此過往活動已停止報名。") : selectedEvent.status === "cancelled" ? t("Bookings stopped. Purchased tickets must be reviewed for refunds.", "已停止报名；已购买的门票须进行退款审核。", "已停止報名；已購買的門票須進行退款審核。") : t("A release time does not publish an event by itself. UniMate approval is required first.", "开放时间不会自动发布活动；须先获得优你伴审核批准。", "開放時間不會自動發佈活動；須先獲得優你伴審核批准。")}</Text></View>
+        <View style={[styles.workspaceCard, { flexDirection: "row", gap: 12 }]}><View style={{ flex: 1 }}><Text style={styles.workspaceHint}>{selectedEvent.status === "cancelled" ? t("Tickets affected", "受影响门票", "受影響門票") : selectedEvent.price === 0 ? t("Free sign-ups", "免费报名人数", "免費報名人數") : t("Tickets sold", "已售门票", "已售門票")}</Text><Text style={styles.workspaceCardTitle}>{selectedEvent.price === 0 ? selectedEvent.signUps || 0 : selectedEvent.ticketsSold}</Text></View><View style={{ flex: 1 }}><Text style={styles.workspaceHint}>{selectedEvent.status === "cancelled" ? t("Face-value illustration", "票面金额示例", "票面金額示例") : t("Gross ticket value", "票款总额", "票款總額")}</Text><Text style={styles.workspaceCardTitle}>£{(selectedEvent.ticketsSold * selectedEvent.price).toFixed(2)}</Text></View></View>
+        {selectedEvent.status === "cancelled" && <View style={[styles.workspaceCard, { gap: 9, borderColor: "#F2C8CC" }]}><Text style={styles.workspaceCardTitle}>{t("Refund tracker · sample", "退款进度 · 示例", "退款進度 · 示例")}</Text><Text style={styles.workspaceCardText}>{t("Status", "状态", "狀態")}: {selectedEvent.refundStatus === "completed" ? t("Completed in sample", "示例显示已完成", "示例顯示已完成") : selectedEvent.refundStatus === "processing" ? t("Processing in sample", "示例显示处理中", "示例顯示處理中") : t("Awaiting review", "等待审核", "等待審核")}</Text><Text style={styles.workspaceCardText}>{t("Next steps", "后续步骤", "後續步驟")}: {t("UniMate verifies affected orders, confirms refund rules with the payment provider, notifies ticket holders and records each refund outcome.", "优你伴核对受影响订单、与支付服务商确认退款规则、通知持票者并记录每笔退款结果。", "優你伴核對受影響訂單、與支付服務商確認退款規則、通知持票者並記錄每筆退款結果。")}</Text><Text style={styles.workspaceHint}>{t("The face-value figure is not a promised refund total; discounts, fees and individual payment records must be reconciled.", "票面金额并非承诺退款总额；折扣、费用及每笔付款记录须逐一对账。", "票面金額並非承諾退款總額；折扣、費用及每筆付款記錄須逐一對賬。")}</Text></View>}
+        <View style={styles.workspaceNotice}><Ionicons name="information-circle-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{selectedEvent.status === "draft" ? t("This draft is private. Moving it to pending review changes only this local preview; it does not send a real request.", "此草稿不公开。移至待审核只会更改本地预览，不会实际提交申请。", "此草稿不公開。移至待審核只會更改本機預覽，不會實際提交申請。") : selectedEvent.status === "pending" ? t("Awaiting approval in this preview. Tickets are not on sale.", "此预览显示等待审核；门票尚未开售。", "此預覽顯示等待審核；門票尚未發售。") : t("Ticket, payment and attendance figures are illustrative sample data, not transactions.", "门票、付款及参加人数均为示例数据，并非真实交易。", "門票、付款及參加人數均為示例資料，並非真實交易。")}</Text></View>
+        {selectedEvent.status === "draft" && <><Pressable accessibilityRole="button" style={styles.primaryButton} onPress={() => editEventDraft(selectedEvent)}><Ionicons name="create-outline" size={18} color="#FFFFFF" /><Text style={styles.primaryButtonText}>{t("Edit draft", "编辑草稿", "編輯草稿")}</Text></Pressable><Pressable accessibilityRole="button" style={[styles.secondaryButton, { justifyContent: "center" }]} onPress={() => { const pendingEvent = { ...selectedEvent, status: "pending" as const }; setEventsList((current) => current.map((event) => event.id === pendingEvent.id ? pendingEvent : event)); setSelectedEvent(pendingEvent); }}><Ionicons name="shield-checkmark-outline" size={18} color={palette.blue} /><Text style={styles.secondaryButtonText}>{t("Move to pending review · preview", "移至待审核 · 预览", "移至待審核 · 預覽")}</Text></Pressable></>}
+        {(selectedEvent.status === "live" || selectedEvent.status === "past") && <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={() => { setSelectedEvent(null); setTab("finance"); }}><Text style={styles.primaryButtonText}>{t("View ticket finance", "查看门票财务", "查看門票財務")}</Text></Pressable>}
+        {selectedEvent.status === "live" && <Pressable accessibilityRole="button" style={[styles.secondaryButton, { justifyContent: "center" }]} onPress={() => { setSelectedMessage("UniMate operations"); setMessageDraft(t(`Please review a cancellation request for ${selectedEvent.title} (${selectedEvent.id}). Please advise ticket-holder notifications and refunds before any public status change.`, `请审核取消活动 ${selectedEvent.title}（${selectedEvent.id}）的申请，并在公开状态变更前告知持票者通知及退款安排。`, `請審核取消活動 ${selectedEvent.title}（${selectedEvent.id}）的申請，並在公開狀態變更前告知持票者通知及退款安排。`)); setSelectedEvent(null); setTab("messages"); }}><Ionicons name="alert-circle-outline" size={18} color={palette.blue} /><Text style={styles.secondaryButtonText}>{t("Request cancellation & refund review", "申请取消与退款审核", "申請取消及退款審核")}</Text></Pressable>}
+        {selectedEvent.status === "cancelled" && <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={() => { setSelectedMessage("UniMate operations"); setMessageDraft(t(`Please provide a refund status update for cancelled event ${selectedEvent.title} (${selectedEvent.id}).`, `请提供已取消活动 ${selectedEvent.title}（${selectedEvent.id}）的退款进度。`, `請提供已取消活動 ${selectedEvent.title}（${selectedEvent.id}）的退款進度。`)); setSelectedEvent(null); setTab("messages"); }}><Text style={styles.primaryButtonText}>{t("Ask UniMate for a refund update", "向优你伴查询退款进度", "向優你伴查詢退款進度")}</Text></Pressable>}
+      </ScrollView>}
+    </Sheet>
+    <Sheet visible={showEventForm && isEvents} title={editingEventId ? t("Edit event draft", "编辑活动草稿", "編輯活動草稿") : t("Create an event", "创建活动", "建立活動")} onClose={() => { setShowEventForm(false); setEditingEventId(null); }}>
+      <ScrollView contentContainerStyle={styles.foodReviewBody} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+        <View style={styles.staffEventNote}><Ionicons name="shield-checkmark" size={18} color={palette.blue} /><Text style={styles.staffEventNoteText}>{t("Organisation events are saved as private drafts in this demo. Venue, safety and capacity checks are required before a real event goes public.", "机构活动在演示中保存为私人草稿。正式公开前须完成场地、安全及人数审核。", "機構活動在示範中儲存為私人草稿。正式公開前須完成場地、安全及人數審核。")}</Text></View>
+        <Text style={styles.formSectionLabel}>{t("EVENT CATEGORY", "活动分类", "活動分類")}</Text>
+        <SlidableCategories language={language} rowStyle={styles.categoryRow}>{["Sports", "Parties", "House parties", "Culture", "Trips", "Other"].map((item) => <Pressable key={item} accessibilityRole="button" accessibilityState={{ selected: eventCategory === item }} style={[styles.categoryChip, eventCategory === item && styles.categoryChipActive]} onPress={() => setEventCategory(item)}><Text style={[styles.categoryChipText, eventCategory === item && styles.categoryChipTextActive]}>{categoryLabel(language, item)}</Text></Pressable>)}</SlidableCategories>
+        <View style={styles.photoPicker}>{eventCover ? <Image source={{ uri: eventCover }} style={styles.photoPreview} /> : <><View style={styles.photoIcon}><Ionicons name="image-outline" size={27} color={palette.blue} /></View><Text style={styles.photoTitle}>{t("Add event cover photo", "添加活动封面照片", "加入活動封面相片")}</Text><Text style={styles.photoHint}>{t("Recommended 16:9 · JPG or PNG", "建议比例16:9 · JPG或PNG", "建議比例16:9 · JPG或PNG")}</Text></>}</View>
+        <PhotoSourceActions language={language} onCamera={async () => { const uris = await selectPhotoUris(language, "camera", { allowsEditing: true, aspect: [16, 9], quality: .8 }); if (uris[0]) setEventCover(uris[0]); }} onLibrary={async () => { const uris = await selectPhotoUris(language, "library", { allowsEditing: true, aspect: [16, 9], quality: .8 }); if (uris[0]) setEventCover(uris[0]); }} />
+        <View style={styles.field}><Text style={styles.fieldLabel}>{t("Event name", "活动名称", "活動名稱")}</Text><TextInput value={eventTitle} onChangeText={setEventTitle} placeholder={t("Enter event name", "输入活动名称", "輸入活動名稱")} placeholderTextColor="#A1ADBE" /></View>
+        <EventDateField language={language} value={eventDate} onChange={setEventDate} />
+        <EventTimeField label={t("Start time", "开始时间", "開始時間")} value={eventStartTime} onChange={setEventStartTime} />
+        <EventTimeField label={t("End time", "结束时间", "結束時間")} value={eventEndTime} onChange={setEventEndTime} />
+        <View style={styles.field}><Text style={styles.fieldLabel}>{t("Location / full address", "地点 / 完整地址", "地點 / 完整地址")}</Text><TextInput value={eventVenue} onChangeText={setEventVenue} placeholder={t("Enter location / full address", "输入地点及完整地址", "輸入地點及完整地址")} placeholderTextColor="#A1ADBE" /></View>
+        <View style={[styles.field, { minHeight: 100 }]}><Text style={styles.fieldLabel}>{t("Summary of the event", "活动简介", "活動簡介")}</Text><TextInput multiline value={eventSummary} onChangeText={setEventSummary} placeholder={t("Describe the experience for students", "为学生介绍活动内容", "向學生介紹活動內容")} placeholderTextColor="#A1ADBE" /></View>
+        <View style={styles.field}><Text style={styles.fieldLabel}>{t("Ticket price · £0 for free sign-up", "门票价格 · £0 表示免费报名", "門票價格 · £0 表示免費報名")}</Text><View style={styles.currencyInputRow}><Text style={styles.currencyPrefix}>£</Text><TextInput value={eventPrice} onChangeText={setEventPrice} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor="#A1ADBE" style={styles.currencyInput} /></View></View>
+        <EventTimeField label={t("Last entry time", "最晚入场时间", "最晚入場時間")} value={eventLastEntry} onChange={setEventLastEntry} />
+        <Text style={[styles.formSectionLabel, { marginTop: 8 }]}>{t("BOOKING RELEASE PLAN", "报名开放计划", "報名開放計劃")}</Text>
+        <Text style={styles.workspaceHint}>{t("Choose when paid tickets or free sign-up should open after UniMate approval. Saving a draft does not publish the event.", "选择优你伴审核通过后购票或免费报名开放的时间。保存草稿不会发布活动。", "選擇優你伴審核通過後購票或免費報名開放的時間。儲存草稿不會發佈活動。")}</Text>
+        <Text style={styles.fieldLabel}>{t("Booking opens on", "报名开放日期", "報名開放日期")}</Text>
+        <EventDateField language={language} value={eventReleaseDate} onChange={setEventReleaseDate} />
+        <EventTimeField label={t("Ticket release time", "门票开售时间", "門票發售時間")} value={eventReleaseTime} onChange={setEventReleaseTime} />
+        <View style={styles.eventCapacityField}><View style={styles.eventCapacityHead}><View style={styles.eventCapacityIcon}><Ionicons name="people-outline" size={20} color={palette.blue} /></View><View style={{ flex: 1 }}><Text style={styles.fieldLabel}>{t("Event capacity", "活动人数上限", "活動人數上限")}</Text><Text style={styles.eventCapacityHint}>{t("Organisation event drafts are limited to 20–350 people. Discuss larger or festival-scale events with UniMate first.", "机构活动草稿限 20–350 人。更大型或节庆规模活动须先与优你伴商议。", "機構活動草稿限 20–350 人。更大型或節慶規模活動須先與優你伴商議。")}</Text></View></View><View style={styles.eventCapacityControl}><Pressable accessibilityRole="button" accessibilityLabel={t("Reduce capacity", "减少人数", "減少人數")} disabled={Number(eventCapacity) <= 20} style={[styles.eventCapacityButton, Number(eventCapacity) <= 20 && styles.eventCapacityButtonDisabled]} onPress={() => setEventCapacity(String(Math.max(20, Number(eventCapacity || 20) - 1)))}><Ionicons name="remove" size={20} color={Number(eventCapacity) <= 20 ? "#AAB7C5" : palette.blue} /></Pressable><View style={styles.eventCapacityValueWrap}><TextInput accessibilityLabel={t("Event capacity", "活动人数上限", "活動人數上限")} value={eventCapacity} onChangeText={(value) => { const digits = value.replace(/\D/g, ""); setEventCapacity(digits ? String(Math.min(350, Number(digits))) : ""); }} keyboardType="number-pad" style={[styles.eventCapacityValue, { width: 96, height: 30, padding: 0, textAlign: "center" }]} /><Text style={styles.eventCapacityUnit}>{t("spots", "个名额", "個名額")}</Text></View><Pressable accessibilityRole="button" accessibilityLabel={t("Increase capacity", "增加人数", "增加人數")} disabled={Number(eventCapacity) >= 350} style={[styles.eventCapacityButton, Number(eventCapacity) >= 350 && styles.eventCapacityButtonDisabled]} onPress={() => setEventCapacity(String(Math.min(350, Number(eventCapacity || 20) + 1)))}><Ionicons name="add" size={20} color={Number(eventCapacity) >= 350 ? "#AAB7C5" : palette.blue} /></Pressable></View><View style={styles.eventCapacityPresets}>{[20, 100, 200, 350].map((value) => <Pressable key={value} accessibilityRole="button" style={[styles.eventCapacityPreset, eventCapacity === String(value) && styles.eventCapacityPresetActive]} onPress={() => setEventCapacity(String(value))}><Text style={[styles.eventCapacityPresetText, eventCapacity === String(value) && styles.eventCapacityPresetTextActive]}>{value}</Text></Pressable>)}</View></View>
+        <Pressable accessibilityRole="button" style={styles.reviewCountAction} onPress={() => { setShowEventForm(false); setTab("messages"); setSelectedMessage("UniMate operations"); setMessageDraft(t(`I'd like to discuss an event for more than 350 people. Event: ${eventTitle.trim() || "[event name]"}. Venue: ${eventVenue.trim() || "[venue]"}.`, `我想商议超过 350 人的活动。活动：${eventTitle.trim() || "[活动名称]"}。场地：${eventVenue.trim() || "[场地]"}。`, `我想商議超過 350 人的活動。活動：${eventTitle.trim() || "[活動名稱]"}。場地：${eventVenue.trim() || "[場地]"}。`)); }}><Text style={styles.reviewCountActionText}>{t("Discuss more than 350 places with UniMate", "与优你伴商议超过 350 人的活动", "與優你伴商議超過 350 人的活動")}</Text><Ionicons name="chevron-forward" size={17} color={palette.blue} /></Pressable>
+        <View style={styles.field}><Text style={styles.fieldLabel}>{t("Voucher code (optional)", "优惠码（选填）", "優惠碼（選填）")}</Text><TextInput value={eventVoucher} onChangeText={setEventVoucher} autoCapitalize="characters" placeholder={t("e.g. STUDENT15", "例如 STUDENT15", "例如 STUDENT15")} placeholderTextColor="#A1ADBE" /></View>
+        {!!formError && <Text style={styles.workspaceError}>{formError}</Text>}
+        <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={addEvent}><Text style={styles.primaryButtonText}>{editingEventId ? t("Save draft changes", "保存草稿更改", "儲存草稿更改") : t("Save event draft", "保存活动草稿", "儲存活動草稿")}</Text></Pressable>
+      </ScrollView>
+    </Sheet>
+    <Sheet visible={!!selectedFinanceDocument && isEvents} title={selectedFinanceDocument === "invoice" ? t("Organiser invoices", "主办方发票", "主辦方發票") : selectedFinanceDocument === "settlement" ? t("Ticket settlement", "门票结算", "門票結算") : t("Finance document", "财务文件", "財務文件")} onClose={() => setSelectedFinanceDocument(null)}>
+      <ScrollView contentContainerStyle={styles.modalBody} showsVerticalScrollIndicator={false}>
+        {selectedFinanceDocument === "invoice" ? <>
+          <View style={[styles.workspaceCard, { gap: 9 }]}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{invoiceEvent?.title || t("No invoice issued", "尚未开具发票", "尚未開具發票")}</Text><Text style={[styles.workspaceStatus, { color: palette.blue, backgroundColor: "#EAF4FF" }]}>{t("Not issued", "未开具", "未開具")}</Text></View><Text style={styles.workspaceCardText}>{t("Organiser fees are agreed privately for each event. Once UniMate confirms the amount, tax treatment, due date and payment route, its invoice will appear here with an invoice number and payment status.", "主办方费用按每场活动私下商议。优你伴确认金额、税务处理、到期日和付款方式后，发票将在此显示编号及付款状态。", "主辦方費用按每場活動私下商議。優你伴確認金額、稅務處理、到期日及付款方式後，發票將在此顯示編號及付款狀態。")}</Text></View>
+          <View style={styles.workspaceDetailRow}><Text style={styles.workspaceDetailLabel}>{t("Invoice number", "发票编号", "發票編號")}</Text><Text style={styles.workspaceDetailValue}>—</Text></View>
+          <View style={styles.workspaceDetailRow}><Text style={styles.workspaceDetailLabel}>{t("Agreed fee", "约定费用", "約定費用")}</Text><Text style={styles.workspaceDetailValue}>{t("Not set", "尚未确定", "尚未確定")}</Text></View>
+          <View style={styles.workspaceDetailRow}><Text style={styles.workspaceDetailLabel}>{t("Payment method", "付款方式", "付款方式")}</Text><Text style={styles.workspaceDetailValue}>{billingMethod === "card" ? t("Card preference", "银行卡偏好", "銀行卡偏好") : billingMethod === "bank" ? t("Bank transfer preference", "银行转账偏好", "銀行轉賬偏好") : t("Not selected", "尚未选择", "尚未選擇")}</Text></View>
+          <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={() => { setSelectedFinanceDocument(null); setTab("messages"); setSelectedMessage("UniMate operations"); setMessageDraft(t(`Please confirm the agreed organiser fee and provide an official invoice for ${invoiceEvent?.title || "my event"}.`, `请确认 ${invoiceEvent?.title || "我的活动"} 所约定的主办方费用，并提供正式发票。`, `請確認 ${invoiceEvent?.title || "我的活動"} 所約定的主辦方費用，並提供正式發票。`)); }}><Text style={styles.primaryButtonText}>{t("Ask UniMate for an invoice", "向优你伴索取发票", "向優你伴索取發票")}</Text></Pressable>
+          <Text style={styles.workspaceHint}>{t("This opens a local message draft only; it is not sent in the demo.", "这只会打开本地消息草稿；演示中不会发送。", "這只會開啟本機訊息草稿；示範中不會發送。")}</Text>
+        </> : selectedFinanceDocument === "settlement" && pastSampleEvent && <>
+          <View style={[styles.workspaceCard, { gap: 9 }]}><Text style={styles.workspaceCardTitle}>{pastSampleEvent.title}</Text><Text style={styles.workspaceHint}>{t("Illustrative settlement · not an issued financial document", "示例结算 · 并非已开具的财务文件", "示例結算 · 並非已開具的財務文件")}</Text></View>
+          <View style={styles.workspaceDetailRow}><Text style={styles.workspaceDetailLabel}>{t("Tickets sold", "已售门票", "已售門票")}</Text><Text style={styles.workspaceDetailValue}>{pastSampleEvent.ticketsSold}</Text></View>
+          <View style={styles.workspaceDetailRow}><Text style={styles.workspaceDetailLabel}>{t("Gross ticket value", "票款总额", "票款總額")}</Text><Text style={styles.workspaceDetailValue}>£{(pastSampleEvent.ticketsSold * pastSampleEvent.price).toFixed(2)}</Text></View>
+          <View style={styles.workspaceDetailRow}><Text style={styles.workspaceDetailLabel}>{t("UniMate commission", "优你伴佣金", "優你伴佣金")}</Text><Text style={styles.workspaceDetailValue}>{t("Agreed per event", "按活动约定", "按活動約定")}</Text></View>
+          <View style={styles.workspaceDetailRow}><Text style={styles.workspaceDetailLabel}>{t("Refunds / adjustments", "退款／调整", "退款／調整")}</Text><Text style={styles.workspaceDetailValue}>{t("Pending reconciliation", "等待对账", "等待對賬")}</Text></View>
+          <View style={styles.workspaceDetailRow}><Text style={styles.workspaceDetailLabel}>{t("Net payout", "净结算金额", "淨結算金額")}</Text><Text style={styles.workspaceDetailValue}>{t("Pending", "待定", "待定")}</Text></View>
+          <View style={styles.workspaceNotice}><Ionicons name="shield-checkmark-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("No fixed commission is assumed. The final statement must use the privately agreed terms and verified payment, refund and chargeback records.", "此处不假设固定佣金。最终结算单须依据私下约定条款，以及已核实的付款、退款和拒付记录。", "此處不假設固定佣金。最終結算單須依據私下約定條款，以及已核實的付款、退款及拒付記錄。")}</Text></View>
+        </>}
+      </ScrollView>
+    </Sheet>
+    <Sheet visible={settingsOpen} title={t("Settings", "设置", "設定")} onClose={() => setSettingsOpen(false)}><ScrollView contentContainerStyle={styles.settingsBody}><WorkspaceCommonSettings language={language} onLanguage={onLanguage} darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} notifications={activityNotifications} onToggleNotifications={() => setActivityNotifications((current) => !current)} notificationDescription={t("Events, reviews, offers and messages", "活动、评价、优惠及消息", "活動、評價、優惠及訊息")} onLogout={onLogout} /></ScrollView></Sheet>
+    <Sheet visible={editPublicPageOpen} title={t("Edit public page", "编辑公开主页", "編輯公開主頁")} onClose={() => setEditPublicPageOpen(false)}><ScrollView contentContainerStyle={styles.modalBody}>
+      <View style={styles.workspaceNotice}><Ionicons name="information-circle-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("Changes are saved only in this demo. The official badge and ownership checks cannot be edited here.", "更改仅保存在此演示中。官方标记及所有权审核不能在此修改。", "更改只儲存在此示範中。官方標記及擁有權審核不能在此修改。")}</Text></View>
+      <Text style={styles.authFieldLabel}>{isRestaurant ? t("Restaurant name", "餐厅名称", "餐廳名稱") : t("Organisation name", "机构名称", "機構名稱")}</Text><TextInput style={styles.authInput} value={accountName} onChangeText={setAccountName} placeholder={t("Public display name", "公开显示名称", "公開顯示名稱")} />
+      <Text style={styles.authFieldLabel}>{isEvents ? t("Location / service area", "地点／服务地区", "地點／服務地區") : t("Service area", "服务地区", "服務地區")}</Text><TextInput style={styles.authInput} value={organisationArea} onChangeText={setOrganisationArea} placeholder={t("e.g. London", "例如：伦敦", "例如：倫敦")} />
+      <Text style={styles.authFieldLabel}>{t("Introduction", "简介", "簡介")}</Text><TextInput style={[styles.authInput, { minHeight: 94 }]} multiline value={profileIntroduction} onChangeText={setProfileIntroduction} placeholder={t("Tell visitors about your organisation", "向访客介绍您的机构", "向訪客介紹您的機構")} />
+      {isEvents && <>
+        <Text style={[styles.workspaceSectionTitle, { marginTop: 12 }]}>{t("Organiser profile photo", "主办方头像", "主辦方頭像")}</Text>
+        <View style={[styles.workspaceCard, { flexDirection: "row", alignItems: "center", gap: 13 }]}><View style={styles.workspaceAvatar}>{eventProfileUri ? <Image source={{ uri: eventProfileUri }} style={{ width: 88, height: 88, borderRadius: 44 }} /> : <Text style={styles.workspaceAvatarText}>{accountInitials}</Text>}</View><View style={{ flex: 1, gap: 7 }}><Text style={styles.workspaceCardTitle}>{t("A recognisable organiser image", "清晰易辨的主办方图片", "清晰易辨的主辦方圖片")}</Text><Text style={styles.workspaceHint}>{t("Square photo or logo · shown on your public page", "方形照片或标志 · 显示于公开主页", "方形相片或標誌 · 顯示於公開主頁")}</Text><Pressable accessibilityRole="button" style={[styles.marketCategory, { alignSelf: "flex-start" }]} onPress={chooseEventProfilePhoto}><Ionicons name="image-outline" size={16} color={palette.blue} /><Text style={styles.marketCategoryText}>{eventProfileUri ? t("Change photo", "更换照片", "更換相片") : t("Add photo", "添加照片", "加入相片")}</Text></Pressable></View></View>
+        <Text style={[styles.workspaceSectionTitle, { marginTop: 14 }]}>{t("Past event photo library", "往期活动照片库", "過往活動相片庫")}</Text>
+        <Text style={styles.workspaceHint}>{t("Show real highlights from events you organised. A sample past-event cover appears below; you can add up to six more photos in this preview.", "展示您举办的真实活动精彩瞬间。下方有示例往期封面；此预览还可添加最多六张照片。", "展示您舉辦的真實活動精彩瞬間。下方有示例過往封面；此預覽還可加入最多六張相片。")}</Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 9, marginTop: 10 }}>{publicPastPhotos.map((photo, index) => <View key={`${photo.uri}-${index}`} style={{ width: 100 }}><Image source={{ uri: photo.uri }} style={{ width: 100, height: 85, borderRadius: 10 }} resizeMode="cover" /><Text style={[styles.workspaceHint, { marginTop: 4 }]} numberOfLines={2}>{photo.sample ? t("Sample past cover", "示例往期封面", "示例過往封面") : photo.title}</Text>{!photo.sample && <Pressable accessibilityRole="button" accessibilityLabel={t("Remove past event photo", "移除往期活动照片", "移除過往活動相片")} style={{ position: "absolute", top: 3, right: 3, backgroundColor: "#FFFFFF", borderRadius: 12 }} onPress={() => setEventGalleryUris((current) => current.filter((uri) => uri !== photo.uri))}><Ionicons name="close-circle" size={21} color={palette.coral} /></Pressable>}</View>)}</View>
+        <Pressable accessibilityRole="button" disabled={eventGalleryUris.length >= 6} style={[styles.secondaryButton, { justifyContent: "center", marginTop: 10 }, eventGalleryUris.length >= 6 && { opacity: 0.5 }]} onPress={addEventGalleryPhotos}><Ionicons name="images-outline" size={18} color={palette.blue} /><Text style={styles.secondaryButtonText}>{t("Add past event photos", "添加往期活动照片", "加入過往活動相片")} · {eventGalleryUris.length}/6</Text></Pressable>
+        <Text style={[styles.workspaceSectionTitle, { marginTop: 14 }]}>{t("Social media", "社交媒体", "社交媒體")}</Text>
+        <Text style={styles.workspaceHint}>{t("Add full HTTPS links to your official organiser accounts. Only valid links appear publicly.", "填写主办方官方账号的完整 HTTPS 链接。只有有效链接会公开显示。", "填寫主辦方官方帳戶的完整 HTTPS 連結。只有有效連結會公開顯示。")}</Text>
+        <Text style={styles.authFieldLabel}>Instagram</Text><TextInput style={styles.authInput} value={eventInstagram} onChangeText={setEventInstagram} autoCapitalize="none" keyboardType="url" placeholder="https://www.instagram.com/yourprofile" />
+        <Text style={styles.authFieldLabel}>Facebook</Text><TextInput style={styles.authInput} value={eventFacebook} onChangeText={setEventFacebook} autoCapitalize="none" keyboardType="url" placeholder="https://www.facebook.com/yourpage" />
+        <Text style={styles.authFieldLabel}>TikTok</Text><TextInput style={styles.authInput} value={eventTikTok} onChangeText={setEventTikTok} autoCapitalize="none" keyboardType="url" placeholder="https://www.tiktok.com/@yourprofile" />
+      </>}
+      {isRestaurant && <><Text style={styles.workspaceSectionTitle}>{t("Restaurant details", "餐厅资料", "餐廳資料")}</Text><Text style={styles.authFieldLabel}>{t("Cuisine", "菜系", "菜系")}</Text><TextInput style={styles.authInput} value={restaurantCuisine} onChangeText={setRestaurantCuisine} /><Text style={styles.authFieldLabel}>{t("Public address / area", "公开地址／地区", "公開地址／地區")}</Text><TextInput style={styles.authInput} value={restaurantAddress} onChangeText={setRestaurantAddress} /><Text style={styles.authFieldLabel}>{t("Opening hours", "营业时间", "營業時間")}</Text><TextInput style={styles.authInput} value={restaurantHours} onChangeText={setRestaurantHours} placeholder={t("e.g. Mon–Sun 12:00–22:00", "例如：周一至周日 12:00–22:00", "例如：週一至週日 12:00–22:00")} /><SelectField label={t("Price level", "价格档次", "價格水平")} value={restaurantPriceLevel} options={["£", "££", "£££", "££££"]} onChange={setRestaurantPriceLevel} /><Text style={styles.authFieldLabel}>{t("Website (optional)", "网站（选填）", "網站（選填）")}</Text><TextInput style={styles.authInput} value={restaurantWebsite} onChangeText={setRestaurantWebsite} autoCapitalize="none" keyboardType="url" placeholder="https://" /><Text style={styles.authFieldLabel}>{t("Public phone (optional)", "公开电话（选填）", "公開電話（選填）")}</Text><TextInput style={styles.authInput} value={restaurantPhone} onChangeText={setRestaurantPhone} keyboardType="phone-pad" placeholder={t("Business contact number", "商家联系电话", "商戶聯絡電話")} /></>}
+      {isRestaurant && <><Text style={styles.workspaceSectionTitle}>{t("Restaurant page", "餐厅主页", "餐廳主頁")}</Text><Image source={{ uri: restaurantCoverSource }} style={styles.restaurantCover} resizeMode="cover" /><View style={styles.authRoleChoices}><Pressable accessibilityRole="button" style={styles.authRoleChoice} onPress={chooseCover}><Ionicons name="image-outline" size={17} color={palette.blue} /><Text style={styles.authRoleChoiceText}>{t("Change cover photo", "更换封面照片", "更換封面相片")}</Text></Pressable><Pressable accessibilityRole="button" style={styles.authRoleChoice} onPress={chooseMenu}><Ionicons name="document-outline" size={17} color={palette.blue} /><Text style={styles.authRoleChoiceText}>{t("Upload official menu", "上传官方菜单", "上載官方餐單")}</Text></Pressable></View><Text style={styles.workspaceHint}>{menuFile ? menuFile.name : t("PDF or image; stays on this device in the preview.", "支持 PDF 或图片；预览中仅保留在本机。", "支援 PDF 或圖片；預覽中只保留在本機。")}</Text><View style={styles.workspaceCard}><Text style={styles.workspaceCardTitle}>{t("Menu items for offers", "可设置优惠的菜单商品", "可設定優惠的餐單商品")}</Text><View style={styles.authRoleChoices}>{menuItems.map((item) => <View key={item} style={styles.authRoleChoice}><Text style={styles.authRoleChoiceText}>{item}</Text></View>)}</View><View style={styles.workspaceComposer}><TextInput style={[styles.workspaceInput, { flex: 1 }]} value={newMenuItem} onChangeText={setNewMenuItem} placeholder={t("Add a menu item", "添加菜单商品", "加入餐單商品")} placeholderTextColor="#68778F" /><Pressable accessibilityRole="button" disabled={!newMenuItem.trim()} style={[styles.workspaceSend, !newMenuItem.trim() && { opacity: 0.45 }]} onPress={() => { const item = newMenuItem.trim(); if (!menuItems.some((existing) => existing.toLowerCase() === item.toLowerCase())) setMenuItems((current) => [...current, item]); setNewMenuItem(""); }}><Ionicons name="add" size={19} color="#FFFFFF" /></Pressable></View></View></>}
+      {isEvents && <Text style={styles.workspaceHint}>{t("Manage event dates, tickets and capacity in the Events tab. They appear on your public page preview.", "请在活动页面管理日期、门票和人数；它们会显示在公开主页预览中。", "請在活動頁面管理日期、門票及人數；它們會顯示在公開主頁預覽中。")}</Text>}
+      <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={() => { if (!accountName.trim()) { Alert.alert(t("Name required", "需要填写名称", "需要填寫名稱")); return; } if (isEvents && !organisationArea.trim()) { Alert.alert(t("Location required", "需要填写地点", "需要填寫地點")); return; } if (isEvents && (!!eventInstagram.trim() && !validSocialLink(eventInstagram, ["instagram.com"]) || !!eventFacebook.trim() && !validSocialLink(eventFacebook, ["facebook.com", "fb.com"]) || !!eventTikTok.trim() && !validSocialLink(eventTikTok, ["tiktok.com"]))) { Alert.alert(t("Check social links", "请检查社交链接", "請檢查社交連結"), t("Use full HTTPS links for the matching Instagram, Facebook or TikTok account.", "请填写对应 Instagram、Facebook 或 TikTok 账号的完整 HTTPS 链接。", "請填寫對應 Instagram、Facebook 或 TikTok 帳戶的完整 HTTPS 連結。")); return; } if (restaurantWebsite.trim() && !/^https?:\/\//i.test(restaurantWebsite.trim())) { Alert.alert(t("Website link", "网站链接", "網站連結"), t("Enter a full http:// or https:// address.", "请输入完整的 http:// 或 https:// 网址。", "請輸入完整的 http:// 或 https:// 網址。")); return; } if (kind === "restaurant") onSaveRestaurantProfile({ name: accountName.trim(), cuisine: restaurantCuisine.trim(), address: restaurantAddress.trim(), hours: restaurantHours.trim(), website: restaurantWebsite.trim(), phone: restaurantPhone.trim(), priceLevel: restaurantPriceLevel, introduction: profileIntroduction.trim(), coverUri, menuItems, menuFile }); setEditPublicPageOpen(false); }}><Text style={styles.primaryButtonText}>{t("Save page", "保存主页", "儲存主頁")}</Text></Pressable>
+    </ScrollView></Sheet>
+    <Sheet visible={publicPageOpen && !isRestaurant} title={t("Official event page", "官方活动主页", "官方活動主頁")} onClose={() => setPublicPageOpen(false)}>
+      <ScrollView contentContainerStyle={styles.modalBody} showsVerticalScrollIndicator={false}>
+        <View style={styles.workspaceProfileHero}>
+          <View style={styles.workspaceAvatarWrap}><View style={styles.workspaceAvatar}>{eventProfileUri ? <Image source={{ uri: eventProfileUri }} style={{ width: 88, height: 88, borderRadius: 44 }} /> : <Text style={styles.workspaceAvatarText}>{accountInitials}</Text>}</View><View style={styles.profileAvatarBadge}><VerificationBadge kind="organisation" language={language} /></View></View>
+          <Text style={styles.workspaceProfileName}>{accountName}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}><Ionicons name="location-outline" size={15} color={palette.blue} /><Text style={styles.workspaceSubtitle}>{organisationArea || t("Location not added", "尚未填写地点", "尚未填寫地點")}</Text></View>
+          <View style={styles.workspaceOfficialPill}><Ionicons name="star" size={14} color="#17213A" /><Text style={styles.workspaceOfficialText}>{t("Official page", "官方主页", "官方主頁")}</Text></View>
+        </View>
+        <Pressable accessibilityRole="button" style={styles.viewProfileButton} onPress={() => { setPublicPageOpen(false); setEditPublicPageOpen(true); }}><Ionicons name="create-outline" size={17} color={palette.blue} /><Text style={styles.viewProfileButtonText}>{t("Edit organiser page", "编辑主办方主页", "編輯主辦方主頁")}</Text></Pressable>
+        <Text style={styles.workspaceSectionTitle}>{t("About the organiser", "关于主办方", "關於主辦方")}</Text>
+        <View style={styles.workspaceCard}><Text style={styles.workspaceCardText}>{profileIntroduction || t("Student events and venue experiences across London.", "提供伦敦学生活动与场馆体验。", "提供倫敦學生活動及場館體驗。")}</Text></View>
+        <Text style={styles.workspaceSectionTitle}>{t("Official social channels", "官方社交账号", "官方社交帳戶")}</Text>
+        {publicSocialLinks.length ? <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10, marginBottom: 12 }}>{publicSocialLinks.map((item) => <Pressable key={item.name} accessibilityRole="link" style={[styles.marketCategory, { gap: 6 }]} onPress={() => Linking.openURL(item.value).catch(() => Alert.alert(t("Could not open link", "无法打开链接", "無法開啟連結")))}><Ionicons name={item.icon as any} size={17} color={palette.blue} /><Text style={styles.marketCategoryText}>{item.name}</Text></Pressable>)}</View> : <View style={styles.workspaceCard}><Text style={styles.workspaceHint}>{t("No official social links added yet.", "尚未添加官方社交链接。", "尚未加入官方社交連結。")}</Text></View>}
+        <Text style={styles.workspaceSectionTitle}>{t("Live events · open to students", "已上线活动 · 学生可报名", "已上線活動 · 學生可報名")}</Text>
+        {liveEvents.map((event) => <View key={event.id} style={[styles.workspaceCard, { gap: 5 }]}><Text style={styles.workspaceCardTitle}>{event.title}{event.isSample ? ` · ${t("sample", "示例", "示例")}` : ""}</Text><Text style={styles.workspaceCardText}>{event.date} · {event.venue}</Text><Text style={styles.workspaceHint}>{event.price === 0 ? t("Free sign-up", "免费报名", "免費報名") : `£${event.price.toFixed(2)}`} · {Math.max(0, event.capacity - (event.price === 0 ? event.signUps || 0 : event.ticketsSold))} {t("spots left", "个剩余名额", "個剩餘名額")}</Text></View>)}
+        {!liveEvents.length && <View style={styles.workspaceCard}><Text style={styles.workspaceHint}>{t("No approved events currently open for booking.", "目前没有获批并开放报名的活动。", "目前沒有獲批並開放報名的活動。")}</Text></View>}
+        <Text style={[styles.workspaceSectionTitle, { marginTop: 12 }]}>{t("Past event photos", "往期活动照片", "過往活動相片")}</Text>
+        {publicPastPhotos.length ? <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 9, marginTop: 10, marginBottom: 10 }}>{publicPastPhotos.map((photo, index) => <View key={`${photo.uri}-${index}`} style={{ width: 108 }}><Image source={{ uri: photo.uri }} style={{ width: 108, height: 92, borderRadius: 10 }} resizeMode="cover" /><Text style={[styles.workspaceHint, { marginTop: 4 }]} numberOfLines={2}>{photo.title}{photo.sample ? ` · ${t("sample", "示例", "示例")}` : ""}</Text></View>)}</View> : <View style={styles.workspaceCard}><Text style={styles.workspaceHint}>{t("No past event photos yet.", "尚无往期活动照片。", "尚無過往活動相片。")}</Text></View>}
+        <Text style={[styles.workspaceSectionTitle, { marginTop: 12 }]}>{t("Event ratings", "活动评分", "活動評分")}</Text>
+        <View style={[styles.workspaceCard, { gap: 8 }]}><Text style={styles.workspaceCardTitle}>★ {(sampleEventRatings.reduce((total, rating) => total + rating.rating, 0) / sampleEventRatings.length).toFixed(1)} / 5 · {sampleEventRatings.length} {t("sample ratings", "条示例评分", "條示例評分")}</Text><Text style={styles.workspaceHint}>{t("Example reviews from a past event. Real ratings need verified attendance and student submissions.", "来自往期活动的示例评价。真实评分须以已验证的参加记录及学生提交为准。", "來自過往活動的示例評價。真實評分須以已驗證的參加記錄及學生提交為準。")}</Text></View>
+        {sampleEventRatings.map((rating) => <View key={rating.id} style={[styles.workspaceCard, { gap: 5 }]}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{rating.student}</Text><Text style={[styles.workspaceCardTitle, { color: "#D88A17" }]}>★ {rating.rating}/5</Text></View><Text style={styles.workspaceHint}>{rating.event} · {t("sample", "示例", "示例")}</Text><Text style={styles.workspaceCardText}>{rating.text}</Text></View>)}
+        <View style={styles.workspaceNotice}><Ionicons name="information-circle-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("Public page preview only. Private drafts, pending events and cancelled events are not shown to students here. Changes are not published.", "仅为公开主页预览。私人草稿、待审核及已取消活动不会在此向学生显示；更改也不会实际发布。", "僅為公開主頁預覽。私人草稿、待審核及已取消活動不會在此向學生顯示；更改亦不會實際發佈。")}</Text></View>
+      </ScrollView>
+    </Sheet>
+    <Sheet visible={publicPageOpen && isRestaurant} title={t("Restaurant public page", "餐厅公开主页", "餐廳公開主頁")} onClose={() => setPublicPageOpen(false)}>
+      <ScrollView contentContainerStyle={styles.modalBody} showsVerticalScrollIndicator={false}>
+        <Image source={{ uri: restaurantCoverSource }} style={styles.restaurantPublicCover} resizeMode="cover" />
+        <View style={styles.workspaceProfileHero}><View style={styles.workspaceAvatarWrap}><View style={styles.workspaceAvatar}><Text style={styles.workspaceAvatarText}>{accountInitials}</Text></View><View style={styles.profileAvatarBadge}><VerificationBadge kind="organisation" language={language} /></View></View><Text style={styles.workspaceProfileName}>{accountName}</Text><Text style={styles.workspaceSubtitle}>{restaurantCuisine} · {restaurantAddress} · {restaurantPriceLevel}</Text></View>
+        <Pressable accessibilityRole="button" style={styles.viewProfileButton} onPress={() => setEditPublicPageOpen(true)}><Ionicons name="create-outline" size={17} color={palette.blue} /><Text style={styles.viewProfileButtonText}>{t("Edit this public page", "编辑此公开主页", "編輯此公開主頁")}</Text></Pressable>
+        <View style={[styles.workspaceCard, { gap: 9 }]}><Text style={styles.workspaceCardTitle}>{t("Restaurant information", "餐厅信息", "餐廳資訊")}</Text><Text style={styles.workspaceCardText}>📍 {restaurantAddress}</Text>{!!restaurantHours.trim() && <Text style={styles.workspaceCardText}>◷ {restaurantHours}</Text>}{!!restaurantPhone.trim() && <Text style={styles.workspaceCardText}>☎ {restaurantPhone}</Text>}{!!restaurantWebsite.trim() && <Pressable accessibilityRole="link" onPress={() => Linking.openURL(restaurantWebsite.trim()).catch(() => Alert.alert(t("Could not open website", "无法打开网站", "無法開啟網站")))}><Text style={styles.workspaceCardLink}>{t("Visit website", "访问网站", "瀏覽網站")}  ›</Text></Pressable>}</View>
+        <Text style={styles.workspaceSectionTitle}>{t("About", "简介", "簡介")}</Text><View style={styles.workspaceCard}><Text style={styles.workspaceCardText}>{profileIntroduction || t("Student-friendly food and offers in London.", "为伦敦学生提供餐饮与优惠。", "為倫敦學生提供餐飲及優惠。")}</Text></View>
+        <View style={styles.workspaceNotice}><Ionicons name="information-circle-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("Public page preview only. Uploaded files, offers and replies are not published.", "仅供公开主页预览。上传文件、优惠和回复不会实际发布。", "只供公開主頁預覽。上載檔案、優惠及回覆不會實際發佈。")}</Text></View>
+        <Text style={styles.workspaceSectionTitle}>{t("Official menu", "官方菜单", "官方餐單")}</Text>
+        <View style={styles.workspaceCard}>{menuFile ? <><Text style={styles.workspaceCardTitle}>{menuFile.name}</Text>{menuFile.mimeType?.startsWith("image/") ? <Image source={{ uri: menuFile.uri }} style={styles.restaurantMenuImage} resizeMode="contain" /> : <Pressable accessibilityRole="button" onPress={() => Linking.openURL(menuFile.uri).catch(() => Alert.alert(t("Could not open file", "无法打开文件", "無法開啟檔案")))}><Text style={styles.workspaceCardLink}>{t("Open menu file", "打开菜单文件", "開啟餐單檔案")}  ›</Text></Pressable>}</> : <Text style={styles.workspaceCardText}>{t("Menu coming soon", "菜单即将上线", "餐單即將上線")}</Text>}</View>
+        <Text style={styles.workspaceSectionTitle}>{t("Menu highlights", "菜单精选", "餐單精選")}</Text><View style={styles.authRoleChoices}>{menuItems.map((item) => <View key={item} style={styles.authRoleChoice}><Text style={styles.authRoleChoiceText}>{item}</Text></View>)}</View>
+        <Text style={styles.workspaceSectionTitle}>{t("Student offers", "学生优惠", "學生優惠")}</Text>{offers.filter((offer) => offer.area === "restaurant").map((offer) => <View key={offer.id} style={styles.workspaceCard}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{offer.discount}% {t("off", "折扣", "折扣")}</Text><Text style={styles.workspaceStatus}>{offer.code}</Text></View><Text style={styles.workspaceCardText}>{offer.target}</Text>{!!offer.occasion && <Text style={styles.workspaceCardText}>{offer.occasion}</Text>}{!!offer.startDate && <Text style={styles.workspaceCardText}>{offer.startDate} – {offer.endDate}</Text>}</View>)}
+        <Text style={styles.workspaceSectionTitle}>{t("Student reviews", "学生评价", "學生評價")} · ★ {averageReviewRating}</Text><Text style={styles.workspaceHint}>{publicReviewCount} {t("ratings in this preview; selected comments are shown below.", "条预览评分；以下展示部分评论。", "條預覽評分；以下展示部分評論。")}</Text>{allReviews.map((review) => <View key={review.id} style={styles.workspaceCard}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{review.student}</Text><Text style={styles.workspaceReviewStars}>{"★".repeat(Math.round(review.rating))}{"☆".repeat(5 - Math.round(review.rating))} {review.rating.toFixed(1)}/5</Text></View><Text style={styles.workspaceCardText}>{review.text}</Text>{!!review.reply && <View style={styles.workspaceOwnerReply}><Text style={styles.workspaceCardTitle}>{t("Owner response", "商家回复", "商戶回覆")}</Text><Text style={styles.workspaceCardText}>{review.reply}</Text></View>}</View>)}
+        {isEvents && <><Text style={styles.workspaceSectionTitle}>{t("Events", "活动", "活動")}</Text>{eventsList.map((event) => <View key={event.id} style={styles.workspaceCard}><Text style={styles.workspaceCardTitle}>{event.title}</Text><Text style={styles.workspaceCardText}>{event.date} · {event.venue}</Text></View>)}</>}
+      </ScrollView>
+    </Sheet>
+  </SafeAreaView>;
+}
+
+function PostSignupScreen({ role, name, staffPosition, staffService, movingDriver, studentStatus, language, onLanguage, darkMode, onToggleDarkMode, onStudentSubmitted, onContinueLimited, onContactSupport, onBack, onPreview }: {
+  role: AccountRole;
+  name: string;
+  staffPosition: string;
+  staffService: StaffService;
+  movingDriver: boolean;
+  studentStatus: "unverified" | "pending" | "failed";
+  language: Language;
+  onLanguage: (language: Language) => void;
+  darkMode: boolean;
+  onToggleDarkMode: () => void;
+  onStudentSubmitted: (decision: StudentVerificationDecision) => void;
+  onContinueLimited: () => void;
+  onContactSupport: () => void;
+  onBack: () => void;
+  onPreview: () => void;
+}) {
+  const [verificationOpen, setVerificationOpen] = useState(false);
+  const isStudent = role === "student";
+  const t = (en: string, simplified: string, traditional = simplified) => tr(language, en, simplified, traditional);
+  const heading = isStudent ? studentStatus === "pending" ? t("Verification needs review", "认证需要审核", "認證需要審核") : studentStatus === "failed" ? t("Verification not completed", "认证未通过", "認證未通過") : t("Verify your student account", "认证学生账号", "認證學生帳戶") : t("Application pending approval", "申请待审核", "申請待審核");
+  const explanation = isStudent ? studentStatus === "pending" ? t("The automated checks could not reach a clear result. Student features stay locked while the case is reviewed.", "自动核验未得出明确结果。审核期间学生功能仍会锁定。", "自動核驗未得出明確結果。審核期間學生功能仍會鎖定。") : studentStatus === "failed" ? t("We could not verify your student status. Check your details and try again, or contact the support team for help.", "无法核验您的学生身份。请检查资料后重试，或联系支持团队。", "無法核實您的學生身分。請檢查資料後重試，或聯絡支援團隊。") : t("Verify your student status to unlock UniMate’s student community.", "认证学生身份以解锁 UniMate 学生社区。", "認證學生身分以解鎖 UniMate 學生社群。") : t(`Your ${role} application for ${name} is marked as pending review.`, `${name} 的${role === "staff" ? "员工" : role === "seller" ? "独立卖家" : "机构"}申请已标记为待审核。`, `${name} 的${role === "staff" ? "員工" : role === "seller" ? "獨立賣家" : "機構"}申請已標記為待審核。`);
+  const steps = isStudent ? [t("Confirm ownership of your university email", "确认大学邮箱的所有权", "確認大學電郵的擁有權"), t("Check student ID authenticity and current enrolment", "核验学生证真伪及当前在读状态", "核驗學生證真偽及目前在讀狀態"), t("Pass a live selfie and face match to unlock access automatically", "通过实时自拍及人脸比对后自动开放权限", "通過即時自拍及人臉比對後自動開放權限")] : [role === "staff" ? t(`Position: ${staffPosition}`, `职位：${staffPosition}`, `職位：${staffPosition}`) : role === "seller" ? t("Marketplace-only seller review required", "需要审核二手市场卖家资格", "需要審核二手市場賣家資格") : t("Official organisation page review required", "需要审核机构官方主页", "需要審核機構官方主頁"), t("UniMate reviews the application before granting access", "UniMate 审核申请后才会开放访问权限", "UniMate 審核申請後才會開放存取權限"), role === "seller" ? t("Marketplace sellers do not receive student, staff or official badges", "独立卖家不会获得学生、员工或官方机构标记", "獨立賣家不會獲得學生、員工或官方機構標記") : t("You will not receive a verified badge before approval", "批准前不会获得认证标记", "批准前不會獲認證標記")];
+  if (role === "staff" && (staffService === "airport" || staffService === "moving" && movingDriver)) {
+    steps.splice(1, 0, t("Driving licence and DVLA record checked with your consent", "征得同意后核验驾驶证及 DVLA 驾驶记录", "取得同意後核實駕駛執照及 DVLA 駕駛紀錄"));
+    steps.splice(2, 0, staffService === "airport" ? t("Private-hire licence, DBS/medical status, vehicle and hire-and-reward insurance reviewed", "审核网约车执照、背景/体检状态、车辆及载客保险", "審核私家出租車牌照、背景/體檢狀態、車輛及載客保險") : t("Vehicle class, business insurance and goods cover reviewed", "审核车辆类别、商业保险及货物保障", "審核車輛類別、商業保險及貨物保障"));
+  }
+  return <SafeAreaView style={styles.safe}><AuthPreferences language={language} onLanguage={onLanguage} darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} /><ScrollView contentContainerStyle={{ padding: 24, paddingTop: 32, paddingBottom: 48, flexGrow: 1 }}>
+    <View style={{ alignItems: "center", marginBottom: 24 }}><View style={{ width: 72, height: 72, borderRadius: 22, backgroundColor: studentStatus === "failed" && isStudent ? "#FFF1F2" : isStudent ? "#EAF4FF" : "#FFF5DB", alignItems: "center", justifyContent: "center" }}><Ionicons name={studentStatus === "failed" && isStudent ? "close-circle-outline" : isStudent ? "school-outline" : "time-outline"} size={34} color={studentStatus === "failed" && isStudent ? palette.coral : isStudent ? palette.blue : "#9F6D05"} /></View><Text style={{ color: palette.navy, fontWeight: "900", fontSize: 25, marginTop: 16, textAlign: "center" }}>{heading}</Text><Text style={{ color: palette.muted, fontSize: 13, lineHeight: 20, textAlign: "center", marginTop: 9 }}>{explanation}</Text></View>
+    {studentStatus === "failed" && isStudent ? <View style={{ backgroundColor: "#FFF7F7", borderRadius: 15, padding: 17, marginBottom: 18, borderWidth: 1, borderColor: "#FFD5D8" }}><Text style={{ color: palette.navy, fontWeight: "800", fontSize: 14, marginBottom: 7 }}>{t("Before you retry", "重试前请检查", "重試前請檢查")}</Text><Text style={{ color: palette.muted, fontSize: 12, lineHeight: 19 }}>{t("Use your current student ID, ensure the details are readable, and take a clear live selfie. If the result still fails, contact support.", "请使用有效学生证，确保资料清晰，并拍摄清晰的实时自拍。如仍未通过，请联系支持团队。", "請使用有效學生證，確保資料清晰，並拍攝清晰的即時自拍。如仍未通過，請聯絡支援團隊。")}</Text></View> : <View style={{ backgroundColor: "#F4F8FD", borderRadius: 15, padding: 17, marginBottom: 18, borderWidth: 1, borderColor: "#DAE8F8" }}><Text style={{ color: palette.navy, fontWeight: "800", fontSize: 14, marginBottom: 9 }}>{isStudent ? t("How access works", "访问权限说明", "存取權限說明") : t("What happens next", "接下来会怎样", "接下來會怎樣")}</Text>{steps.map((line) => <View key={line} style={{ flexDirection: "row", gap: 8, alignItems: "flex-start", marginTop: 7 }}><Ionicons name="checkmark-circle-outline" size={17} color={palette.blue} /><Text style={{ color: palette.navy, flex: 1, fontSize: 12, lineHeight: 18 }}>{line}</Text></View>)}</View>}
+    {isStudent && studentStatus !== "failed" && <View style={{ backgroundColor: "#FFF9EE", borderRadius: 13, padding: 14, marginBottom: 18 }}><Text style={{ color: palette.navy, fontWeight: "800", fontSize: 12, marginBottom: 4 }}>{t("If you skip verification", "如果跳过认证", "如果跳過認證")}</Text><Text style={{ color: palette.muted, fontSize: 12, lineHeight: 18 }}>{t("You can browse the home screen and contact support, but events, event group chats, making friends and student food reviews will be locked.", "您仍可浏览首页及联系客服，但活动、活动群聊、交友和学生美食点评将被锁定。", "您仍可瀏覽首頁及聯絡客服，但活動、活動群組、交友及學生美食評價將被鎖定。")}</Text></View>}
+    <Text style={{ color: palette.muted, fontSize: 11, lineHeight: 17, marginBottom: 18 }}>{t("Prototype only: no real account or application has been sent to UniMate. Approval and email updates require a connected account system.", "仅供原型预览：尚未向 UniMate 发送真实账号或申请。审核及邮件通知需要连接账号系统。", "僅供原型預覽：尚未向 UniMate 發送真實帳戶或申請。審核及電郵通知需要連接帳戶系統。")}</Text>
+    {isStudent && studentStatus !== "pending" && <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={() => setVerificationOpen(true)}><Text style={styles.primaryButtonText}>{studentStatus === "failed" ? t("Try verification again", "重新认证", "重新認證") : t("Start student verification", "开始学生认证", "開始學生認證")}</Text></Pressable>}
+    {isStudent && <Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 10 }]} onPress={onContactSupport}><Text style={styles.secondaryButtonText}>{t("Contact support", "联系支持团队", "聯絡支援團隊")}</Text></Pressable>}
+    {isStudent && studentStatus !== "failed" && <Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 10 }]} onPress={onContinueLimited}><Text style={styles.secondaryButtonText}>{studentStatus === "pending" ? t("Continue with limited access", "以有限权限继续", "以有限權限繼續") : t("Skip for now · Limited access", "暂时跳过 · 有限权限", "暫時跳過 · 有限權限")}</Text></Pressable>}
+    {!isStudent && <Pressable accessibilityRole="button" style={styles.secondaryButton} onPress={onPreview}><Text style={styles.secondaryButtonText}>{t("Open main app preview", "打开主应用预览", "開啟主程式預覽")}</Text></Pressable>}
+    <Pressable accessibilityRole="button" onPress={onBack} style={{ alignSelf: "center", padding: 14, marginTop: 9 }}><Text style={{ color: palette.blue, fontWeight: "800", fontSize: 13 }}>{t("Back to sign in", "返回登录", "返回登入")}</Text></Pressable>
+  </ScrollView>{isStudent && <StudentVerificationSheet visible={verificationOpen} language={language} status={studentStatus} startApply onClose={() => setVerificationOpen(false)} onSubmit={(decision) => { setVerificationOpen(false); onStudentSubmitted(decision); }} onContactSupport={() => { setVerificationOpen(false); onContactSupport(); }} />}</SafeAreaView>;
+}
+
+function DemoGallery({ language, onLanguage, darkMode, onToggleDarkMode, onBack, onSelect }: { language: Language; onLanguage: (language: Language) => void; darkMode: boolean; onToggleDarkMode: () => void; onBack: () => void; onSelect: (role: AccountRole, service?: StaffService, kind?: OrganisationType, approvedSeller?: boolean) => void }) {
+  const t = (en: string, simplified: string, traditional = simplified) => tr(language, en, simplified, traditional);
+  const demos: { id: string; title: string; detail: string; icon: string; role: AccountRole; service?: StaffService; kind?: OrganisationType; approvedSeller?: boolean }[] = [
+    { id: "student", title: t("Student app", "学生应用", "學生應用程式"), detail: t("Community, events, places and marketplace", "社群、活动、地点与二手市场", "社群、活動、地點及二手市場"), icon: "school-outline", role: "student" },
+    { id: "cleaning", title: t("Cleaning staff", "清洁服务员工", "清潔服務員工"), detail: t("Confirmed cleaning jobs, schedule and messages", "已确认清洁订单、日程与消息", "已確認清潔訂單、日程及訊息"), icon: "sparkles-outline", role: "staff", service: "cleaning" },
+    { id: "moving", title: t("Moving staff", "搬运服务员工", "搬運服務員工"), detail: t("Moving jobs, routes and messages", "搬运订单、路线与消息", "搬運訂單、路線及訊息"), icon: "cube-outline", role: "staff", service: "moving" },
+    { id: "airport", title: t("Airport transfer staff", "机场接送员工", "機場接送員工"), detail: t("Airport pickups, itinerary and messages", "机场接送、行程与消息", "機場接送、行程及訊息"), icon: "airplane-outline", role: "staff", service: "airport" },
+    { id: "events", title: t("Event organisation", "活动机构", "活動機構"), detail: t("Post larger events, set tickets and vouchers", "发布大型活动、设置门票与优惠码", "發佈大型活動、設定門票及優惠碼"), icon: "calendar-outline", role: "organisation", kind: "events" },
+    { id: "restaurant", title: t("Restaurant organisation", "餐厅机构", "餐廳機構"), detail: t("Reviews, owner replies and offers", "点评、店主回复与优惠", "評價、店主回覆及優惠"), icon: "restaurant-outline", role: "organisation", kind: "restaurant" },
+    { id: "both", title: t("Events + restaurant account", "活动与餐厅双账号", "活動及餐廳雙帳戶"), detail: t("Switch between dedicated event and restaurant workspaces", "在独立的活动与餐厅工作区之间切换", "在獨立的活動及餐廳工作區之間切換"), icon: "swap-horizontal-outline", role: "organisation", kind: "both" },
+    { id: "seller", title: t("Marketplace seller applicant", "市场卖家申请者", "市場賣家申請者"), detail: t("Apply to sell handmade or niche products", "申请销售手作或特色商品", "申請銷售手作或特色商品"), icon: "bag-handle-outline", role: "seller" },
+    { id: "approved-seller", title: t("Approved small shop", "已批准独立小店", "已批准獨立小店"), detail: t("View a curated maker's shop and listings", "查看精选创作者小店与商品", "查看精選創作者小店及商品"), icon: "ribbon-outline", role: "seller", approvedSeller: true },
+  ];
+  return <SafeAreaView style={styles.safe}><AuthPreferences language={language} onLanguage={onLanguage} darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} /><ScrollView contentContainerStyle={styles.workspaceBody}>
+    <Pressable accessibilityRole="button" onPress={onBack} style={styles.workspaceBack}><Ionicons name="arrow-back" size={18} color={palette.blue} /><Text style={styles.workspaceBackText}>{t("Back", "返回", "返回")}</Text></Pressable>
+    <Text style={styles.workspaceTitle}>{t("Choose a workspace", "探索优你伴预览", "探索優你伴預覽")}</Text>
+    <Text style={styles.workspaceHint}>{t("Choose a sample role to inspect its workspace. This switcher is for prototype review only; it does not grant a real account, approval or access.", "请选择示例角色查看工作区。此切换器仅供原型评审，不会授予真实账号、审核通过或访问权限。", "請選擇示例角色查看工作區。此切換器只供原型評審，不會授予真實帳戶、審批或存取權限。")}</Text>
+    {demos.map((demo) => <Pressable key={demo.id} accessibilityRole="button" onPress={() => onSelect(demo.role, demo.service, demo.kind, demo.approvedSeller)} style={styles.workspaceScheduleRow}><View style={styles.workspaceScheduleDate}><Ionicons name={demo.icon as any} size={22} color={palette.blue} /></View><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{demo.title}</Text><Text style={styles.workspaceCardText}>{demo.detail}</Text></View><Ionicons name="chevron-forward" size={18} color={palette.blue} /></Pressable>)}
+  </ScrollView></SafeAreaView>;
+}
+
 export default function App() {
   const [darkMode, setDarkMode] = useState(false);
+  const [language, setLanguage] = useState<Language>("EN");
+  const [activeRole, setActiveRole] = useState<AccountRole | null>(null);
+  const [flow, setFlow] = useState<"auth" | "app" | "student-onboarding" | "approval" | "auth-support" | "demo-gallery">("auth");
+  const [demoReturnFlow, setDemoReturnFlow] = useState<"auth" | "app">("auth");
+  const [supportReturnFlow, setSupportReturnFlow] = useState<"auth" | "student-onboarding" | "approval">("auth");
+  const [studentStatus, setStudentStatus] = useState<StudentVerificationStatus>("verified");
+  const [accountName, setAccountName] = useState("");
+  const [staffPosition, setStaffPosition] = useState("");
+  const [activeStaffService, setActiveStaffService] = useState<StaffService>("cleaning");
+  const [activeMovingDriver, setActiveMovingDriver] = useState(true);
+  const [activeOrganisationType, setActiveOrganisationType] = useState<OrganisationType>("events");
+  const [activeSellerApproved, setActiveSellerApproved] = useState(false);
+  const [activeSellerCategories, setActiveSellerCategories] = useState<string[]>([]);
+  const [staffAvailability, setStaffAvailability] = useState<Record<StaffService, StaffAvailability>>({
+    cleaning: { areas: ["Central London"], blockedDates: {} },
+    moving: { areas: ["Central London", "North London", "South London", "East London", "West London"], blockedDates: {} },
+    airport: { areas: ["Central London", "North London", "South London", "East London", "West London"], blockedDates: {} },
+  });
+  const [sessionId, setSessionId] = useState(0);
+  const [previewBookings, setPreviewBookings] = useState<(StaffBooking & { service: StaffService })[]>([]);
+  const [completedJobs, setCompletedJobs] = useState<StaffCompletedJob[]>([]);
+  const [serviceChatCases, setServiceChatCases] = useState<ServiceChatCase[]>([]);
+  const [statusUpdates, setStatusUpdates] = useState<ServiceStatusUpdate[]>([]);
+  const [serviceReviews, setServiceReviews] = useState<StaffServiceReview[]>([]);
+  const [staffTips, setStaffTips] = useState<StaffTip[]>([]);
+  const [studentProfilePhoto, setStudentProfilePhoto] = useState("");
+  const [marketplaceConversations, setMarketplaceConversations] = useState<MarketplaceConversation[]>([{ id: "MP-13", productName: products[12].name, productPrice: products[12].price, productImage: products[12].image, sellerHandle: "@loopandloom", buyerName: "Sophie Chen", status: "enquiry", requestStatus: "pending", messages: [{ author: "buyer", text: "Hi, is this item still available?" }] }]);
+  const [submittedPlaceReviews, setSubmittedPlaceReviews] = useState<PlaceReview[]>([]);
+  const [placeReviewReplies, setPlaceReviewReplies] = useState<Record<string, string>>({});
+  const [restaurantPublicProfile, setRestaurantPublicProfile] = useState<RestaurantPublicProfile>(defaultRestaurantPublicProfile);
+  const openMarketplaceConversation = (product: (typeof products)[number], sellerHandle: string) => { const id = `MP-${products.indexOf(product) + 1}`; setMarketplaceConversations((current) => current.some((item) => item.id === id) ? current : [...current, { id, productName: product.name, productPrice: product.price, productImage: product.image, sellerHandle, buyerName: accountName.trim() || "Sophie Chen", status: "enquiry", requestStatus: "pending", messages: [] }]); return id; };
+  const sendMarketplaceMessage = (id: string, author: "buyer" | "seller", text: string, attachment?: ChatAttachment) => setMarketplaceConversations((current) => current.map((item) => { if (item.id !== id || (!text.trim() && !attachment) || !item.issue && (item.status === "received" || item.requestStatus === "declined" || item.requestStatus === "blocked")) return item; if (!item.issue && item.requestStatus === "pending" && !(author === "buyer" && item.messages.length === 0)) return item; return { ...item, messages: [...item.messages, { author, text: text.trim(), attachment }] }; }));
+  const decideMarketplaceRequest = (id: string, decision: "accepted" | "declined" | "blocked") => setMarketplaceConversations((current) => current.map((item) => item.id === id && item.requestStatus === "pending" ? { ...item, requestStatus: decision } : item));
+  const markMarketplaceSold = (id: string) => setMarketplaceConversations((current) => current.map((item) => item.id === id && item.status === "enquiry" && item.requestStatus === "accepted" ? { ...item, status: "sold" } : item));
+  const confirmMarketplaceReceipt = (id: string) => setMarketplaceConversations((current) => current.map((item) => item.id === id && item.status === "sold" ? { ...item, status: "received" } : item));
+  const openMarketplaceIssue = (id: string, reason: MarketplaceIssueReason, details: string, openedBy: "buyer" | "seller") => setMarketplaceConversations((current) => current.map((item) => item.id === id && !item.issue && details.trim().length >= 10 ? { ...item, issue: { reason, details: details.trim() }, messages: [...item.messages, { author: openedBy, text: details.trim() }, { author: "support", text: "UniMate support joined this product case in the demo. A real support agent is not connected." }] } : item));
+  const addPreviewBooking = (order: ServiceCheckoutOrder) => { const service: StaffService = order.service === "airport" ? "airport" : order.service === "moving" ? "moving" : "cleaning"; setPreviewBookings((current) => [{ service, id: `PV-${Date.now()}`, title: order.title, student: accountName.trim() || "Student preview", date: order.bookingDate || "24 Sep 2026", time: order.bookingTime || order.when, place: order.bookingAddress || order.details, detail: order.details, intake: order.intake }, ...current]); };
+  const recordCompletedJob = (job: StaffCompletedJob) => setCompletedJobs((current) => current.some((item) => item.booking.id === job.booking.id) ? current : [job, ...current]);
+  const openServiceChatCase = (job: StaffCompletedJob, reason: ServiceCaseReason, openedBy: "customer" | "staff", details: string) => { if (!completedJobs.some((item) => item.booking.id === job.booking.id)) return; setServiceChatCases((current) => current.some((item) => item.bookingId === job.booking.id) ? current : [{ bookingId: job.booking.id, service: job.service, reason, booking: job.booking, openedBy, messages: details.trim() ? [{ author: openedBy, text: details.trim() }] : [] }, ...current]); };
+  const addServiceCaseMessage = (bookingId: string, author: "customer" | "staff", message: string) => setServiceChatCases((current) => current.map((item) => item.bookingId === bookingId ? { ...item, messages: [...item.messages, { author, text: message.trim() }] } : item));
+  const recordServiceReview = (review: StaffServiceReview) => setServiceReviews((current) => current.some((item) => item.bookingId === review.bookingId) ? current : [review, ...current]);
+  const addStaffTip = (tip: StaffTip) => setStaffTips((current) => current.some((item) => item.bookingId === tip.bookingId) ? current : [tip, ...current]);
+  const respondToServiceReview = (bookingId: string, response: string) => setServiceReviews((current) => current.map((review) => review.bookingId === bookingId ? { ...review, staffResponse: response } : review));
+  const openPreview = () => { setActiveRole("student"); setStudentStatus("verified"); setAccountName(""); setFlow("app"); setSessionId((current) => current + 1); };
+  const openDemoGallery = () => { setDemoReturnFlow(flow === "app" ? "app" : "auth"); setFlow("demo-gallery"); };
+  const selectDemo = (role: AccountRole, service?: StaffService, kind?: OrganisationType, approvedSeller?: boolean) => { setActiveRole(role); setActiveStaffService(service || "cleaning"); setActiveMovingDriver(true); setActiveOrganisationType(kind || "events"); setActiveSellerApproved(!!approvedSeller); setActiveSellerCategories(approvedSeller ? ["Handmade & crochet"] : []); setStudentStatus("verified"); setAccountName(""); setFlow("app"); setSessionId((current) => current + 1); };
+  const openAccountSupport = (returnFlow: "auth" | "student-onboarding" | "approval") => { setSupportReturnFlow(returnFlow); setFlow("auth-support"); };
+  const logout = () => { setActiveRole(null); setFlow("auth"); setAccountName(""); setStaffPosition(""); setSessionId((current) => current + 1); };
   return (
     <DarkModeContext.Provider value={darkMode}>
       <SafeAreaProvider>
@@ -13168,10 +15726,21 @@ export default function App() {
           style={[styles.appFrame, darkMode && styles.darkAppFrame]}
           behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
-          <AppContent
-            darkMode={darkMode}
-            onToggleDarkMode={() => setDarkMode((current) => !current)}
-          />
+          {flow === "demo-gallery" ? (
+            <DemoGallery language={language} onLanguage={setLanguage} darkMode={darkMode} onToggleDarkMode={() => setDarkMode((current) => !current)} onBack={() => setFlow(demoReturnFlow)} onSelect={selectDemo} />
+          ) : flow === "app" && activeRole ? (
+            activeRole === "student" ? <AppContent key={sessionId} darkMode={darkMode} onToggleDarkMode={() => setDarkMode((current) => !current)} language={language} onLanguage={setLanguage} accountRole={activeRole} studentStatus={studentStatus} accountName={accountName} onLogout={logout} onPreviewBooking={addPreviewBooking} previewBookings={previewBookings} staffAvailability={staffAvailability} completedJobs={completedJobs} serviceChatCases={serviceChatCases} statusUpdates={statusUpdates} onOpenServiceChatCase={openServiceChatCase} onAddServiceCaseMessage={addServiceCaseMessage} serviceReviews={serviceReviews} onSubmitServiceReview={recordServiceReview} staffTips={staffTips} onAddStaffTip={addStaffTip} studentProfilePhoto={studentProfilePhoto} onStudentProfilePhotoChange={setStudentProfilePhoto} submittedReviews={submittedPlaceReviews} setSubmittedReviews={setSubmittedPlaceReviews} restaurantReviewReplies={placeReviewReplies} restaurantProfile={restaurantPublicProfile} marketplaceConversations={marketplaceConversations} onOpenMarketplaceConversation={openMarketplaceConversation} onSendMarketplaceMessage={sendMarketplaceMessage} onConfirmMarketplaceReceipt={confirmMarketplaceReceipt} onOpenMarketplaceIssue={openMarketplaceIssue} />
+            : activeRole === "staff" ? <StaffWorkspace key={sessionId} service={activeStaffService} movingDriver={activeMovingDriver} language={language} onLanguage={setLanguage} darkMode={darkMode} onToggleDarkMode={() => setDarkMode((current) => !current)} onLogout={logout} previewBookings={previewBookings.filter((booking) => booking.service === activeStaffService)} completedJobs={completedJobs} onCompleteJob={recordCompletedJob} availability={staffAvailability[activeStaffService]} onAvailabilityChange={(availability) => setStaffAvailability((current) => ({ ...current, [activeStaffService]: availability }))} serviceChatCases={serviceChatCases} onOpenServiceChatCase={openServiceChatCase} onAddServiceCaseMessage={addServiceCaseMessage} statusUpdates={statusUpdates} onAddStatusUpdate={(update) => setStatusUpdates((current) => [...current, update])} staffTips={staffTips} studentProfilePhoto={studentProfilePhoto} serviceReviews={serviceReviews} onRespondReview={respondToServiceReview} />
+            : activeRole === "organisation" ? <OrganisationWorkspace key={sessionId} kind={activeOrganisationType} language={language} onLanguage={setLanguage} darkMode={darkMode} onToggleDarkMode={() => setDarkMode((current) => !current)} onLogout={logout} submittedPlaceReviews={submittedPlaceReviews} placeReviewReplies={placeReviewReplies} onReplyToPlaceReview={(id, reply) => setPlaceReviewReplies((current) => ({ ...current, [id]: reply }))} restaurantProfile={restaurantPublicProfile} onSaveRestaurantProfile={setRestaurantPublicProfile} />
+            : <SellerWorkspace key={sessionId} approvedPreview={activeSellerApproved} initialCategories={activeSellerCategories} language={language} onLanguage={setLanguage} darkMode={darkMode} onToggleDarkMode={() => setDarkMode((current) => !current)} onLogout={logout} marketplaceConversations={marketplaceConversations} onSendMarketplaceMessage={sendMarketplaceMessage} onMarkMarketplaceSold={markMarketplaceSold} onDecideMarketplaceRequest={decideMarketplaceRequest} onOpenMarketplaceIssue={openMarketplaceIssue} studentProfilePhoto={studentProfilePhoto} />
+          ) : flow === "auth-support" ? (
+            <AuthSupportScreen language={language} onLanguage={setLanguage} darkMode={darkMode} onToggleDarkMode={() => setDarkMode((current) => !current)} onBack={() => setFlow(supportReturnFlow)} />
+          ) : (flow === "student-onboarding" || flow === "approval") && activeRole ? (
+            <PostSignupScreen role={activeRole} name={accountName} staffPosition={staffPosition} staffService={activeStaffService} movingDriver={activeMovingDriver} studentStatus={studentStatus === "pending" ? "pending" : studentStatus === "failed" ? "failed" : "unverified"} language={language} onLanguage={setLanguage} darkMode={darkMode} onToggleDarkMode={() => setDarkMode((current) => !current)} onStudentSubmitted={(decision) => { setStudentStatus(decision); if (decision === "verified") { setFlow("app"); setSessionId((current) => current + 1); } }} onContinueLimited={() => { setFlow("app"); setSessionId((current) => current + 1); }} onContactSupport={() => openAccountSupport(flow)} onBack={logout} onPreview={openPreview} />
+          ) : (
+            <AuthScreen language={language} onLanguage={setLanguage} darkMode={darkMode} onToggleDarkMode={() => setDarkMode((current) => !current)} onEnter={(role, mode, name, position, service, organisationType, movingDriver, sellerCategories) => { setActiveRole(role); setAccountName(mode === "create" ? name : ""); setStaffPosition(mode === "create" ? position : ""); setActiveStaffService(service); setActiveMovingDriver(movingDriver); setActiveOrganisationType(organisationType); setActiveSellerApproved(false); setActiveSellerCategories(mode === "create" && role === "seller" ? sellerCategories : []); setStudentStatus(mode === "create" && role === "student" ? "unverified" : "verified"); setFlow(mode === "signin" ? "app" : role === "student" ? "student-onboarding" : "approval"); setSessionId((current) => current + 1); }} onPreview={openPreview} onSupport={() => openAccountSupport("auth")} onExploreDemos={openDemoGallery} />
+          )}
+          {flow === "app" && <Pressable accessibilityRole="button" accessibilityLabel={tr(language, "Switch view", "切换预览视图", "切換預覽檢視")} onPress={openDemoGallery} style={styles.demoSwitchButton}><Ionicons name="swap-horizontal" size={15} color="#FFFFFF" /><Text style={styles.demoSwitchText}>{tr(language, "Switch view", "切换预览", "切換預覽")}</Text></Pressable>}
         </KeyboardAvoidingView>
       </SafeAreaProvider>
     </DarkModeContext.Provider>
@@ -13180,6 +15749,8 @@ export default function App() {
 
 const styles = StyleSheet.create({
   appFrame: { flex: 1, backgroundColor: "#F4F7FB" },
+  demoSwitchButton: { position: "absolute", right: 18, bottom: 82, zIndex: 20, flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 18, backgroundColor: "#184D94", shadowColor: "#092B5B", shadowOpacity: 0.18, shadowRadius: 7, elevation: 4 },
+  demoSwitchText: { color: "#FFFFFF", fontSize: 10, fontWeight: "800" },
   darkAppFrame: { backgroundColor: "#0B1423" },
   safe: {
     flex: 1,
@@ -13605,6 +16176,8 @@ const styles = StyleSheet.create({
   eventCapacityText: { color: palette.blue, fontSize: 10, fontWeight: "900" },
   eventCapacityTextSoldOut: { color: palette.coral },
   categoryScroller: { marginHorizontal: -18, marginBottom: 15 },
+  slidableCategories: { flexDirection: "row", alignItems: "center" },
+  slidableCategoryScroll: { flex: 1 },
   categoryRow: { gap: 8, paddingHorizontal: 18 },
   categoryChip: {
     borderWidth: 1,
@@ -13687,6 +16260,11 @@ const styles = StyleSheet.create({
   },
   detailReleaseTitle: { color: palette.navy, fontSize: 10, fontWeight: "900" },
   detailReleaseText: { color: palette.muted, fontSize: 9, marginTop: 3 },
+  detailFriendsCard: { borderWidth: 1, borderColor: palette.line, borderRadius: 16, marginTop: 14, overflow: "hidden" },
+  detailFriendsHead: { flexDirection: "row", alignItems: "center", gap: 11, padding: 13 },
+  detailFriendsIcon: { width: 42, height: 42, borderRadius: 13, backgroundColor: palette.sky, alignItems: "center", justifyContent: "center" },
+  detailFriendsList: { borderTopWidth: 1, borderTopColor: palette.line, paddingHorizontal: 13, paddingVertical: 12, gap: 12 },
+  detailFriendRow: { flexDirection: "row", alignItems: "center", gap: 10 },
   detailReminderButton: { minHeight: 34, borderRadius: 10, backgroundColor: palette.blue, alignItems: "center", justifyContent: "center", paddingHorizontal: 10 },
   detailReminderText: { color: "white", fontSize: 8, fontWeight: "900" },
   detailItem: { flexDirection: "row", alignItems: "center", gap: 11 },
@@ -13910,6 +16488,7 @@ const styles = StyleSheet.create({
   },
   backText: { color: palette.blue, fontWeight: "800" },
   friendProfileHero: { alignItems: "center", paddingVertical: 8 },
+  friendAvatarBadgeWrap: { width: 96, height: 96, position: "relative" },
   largeAvatar: { width: 96, height: 96, borderRadius: 48, marginRight: 0 },
   largeAvatarText: { color: palette.navy, fontWeight: "900", fontSize: 28 },
   friendProfileName: {
@@ -13918,6 +16497,8 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginTop: 11,
   },
+  friendProfileStats: { alignSelf: "stretch", flexDirection: "row", marginTop: 17, borderWidth: 1, borderColor: "#DEE7F0", borderRadius: 15, backgroundColor: "#FFFFFF" },
+  friendProfileStat: { flex: 1, alignItems: "center", justifyContent: "center", minHeight: 60 },
   privacyPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -14050,6 +16631,94 @@ const styles = StyleSheet.create({
     fontSize: 11,
     marginBottom: 5,
   },
+  authFieldLabel: { color: palette.navy, fontWeight: "800", fontSize: 13, lineHeight: 18, marginBottom: 7 },
+  authRoleDetail: { marginBottom: 18 },
+  authRoleChoices: { flexDirection: "row", flexWrap: "wrap", gap: 7 },
+  authRoleChoice: { flexGrow: 1, minHeight: 46, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, borderWidth: 1, borderColor: "#D3E2F3", borderRadius: 11, backgroundColor: "#FFFFFF", paddingHorizontal: 9 },
+  authRoleChoiceActive: { borderColor: palette.blue, backgroundColor: "#EAF4FF" },
+  authRoleChoiceText: { color: palette.navy, fontSize: 11, fontWeight: "800" },
+  authInput: { minHeight: 50, borderWidth: 1, borderColor: "#C7D7E8", borderRadius: 12, paddingHorizontal: 14, color: palette.ink, fontSize: 15, lineHeight: 21 },
+  authSupportButton: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 22, padding: 14, borderWidth: 1, borderColor: "#D5E5F5", borderRadius: 13, backgroundColor: "#F4F8FD" },
+  authSupportTitle: { color: palette.navy, fontSize: 12, fontWeight: "800" },
+  authSupportDetail: { color: palette.blue, fontSize: 11, fontWeight: "700", marginTop: 3 },
+  authSupportNote: { color: palette.muted, fontSize: 10, lineHeight: 15, marginTop: 7, textAlign: "center" },
+  authSupportHeader: { minHeight: 54, flexDirection: "row", alignItems: "center", paddingHorizontal: 18, borderBottomWidth: 1, borderBottomColor: palette.line },
+  authSupportBack: { flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 10, minWidth: 85 },
+  authSupportBackText: { color: palette.blue, fontSize: 12, fontWeight: "800" },
+  authSupportHeaderTitle: { color: palette.navy, fontSize: 16, fontWeight: "900" },
+  authSupportBody: { padding: 18, flexGrow: 1, gap: 14 },
+  authSupportIntro: { flexDirection: "row", gap: 11, alignItems: "flex-start", padding: 15, borderRadius: 14, backgroundColor: "#F4F8FD" },
+  authSupportIntroTitle: { color: palette.navy, fontSize: 14, fontWeight: "900" },
+  authSupportIntroText: { color: palette.muted, fontSize: 11, lineHeight: 17, marginTop: 4 },
+  authSupportDemoNotice: { flexDirection: "row", alignItems: "flex-start", gap: 8, padding: 11, borderRadius: 11, backgroundColor: "#EAF4FF" },
+  authSupportDemoText: { flex: 1, color: palette.navy, fontSize: 10, lineHeight: 15 },
+  authSupportBubble: { alignSelf: "flex-start", maxWidth: "88%", padding: 13, borderRadius: 14, backgroundColor: "#F1F5FA" },
+  authSupportBubbleText: { color: palette.ink, fontSize: 12, lineHeight: 19 },
+  authSupportOwnBubble: { alignSelf: "flex-end", maxWidth: "85%", padding: 13, borderRadius: 14, backgroundColor: palette.blue },
+  authSupportOwnText: { color: "#FFFFFF", fontSize: 12, lineHeight: 19 },
+  authSupportLocalNote: { alignSelf: "flex-end", color: palette.muted, fontSize: 10 },
+  authSupportComposer: { flexDirection: "row", alignItems: "center", gap: 9, padding: 12, borderTopWidth: 1, borderTopColor: palette.line },
+  authSupportInput: { flex: 1, minHeight: 42, maxHeight: 100, borderWidth: 1, borderColor: "#C7D7E8", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, color: palette.ink, fontSize: 12 },
+  authSupportSend: { width: 42, height: 42, borderRadius: 12, backgroundColor: palette.blue, alignItems: "center", justifyContent: "center" },
+  workspaceHeading: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 18, paddingTop: 19, paddingBottom: 14 },
+  workspaceEyebrow: { color: palette.blue, fontSize: 9, fontWeight: "900", letterSpacing: 1.1, marginBottom: 5 },
+  workspaceTitle: { color: palette.navy, fontSize: 23, fontWeight: "900" },
+  workspaceSubtitle: { color: palette.muted, fontSize: 11, lineHeight: 17, marginTop: 3 },
+  workspaceTabs: { flexDirection: "row", gap: 4, marginHorizontal: 8, marginTop: 5, marginBottom: 7, padding: 4, borderRadius: 14, backgroundColor: "#EDF4FB" },
+  workspaceTab: { flex: 1, minHeight: 52, borderRadius: 10, alignItems: "center", justifyContent: "center", gap: 3, paddingHorizontal: 2 },
+  workspaceTabActive: { backgroundColor: palette.blue },
+  workspaceTabText: { color: palette.muted, fontSize: 9, fontWeight: "800", textAlign: "center" },
+  workspaceTabTextActive: { color: "#FFFFFF" },
+  workspaceContactInitials: { fontSize: 14, fontWeight: "900" },
+  restaurantCover: { width: "100%", height: 150, borderRadius: 14, backgroundColor: "#E5EDF7" },
+  restaurantPublicCover: { width: "100%", height: 180, borderRadius: 14, backgroundColor: "#E5EDF7" },
+  restaurantMenuImage: { width: "100%", height: 260, marginTop: 8, borderRadius: 10, backgroundColor: "#F4F7FB" },
+  workspaceBody: { padding: 18, paddingBottom: 40, gap: 11 },
+  workspaceMetricRow: { flexDirection: "row", gap: 8 },
+  workspaceMetric: { flex: 1, minHeight: 70, alignItems: "center", justifyContent: "center", borderRadius: 13, backgroundColor: "#F2F7FC" },
+  workspaceMetricValue: { color: palette.navy, fontSize: 19, fontWeight: "900" },
+  workspaceMetricLabel: { color: palette.muted, fontSize: 9, fontWeight: "800", marginTop: 2, textAlign: "center" },
+  workspaceSectionTitle: { color: palette.navy, fontSize: 17, fontWeight: "900", marginTop: 6 },
+  workspaceSectionHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
+  workspaceHint: { color: palette.muted, fontSize: 10, lineHeight: 16 },
+  workspaceCard: { borderWidth: 1, borderColor: "#D5E2F2", borderRadius: 15, padding: 14, backgroundColor: "#FFFFFF", gap: 5 },
+  workspaceCardTop: { flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 8 },
+  workspaceCardTitle: { color: palette.navy, fontSize: 13, fontWeight: "900", flexShrink: 1 },
+  workspaceCardText: { color: palette.muted, fontSize: 11, lineHeight: 17 },
+  workspaceCardLink: { color: palette.blue, fontSize: 10, fontWeight: "900", marginTop: 5 },
+  workspaceStatus: { color: "#17774A", backgroundColor: "#E8F8EF", borderRadius: 10, overflow: "hidden", paddingHorizontal: 8, paddingVertical: 4, fontSize: 9, fontWeight: "900" },
+  workspaceNotice: { flexDirection: "row", alignItems: "flex-start", gap: 8, borderRadius: 12, backgroundColor: "#EAF4FF", padding: 12 },
+  workspaceNoticeText: { color: palette.navy, flex: 1, fontSize: 10, lineHeight: 16 },
+  workspaceScheduleRow: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderColor: "#D5E2F2", borderRadius: 13, padding: 12, backgroundColor: "#FFFFFF" },
+  workspaceScheduleDate: { width: 38, height: 38, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: "#EAF4FF" },
+  workspaceBack: { flexDirection: "row", alignItems: "center", gap: 5, alignSelf: "flex-start", paddingVertical: 5 },
+  workspaceBackText: { color: palette.blue, fontSize: 11, fontWeight: "800" },
+  workspaceComposer: { flexDirection: "row", alignItems: "center", gap: 8 },
+  workspaceInput: { minHeight: 44, flexGrow: 1, borderWidth: 1, borderColor: "#C7D7E8", borderRadius: 11, paddingHorizontal: 11, paddingVertical: 9, backgroundColor: "#FFFFFF", color: palette.ink, fontSize: 12 },
+  workspaceSend: { width: 42, height: 42, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: palette.blue },
+  workspaceLocalMessage: { alignSelf: "flex-end", color: "#FFFFFF", backgroundColor: palette.blue, borderRadius: 10, overflow: "hidden", padding: 9, fontSize: 11, marginTop: 5 },
+  workspaceProfileHero: { alignItems: "center", paddingVertical: 11, gap: 5 },
+  workspaceAvatarWrap: { width: 90, height: 90, position: "relative" },
+  workspaceAvatar: { width: 88, height: 88, borderRadius: 44, alignItems: "center", justifyContent: "center", backgroundColor: "#DCEBFF" },
+  workspaceAvatarText: { color: palette.navy, fontSize: 26, fontWeight: "900" },
+  workspaceProfileName: { color: palette.navy, fontSize: 22, fontWeight: "900", marginTop: 6 },
+  workspaceApprovedPill: { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 12, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: palette.blue, marginTop: 5 },
+  workspaceApprovedText: { color: "#FFFFFF", fontSize: 10, fontWeight: "900" },
+  workspaceOfficialPill: { flexDirection: "row", alignItems: "center", gap: 5, borderRadius: 12, paddingVertical: 6, paddingHorizontal: 10, backgroundColor: "#F3C44F", marginTop: 5 },
+  workspaceOfficialText: { color: "#17213A", fontSize: 10, fontWeight: "900" },
+  workspaceLogout: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 7, minHeight: 46, borderWidth: 1, borderColor: "#C9DCF2", borderRadius: 12, marginTop: 5 },
+  workspaceLogoutText: { color: palette.blue, fontSize: 12, fontWeight: "900" },
+  workspaceDetailRow: { borderBottomWidth: 1, borderBottomColor: palette.line, paddingVertical: 11, gap: 3 },
+  workspaceDetailLabel: { color: palette.muted, fontSize: 9, fontWeight: "900", textTransform: "uppercase" },
+  workspaceDetailValue: { color: palette.navy, fontSize: 12, fontWeight: "700" },
+  workspaceSmallAction: { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: 10, backgroundColor: palette.blue, paddingHorizontal: 10, minHeight: 34 },
+  workspaceSmallActionText: { color: "#FFFFFF", fontSize: 10, fontWeight: "900" },
+  workspaceForm: { borderWidth: 1, borderColor: "#C9DCF2", borderRadius: 14, padding: 13, backgroundColor: "#F6FAFE", gap: 9 },
+  workspaceFormRow: { flexDirection: "row", gap: 8 },
+  workspaceError: { color: palette.coral, fontSize: 10, lineHeight: 15 },
+  workspaceReviewStars: { color: "#E99A18", fontSize: 14, fontWeight: "900" },
+  workspaceOwnerReply: { borderLeftWidth: 3, borderLeftColor: palette.blue, backgroundColor: "#F2F7FC", padding: 10, marginTop: 7, borderRadius: 7 },
+  workspaceInlineAction: { alignSelf: "flex-start", paddingVertical: 7 },
   fieldHint: {
     color: palette.muted,
     fontSize: 9,
@@ -14057,6 +16726,7 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
   selectWrap: { marginTop: 12 },
+  scheduleSelectWrap: { marginTop: 8 },
   selectField: {
     minHeight: 50,
     borderWidth: 1,
@@ -14073,6 +16743,7 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 5,
     borderBottomRightRadius: 5,
   },
+  scheduleSelectField: { minHeight: 62, borderRadius: 13, paddingHorizontal: 11, gap: 10 },
   selectValue: { flex: 1, color: palette.ink, fontSize: 12, fontWeight: "700" },
   selectMenu: {
     borderWidth: 1,
@@ -14151,8 +16822,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginTop: 3,
+    marginTop: 18,
+    marginBottom: 8,
   },
+  timeTitleRowLabel: { marginTop: 0, marginBottom: 0 },
   selectedTimePill: {
     flexDirection: "row",
     alignItems: "center",
@@ -14316,6 +16989,13 @@ const styles = StyleSheet.create({
   paymentMethodText: { color: palette.muted, fontSize: 11, fontWeight: "800" },
   paymentMethodTextActive: { color: palette.navy },
   cardFields: { marginTop: 2 },
+  addressSearchWrap: { marginTop: 12 },
+  addressSearchField: { minHeight: 50, borderWidth: 1, borderColor: "#D5E0EB", borderRadius: 12, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: "white" },
+  addressSearchInput: { flex: 1, minWidth: 0, color: palette.ink, fontSize: 12, fontWeight: "700", outlineStyle: "none" } as any,
+  addressSuggestions: { borderWidth: 1, borderColor: "#D5E0EB", borderRadius: 12, marginTop: 6, overflow: "hidden", backgroundColor: "white" },
+  airportAddressSuggestion: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 9, paddingHorizontal: 12, borderBottomWidth: 1, borderBottomColor: palette.line },
+  addressSuggestionText: { flex: 1, color: palette.ink, fontSize: 11, fontWeight: "700" },
+  addressSearchMeta: { color: palette.muted, fontSize: 9, lineHeight: 14, paddingHorizontal: 12, paddingVertical: 8 },
   secureNote: {
     flexDirection: "row",
     alignItems: "center",
@@ -14419,6 +17099,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     overflow: "hidden",
   },
+  paymentSettingsBody: { padding: 18, paddingBottom: 42 },
+  paymentEmptyCard: { alignItems: "center", justifyContent: "center", gap: 5, borderWidth: 1, borderColor: palette.line, borderRadius: 14, padding: 22, backgroundColor: "#F8FBFE" },
+  savedMethodCard: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 9, borderWidth: 1, borderColor: palette.line, borderRadius: 14, padding: 12, marginBottom: 9 },
+  savedMethodIcon: { width: 39, height: 39, borderRadius: 11, alignItems: "center", justifyContent: "center", backgroundColor: palette.sky },
+  savedMethodTitle: { color: palette.navy, fontSize: 12, fontWeight: "900" },
+  savedMethodDefaultBadge: { backgroundColor: "#EAF8F0", borderRadius: 10, paddingHorizontal: 8, paddingVertical: 5 },
+  savedMethodDefaultText: { color: palette.green, fontSize: 9, fontWeight: "900" },
+  savedMethodActions: { width: "100%", flexDirection: "row", justifyContent: "flex-end", gap: 18, borderTopWidth: 1, borderTopColor: palette.line, paddingTop: 8 },
+  savedMethodActionText: { color: palette.blue, fontSize: 10, fontWeight: "800" },
+  savedMethodRemoveText: { color: palette.coral, fontSize: 10, fontWeight: "800" },
+  paymentAddButton: { minHeight: 49, borderRadius: 12, borderWidth: 1, borderColor: "#BCD8F4", backgroundColor: palette.sky, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 13 },
+  paymentAddButtonText: { color: palette.blue, fontSize: 11, fontWeight: "900" },
+  paymentAddCard: { borderWidth: 1, borderColor: palette.line, borderRadius: 14, padding: 13, marginTop: 13 },
+  paymentDefaultToggle: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 14 },
   privacySheetBody: { padding: 18, paddingBottom: 44 },
   privacyIntro: {
     flexDirection: "row",
@@ -14648,9 +17342,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   photoSourceText: { color: palette.blue, fontSize: 10, fontWeight: "900" },
-  currencyInputRow: { flexDirection: "row", alignItems: "center", minHeight: 25 },
-  currencyPrefix: { color: palette.navy, fontSize: 18, fontWeight: "900", marginRight: 5 },
-  currencyInput: { flex: 1, color: palette.ink, fontSize: 15, paddingVertical: 2 },
+  currencyInputRow: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 27 },
+  currencyPrefix: { color: palette.ink, fontSize: 15, lineHeight: 20, fontWeight: "800" },
+  currencyInput: { flex: 1, height: 27, color: palette.ink, fontSize: 15, lineHeight: 20, paddingVertical: 0, textAlignVertical: "center" },
   eventPaymentPage: { padding: 20, paddingBottom: 44 },
   paymentBack: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 18 },
   paymentBackText: { color: palette.blue, fontSize: 11, fontWeight: "900" },
@@ -14659,6 +17353,9 @@ const styles = StyleSheet.create({
   eventPaymentTitle: { color: palette.navy, fontSize: 22, fontWeight: "900", marginTop: 11 },
   eventPaymentSubtitle: { maxWidth: 390, color: palette.muted, fontSize: 11, lineHeight: 17, textAlign: "center", marginTop: 6 },
   eventPaymentSummary: { borderRadius: 15, borderWidth: 1, borderColor: "#D8E5F1", backgroundColor: "#F8FBFF", padding: 15, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  servicePaymentSummary: { borderRadius: 15, borderWidth: 1, borderColor: "#D8E5F1", backgroundColor: "#F8FBFF", padding: 15, gap: 8, marginBottom: 17 },
+  servicePaymentDetail: { color: palette.muted, fontSize: 11, lineHeight: 17 },
+  servicePaymentLine: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, paddingTop: 8 },
   eventPaymentSummaryLabel: { color: palette.navy, fontSize: 13, fontWeight: "900" },
   eventPaymentSummaryMeta: { color: palette.muted, fontSize: 9, marginTop: 3 },
   eventPaymentAmount: { color: palette.navy, fontSize: 20, fontWeight: "900" },
@@ -14843,6 +17540,8 @@ const styles = StyleSheet.create({
   foodFilterRow: { gap: 7, paddingRight: 12 },
   foodSectionHint: { color: palette.muted, fontSize: 9, marginTop: 3 },
   featuredListRow: { gap: 11, paddingBottom: 18 },
+  featuredListExpanded: { flexDirection: "row", flexWrap: "wrap", gap: 11, paddingBottom: 18 },
+  featuredListCardExpanded: { width: "48%", flexGrow: 1 },
   featuredListCard: {
     width: 214,
     height: 145,
@@ -14972,6 +17671,13 @@ const styles = StyleSheet.create({
   },
   placeActionText: { color: palette.blue, fontSize: 9, fontWeight: "900" },
   scoreGrid: { flexDirection: "row", gap: 8, marginTop: 16 },
+  reviewCountAction: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 43, paddingHorizontal: 13, marginTop: 12, borderRadius: 12, backgroundColor: palette.sky },
+  reviewCountActionText: { color: palette.blue, fontSize: 11, fontWeight: "900" },
+  reviewPageSummary: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 16 },
+  reviewPageRating: { color: palette.navy, fontSize: 26, fontWeight: "900" },
+  reviewPageMeta: { color: palette.muted, fontSize: 11, flexShrink: 1 },
+  reviewPageDemoNote: { color: palette.muted, fontSize: 10, lineHeight: 15, marginTop: 12 },
+  reviewPageVisibleAverage: { color: palette.navy, fontSize: 11, fontWeight: "800", marginTop: 10 },
   scoreCard: {
     flex: 1,
     minHeight: 92,
@@ -15040,6 +17746,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   translateText: { color: palette.blue, fontSize: 9, fontWeight: "900" },
+  reviewTranslationError: { color: palette.coral, fontSize: 10, marginTop: 7 },
   friendOpinion: {
     flexDirection: "row",
     alignItems: "center",
@@ -15078,6 +17785,12 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   foodStarRow: { flexDirection: "row", gap: 9, marginBottom: 14 },
+  reviewCriterionRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: palette.line },
+  reviewCriterionLabel: { flex: 1, color: palette.navy, fontSize: 11, fontWeight: "800" },
+  reviewCriterionStars: { flexDirection: "row", gap: 6 },
+  reviewAverageCard: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", backgroundColor: palette.sky, borderRadius: 12, padding: 12, marginTop: 12 },
+  reviewAverageLabel: { color: palette.navy, fontSize: 11, fontWeight: "800" },
+  reviewAverageValue: { color: palette.blue, fontSize: 17, fontWeight: "900" },
   reviewUploadGrid: { flexDirection: "row", gap: 9 },
   reviewUpload: {
     flex: 1,
@@ -15107,21 +17820,20 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   marketHero: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 15,
+    alignItems: "flex-start",
+    gap: 10,
+    marginBottom: 12,
   },
   sellButton: {
     backgroundColor: palette.green,
     flexDirection: "row",
-    gap: 3,
+    gap: 5,
     alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 14,
+    paddingVertical: 11,
+    paddingHorizontal: 16,
+    borderRadius: 12,
   },
-  sellButtonText: { color: "white", fontWeight: "900", fontSize: 11 },
+  sellButtonText: { color: "white", fontWeight: "800", fontSize: 12 },
   commission: {
     backgroundColor: palette.sky,
     borderRadius: 13,
@@ -15131,8 +17843,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 15,
   },
-  marketCategoryScroller: { marginVertical: 11 },
+  marketFilterTitle: { color: palette.navy, fontSize: 13, fontWeight: "900", marginBottom: 10 },
+  marketSellerFilters: { gap: 8, paddingRight: 16, paddingBottom: 2 },
+  marketSellerFilter: { flexDirection: "row", gap: 6, minHeight: 42, borderRadius: 12, paddingHorizontal: 14 },
+  marketSellerFilterText: { fontSize: 11 },
+  marketFilterHint: { color: palette.muted, fontSize: 10, lineHeight: 15, marginTop: 9, marginBottom: 21 },
+  marketCategoryNav: { marginBottom: 10 },
   marketCategoryRow: { gap: 8, paddingRight: 12 },
+  marketResultsHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 13 },
+  marketResultsTitle: { color: palette.navy, fontSize: 15, fontWeight: "900" },
+  marketResultsCount: { color: palette.muted, fontSize: 11, fontWeight: "700" },
   marketCategory: {
     minHeight: 36,
     borderRadius: 18,
@@ -15164,16 +17884,15 @@ const styles = StyleSheet.create({
     fontSize: 9,
     lineHeight: 14,
   },
-  productGrid: { flexDirection: "row", flexWrap: "wrap", marginHorizontal: -6 },
-  productCard: { width: "50%", padding: 6 },
+  productGrid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 12 },
+  productCard: { width: "48.5%", borderWidth: 1, borderColor: palette.line, borderRadius: 16, backgroundColor: "#FFFFFF", overflow: "hidden" },
   productImage: {
-    height: 145,
+    height: 148,
     width: "100%",
-    borderRadius: 14,
     backgroundColor: "#EEF2F6",
   },
-  productBody: { paddingVertical: 8 },
-  productName: { color: palette.navy, fontWeight: "900", fontSize: 14 },
+  productBody: { padding: 11 },
+  productName: { color: palette.navy, fontWeight: "900", fontSize: 13, minHeight: 34 },
   productConditionPill: {
     alignSelf: "flex-start",
     backgroundColor: "#F0F4F8",
@@ -15189,6 +17908,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 5,
   },
+  marketProductSeller: { flexDirection: "row", alignItems: "center", gap: 6, borderTopWidth: 1, borderTopColor: palette.line, marginTop: 10, paddingTop: 9 },
   marketEmpty: {
     alignItems: "center",
     justifyContent: "center",
@@ -15285,6 +18005,14 @@ const styles = StyleSheet.create({
   },
   productSellerInitial: { color: "#6D3EEB", fontSize: 17, fontWeight: "900" },
   productSellerName: { color: palette.navy, fontSize: 12, fontWeight: "900" },
+  sellerPublicHero: { borderWidth: 1, borderColor: palette.line, borderRadius: 18, backgroundColor: "#FFFFFF", overflow: "hidden", paddingBottom: 20 },
+  sellerPublicCover: { width: "100%", height: 145, backgroundColor: "#EAF4FF" },
+  sellerPublicAvatar: { width: 70, height: 70, borderRadius: 35, backgroundColor: "#E9E0FF", borderWidth: 4, borderColor: "#FFFFFF", alignItems: "center", justifyContent: "center", alignSelf: "center", marginTop: -34, marginBottom: 7 },
+  sellerPublicAvatarText: { color: "#6D3EEB", fontWeight: "900", fontSize: 23 },
+  sellerPublicName: { color: palette.navy, fontWeight: "900", fontSize: 19, textAlign: "center" },
+  sellerPublicListings: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", rowGap: 10 },
+  sellerPublicListing: { width: "48.5%", borderWidth: 1, borderColor: palette.line, borderRadius: 14, overflow: "hidden", backgroundColor: "#FFFFFF" },
+  sellerPublicListingImage: { width: "100%", height: 112, backgroundColor: "#EEF2F6" },
   productDetailActions: {
     flexDirection: "row",
     alignItems: "center",
@@ -15378,7 +18106,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   friendFilterScroller: { flexGrow: 0 },
-  friendFilterRow: { paddingLeft: 18, paddingRight: 60, alignItems: "center" },
+  friendFilterRow: { paddingLeft: 18, paddingRight: 18, alignItems: "center" },
   friendFilterArrow: {
     position: "absolute",
     top: 0,
@@ -15721,6 +18449,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
   },
   cleanTypeTextActive: { color: "white" },
+  cleanScopeHint: {
+    color: palette.muted,
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 8,
+    marginBottom: 4,
+  },
   counterCard: {
     borderWidth: 1,
     borderColor: palette.line,
@@ -16213,23 +18948,24 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 10,
-    padding: 13,
+    padding: 14,
     borderRadius: 15,
     backgroundColor: "#ECF9F2",
-    marginBottom: 10,
+    marginBottom: 12,
   },
-  messageSafetyTitle: { color: "#17673B", fontSize: 12, fontWeight: "900" },
+  messageSafetyTitle: { color: "#17673B", fontSize: 12, fontWeight: "800" },
   messageSafetyText: {
     color: "#397653",
-    fontSize: 9,
-    lineHeight: 14,
-    marginTop: 3,
+    fontSize: 11,
+    lineHeight: 16,
+    marginTop: 4,
   },
   messageRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 11,
-    paddingVertical: 14,
+    gap: 12,
+    minHeight: 76,
+    paddingVertical: 13,
     borderBottomWidth: 1,
     borderBottomColor: palette.line,
   },
@@ -16249,18 +18985,18 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   messageTime: {
-    width: 56,
+    minWidth: 48,
     color: palette.muted,
-    fontSize: 9,
+    fontSize: 10,
     textAlign: "right",
   },
   messageType: {
     color: palette.blue,
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: "800",
     marginTop: 2,
   },
-  messagePreview: { color: palette.muted, fontSize: 11, marginTop: 4 },
+  messagePreview: { color: palette.muted, fontSize: 12, marginTop: 5, lineHeight: 17 },
   messageBadge: {
     position: "absolute",
     top: -6,
@@ -16290,12 +19026,19 @@ const styles = StyleSheet.create({
   chatAvatar: {
     width: 38,
     height: 38,
-    borderRadius: 13,
+    borderRadius: 19,
     alignItems: "center",
     justifyContent: "center",
   },
-  chatTitle: { color: palette.navy, fontSize: 14, fontWeight: "900" },
-  chatType: { color: palette.muted, fontSize: 9, marginTop: 2 },
+  chatTitle: { color: palette.navy, fontSize: 15, fontWeight: "800" },
+  chatType: { color: palette.muted, fontSize: 11, marginTop: 3 },
+  groupHostCard: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 16, paddingVertical: 12, backgroundColor: "#FFFFFF", borderBottomWidth: 1, borderBottomColor: palette.line },
+  groupHostAvatar: { width: 38, height: 38, borderRadius: 19, backgroundColor: "#DCEBFF", alignItems: "center", justifyContent: "center" },
+  groupHostInitial: { color: palette.navy, fontWeight: "900", fontSize: 19 },
+  groupHostEyebrow: { color: palette.muted, fontSize: 8, fontWeight: "800", letterSpacing: 0.8 },
+  groupHostName: { color: palette.navy, fontSize: 12, fontWeight: "900" },
+  groupHostHint: { color: palette.muted, fontSize: 9, marginTop: 2 },
+  groupHostMessage: { width: 34, height: 34, borderRadius: 17, backgroundColor: "#EDF6FF", alignItems: "center", justifyContent: "center" },
   chatSafety: {
     flexDirection: "row",
     alignItems: "center",
@@ -16303,7 +19046,7 @@ const styles = StyleSheet.create({
     padding: 11,
     backgroundColor: "#ECF9F2",
   },
-  chatSafetyText: { flex: 1, color: "#397653", fontSize: 9, lineHeight: 13 },
+  chatSafetyText: { flex: 1, color: "#397653", fontSize: 11, lineHeight: 16 },
   chatMessages: { flexGrow: 1, padding: 16, gap: 12 },
   incomingBubble: {
     alignSelf: "flex-start",
@@ -16311,23 +19054,29 @@ const styles = StyleSheet.create({
     backgroundColor: "white",
     borderRadius: 16,
     borderBottomLeftRadius: 5,
-    padding: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 13,
   },
-  incomingText: { color: palette.ink, fontSize: 12, lineHeight: 18 },
+  incomingText: { color: palette.ink, fontSize: 13, lineHeight: 19 },
   outgoingBubble: {
     alignSelf: "flex-end",
     maxWidth: "82%",
     backgroundColor: palette.blue,
     borderRadius: 16,
     borderBottomRightRadius: 5,
-    padding: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 13,
   },
-  outgoingText: { color: "white", fontSize: 12, lineHeight: 18 },
+  outgoingText: { color: "white", fontSize: 13, lineHeight: 19 },
   chatComposerArea: {
     backgroundColor: "white",
     borderTopWidth: 1,
     borderTopColor: palette.line,
   },
+  mentionMenu: { backgroundColor: "white", borderTopWidth: 1, borderTopColor: palette.line, maxHeight: 224 },
+  mentionOption: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 18, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: "#EEF2F7" },
+  mentionHandle: { color: palette.blue, fontSize: 12, fontWeight: "800", minWidth: 100 },
+  mentionDetail: { color: palette.muted, fontSize: 10, flex: 1 },
   chatComposer: {
     flexDirection: "row",
     alignItems: "center",
@@ -16468,6 +19217,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "900",
   },
+  eventFriendsGoing: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#F1F8FF", borderRadius: 11, paddingHorizontal: 10, paddingVertical: 8, marginBottom: 9 },
+  eventFriendAvatars: { flexDirection: "row", alignItems: "center" },
+  eventFriendAvatar: { width: 24, height: 24, borderRadius: 12, borderWidth: 1.5, borderColor: "white", alignItems: "center", justifyContent: "center", marginRight: -5 },
+  eventFriendInitials: { color: palette.navy, fontSize: 7, fontWeight: "900" },
+  eventFriendsText: { flex: 1, color: palette.blue, fontSize: 10, fontWeight: "800" },
   eventAttendanceLabel: {
     color: palette.muted,
     fontSize: 8,
@@ -16476,8 +19230,8 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
   confirmGoingButton: {
-    width: 128,
-    height: 40,
+    width: 176,
+    minHeight: 42,
     borderRadius: 12,
     backgroundColor: palette.green,
     paddingHorizontal: 13,
@@ -16486,19 +19240,23 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 6,
   },
-  confirmGoingText: { color: "white", fontSize: 10, fontWeight: "900" },
+  confirmGoingText: { color: "white", fontSize: 10, fontWeight: "900", textAlign: "center", flexShrink: 1 },
+  cancelGoingButton: { backgroundColor: "#FFF0F1", borderWidth: 1, borderColor: "#F5C8CC" },
+  cancelGoingText: { color: palette.coral },
+  cancelReservationDetail: { alignItems: "center", paddingVertical: 13, marginTop: 8, borderRadius: 12, borderWidth: 1, borderColor: "#F5C8CC", backgroundColor: "#FFF0F1" },
+  cancelReservationDetailText: { color: palette.coral, fontWeight: "900", fontSize: 12 },
   viewEventHint: {
-    width: 128,
-    height: 40,
+    width: 176,
+    minHeight: 42,
     borderRadius: 12,
     backgroundColor: palette.sky,
     paddingHorizontal: 11,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
+    gap: 6,
   },
-  viewEventHintText: { color: palette.blue, fontSize: 9, fontWeight: "900" },
+  viewEventHintText: { color: palette.blue, fontSize: 10, fontWeight: "900" },
   groupChatNotice: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -16795,7 +19553,7 @@ const styles = StyleSheet.create({
   chatStaffPhoto: {
     width: 38,
     height: 38,
-    borderRadius: 13,
+    borderRadius: 19,
     backgroundColor: "#EEF2F6",
   },
   chatHeadAction: {
@@ -16816,29 +19574,45 @@ const styles = StyleSheet.create({
     borderBottomColor: "#CFE4F8",
   },
   staffProfileBody: { padding: 18, paddingBottom: 45, alignItems: "center" },
+  staffProfilePhotoWrap: {
+    width: 108,
+    height: 108,
+    position: "relative",
+  },
   staffProfilePhoto: {
     width: 108,
     height: 108,
     borderRadius: 54,
     backgroundColor: "#EEF2F6",
   },
+  staffProfilePhotoBadge: {
+    position: "absolute",
+    right: -3,
+    bottom: -3,
+    width: 29,
+    height: 29,
+    borderRadius: 15,
+    borderWidth: 3,
+    borderColor: "#FFFFFF",
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   approvedPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    backgroundColor: palette.green,
-    borderRadius: 13,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    marginTop: -13,
-    borderWidth: 3,
-    borderColor: "white",
+    gap: 6,
+    backgroundColor: palette.blue,
+    borderRadius: 14,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    marginTop: 9,
   },
   approvedPillText: {
-    color: "white",
-    fontSize: 9,
-    fontWeight: "900",
-    letterSpacing: 0.4,
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.2,
   },
   staffProfileName: {
     color: palette.navy,
@@ -17040,6 +19814,7 @@ const styles = StyleSheet.create({
   },
   followingButtonText: { color: palette.blue, fontSize: 8, fontWeight: "900" },
   profilePhotoWrap: { width: 90, height: 90, position: "relative" },
+  profileAvatarBadge: { position: "absolute", right: 0, bottom: 0, width: 27, height: 27, borderRadius: 14, borderWidth: 3, borderColor: "#FFFFFF", backgroundColor: "#FFFFFF", alignItems: "center", justifyContent: "center" },
   profilePhoto: {
     width: 82,
     height: 82,
@@ -17083,11 +19858,12 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   publicProfileBody: { padding: 18, paddingBottom: 45 },
-  publicProfileHero: { alignItems: "center", paddingVertical: 8 },
+  publicProfileHero: { alignItems: "center", paddingTop: 2, paddingBottom: 5 },
+  publicProfilePhotoWrap: { width: 88, height: 88, position: "relative" },
   publicProfilePhoto: {
-    width: 102,
-    height: 102,
-    borderRadius: 51,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     marginRight: 0,
     backgroundColor: "#EEF2F6",
     alignItems: "center",
@@ -17095,10 +19871,13 @@ const styles = StyleSheet.create({
   },
   publicProfileName: {
     color: palette.navy,
-    fontSize: 25,
+    fontSize: 23,
     fontWeight: "900",
-    marginTop: 11,
+    marginTop: 9,
   },
+  publicProfileSection: { marginTop: 17 },
+  publicProfileSectionTitle: { color: palette.navy, fontSize: 14, fontWeight: "900", marginBottom: 8 },
+  publicProfileInterests: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   publicBio: {
     color: palette.ink,
     fontSize: 13,
@@ -17253,9 +20032,12 @@ const styles = StyleSheet.create({
     borderColor: palette.blue,
     alignItems: "center",
     justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 14,
     marginTop: 15,
   },
-  secondaryButtonText: { color: palette.blue, fontSize: 12, fontWeight: "900" },
+  secondaryButtonText: { color: palette.blue, fontSize: 12, fontWeight: "900", textAlign: "center", flexShrink: 1 },
   verificationStepIntro: {
     backgroundColor: "#F4F8FC",
     borderRadius: 14,
@@ -17264,32 +20046,43 @@ const styles = StyleSheet.create({
   verificationUploadRow: { flexDirection: "row", gap: 9, marginTop: 13 },
   verificationUpload: {
     flex: 1,
-    minHeight: 226,
+    minHeight: 222,
     borderRadius: 14,
     borderWidth: 1.5,
     borderStyle: "dashed",
     borderColor: "#AFCDEB",
     backgroundColor: "#F7FBFF",
-    alignItems: "center",
-    justifyContent: "flex-end",
-    paddingTop: 86,
-    paddingBottom: 10,
+    alignItems: "stretch",
+    justifyContent: "space-between",
+    padding: 8,
     overflow: "hidden",
   },
   verificationUploadDone: { borderStyle: "solid", borderColor: palette.green },
+  verificationUploadContent: { flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 3 },
+  verificationUploadVisual: { height: 40, width: 64, alignItems: "center", justifyContent: "center" },
+  verificationUploadActions: { width: "100%", gap: 6 },
+  verificationCameraOnly: { minHeight: 34, flexDirection: "row", gap: 5, alignItems: "center", justifyContent: "center" },
+  verificationCameraOnlyText: { color: palette.muted, fontSize: 9, fontWeight: "700" },
+  verificationDemoPanel: { marginTop: 13, padding: 12, borderRadius: 13, borderWidth: 1, borderColor: "#CFE0F3", backgroundColor: "#F4F8FD" },
+  verificationDemoTitle: { color: palette.navy, fontSize: 12, fontWeight: "900" },
+  verificationDemoText: { color: palette.muted, fontSize: 10, lineHeight: 15, marginTop: 4 },
+  verificationDemoOutcomes: { flexDirection: "row", gap: 6, marginTop: 10 },
+  verificationDemoOption: { flex: 1, minHeight: 38, borderWidth: 1, borderColor: "#CFE0F3", borderRadius: 10, alignItems: "center", justifyContent: "center", paddingHorizontal: 3, backgroundColor: "#FFFFFF" },
+  verificationDemoOptionActive: { borderColor: palette.blue, backgroundColor: "#E5F2FF" },
+  verificationDemoOptionText: { color: palette.muted, fontSize: 9, fontWeight: "800", textAlign: "center" },
+  verificationDemoOptionTextActive: { color: palette.blue },
   verificationUploadImage: {
-    width: "100%",
-    height: 82,
-    position: "absolute",
-    top: 0,
+    width: 60,
+    height: 40,
+    borderRadius: 7,
   },
   verificationUploadTitle: {
     color: palette.navy,
     fontSize: 10,
     fontWeight: "900",
-    marginTop: 8,
+    marginTop: 7,
   },
-  verificationUploadMeta: { color: palette.muted, fontSize: 8, marginTop: 3 },
+  verificationUploadMeta: { color: palette.muted, fontSize: 8, lineHeight: 11, minHeight: 24, marginTop: 4, textAlign: "center" },
   backToStatus: { alignItems: "center", padding: 13 },
   backToStatusText: { color: palette.blue, fontSize: 10, fontWeight: "800" },
   locationSheet: { padding: 18 },
@@ -17596,14 +20389,17 @@ const styles = StyleSheet.create({
   bookingDetailFact: { minHeight: 58, flexDirection: "row", alignItems: "flex-start", gap: 10, padding: 12, borderWidth: 1, borderColor: "#E0E7EF", borderRadius: 13, backgroundColor: "white" },
   bookingReferenceCard: { flexDirection: "row", alignItems: "flex-start", gap: 9, backgroundColor: "#ECF9F2", borderRadius: 13, padding: 12, marginTop: 14 },
   bookingReferenceText: { flex: 1, color: "#347253", fontSize: 9, lineHeight: 14 },
-  eventDateField: { borderWidth: 1, borderColor: "#D7E1ED", borderRadius: 13, padding: 12, marginTop: 12, backgroundColor: "white" },
-  eventTimeField: { borderWidth: 1, borderColor: "#D7E1ED", borderRadius: 13, padding: 12, marginTop: 12, backgroundColor: "white" },
-  eventDateButton: { minHeight: 31, flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  eventDateButtonCopy: { flexDirection: "row", alignItems: "center", gap: 8 },
-  eventDateButtonText: { color: palette.navy, fontSize: 12, fontWeight: "800" },
-  eventTimeValue: { color: palette.navy, fontSize: 15, fontWeight: "900", fontVariant: ["tabular-nums"] },
+  eventDateField: { marginTop: 8 },
+  eventTimeField: { marginTop: 8 },
+  eventDateButton: { minHeight: 62, flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderColor: "#D7E1ED", borderRadius: 13, paddingHorizontal: 11, backgroundColor: "white" },
+  eventDateButtonOpen: { borderColor: palette.blue },
+  eventScheduleIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: palette.sky, alignItems: "center", justifyContent: "center" },
+  eventDateButtonCopy: { flex: 1, justifyContent: "center" },
+  eventScheduleLabel: { color: palette.muted, fontSize: 10, fontWeight: "800", marginBottom: 3 },
+  eventDateButtonText: { color: palette.navy, fontSize: 13, fontWeight: "800" },
+  eventTimeValue: { color: palette.navy, fontSize: 14, fontWeight: "900", fontVariant: ["tabular-nums"] },
   eventTimeFormat: { color: palette.blue, fontSize: 8, fontWeight: "900", backgroundColor: palette.sky, borderRadius: 7, paddingHorizontal: 6, paddingVertical: 3 },
-  eventCalendarPanel: { marginTop: 9, borderTopWidth: 1, borderTopColor: palette.line, paddingTop: 10 },
+  eventCalendarPanel: { marginTop: 6, borderWidth: 1, borderColor: palette.line, borderRadius: 13, padding: 12, backgroundColor: "white" },
   eventCalendarPickerLabel: { color: palette.muted, fontSize: 8, fontWeight: "900", textTransform: "uppercase", letterSpacing: 0.7, marginTop: 5, marginBottom: 6 },
   eventCalendarChoiceRow: { gap: 6, paddingRight: 8 },
   eventCalendarChoice: { minHeight: 32, minWidth: 48, borderWidth: 1, borderColor: "#D6E1ED", borderRadius: 10, alignItems: "center", justifyContent: "center", paddingHorizontal: 8, backgroundColor: "white" },
@@ -17611,7 +20407,7 @@ const styles = StyleSheet.create({
   eventCalendarChoiceDisabled: { backgroundColor: "#F1F3F6", borderColor: "#E4E8ED" },
   eventCalendarChoiceText: { color: palette.muted, fontSize: 9, fontWeight: "800" },
   eventCalendarChoiceTextActive: { color: "white" },
-  eventTimePanel: { marginTop: 9, borderTopWidth: 1, borderTopColor: palette.line, paddingTop: 7 },
+  eventTimePanel: { marginTop: 6, borderWidth: 1, borderColor: palette.line, borderRadius: 13, padding: 12, backgroundColor: "white" },
   eventTimeChoice: { width: 42, height: 34, borderWidth: 1, borderColor: "#D6E1ED", borderRadius: 9, alignItems: "center", justifyContent: "center", backgroundColor: "white" },
   eventCalendarWindowNote: { flexDirection: "row", alignItems: "center", gap: 7, backgroundColor: palette.sky, borderRadius: 10, padding: 9, marginBottom: 8 },
   eventCalendarWindowText: { flex: 1, color: palette.navy, fontSize: 9, fontWeight: "700" },
@@ -17727,6 +20523,10 @@ const styles = StyleSheet.create({
     fontWeight: "900",
   },
   eventViewTabTextActive: { color: "white" },
+  goingStatusRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 8, marginTop: 4 },
+  goingStatusText: { color: palette.green, fontSize: 11, fontWeight: "900" },
+  goingPendingNote: { flexDirection: "row", alignItems: "center", gap: 9, borderWidth: 1, borderColor: palette.line, borderRadius: 13, padding: 13, marginTop: 14 },
+  largeEventAttachmentRow: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderColor: palette.line, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9, marginTop: 8 },
   myEventsSubtitle: {
     color: palette.muted,
     fontSize: 9,
@@ -17946,7 +20746,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  eventCapacityValueWrap: { alignItems: "center" },
+  eventCapacityButtonDisabled: {
+    backgroundColor: "#EDF1F5",
+    borderColor: "#E0E6EC",
+  },
+  eventCapacityValueWrap: { flex: 1, alignItems: "center", justifyContent: "center" },
   eventCapacityValue: {
     color: palette.navy,
     fontSize: 23,
@@ -17987,7 +20791,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F0F4F8",
     borderRadius: 14,
     padding: 4,
-    marginTop: 16,
+    marginTop: 12,
   },
   profileAudienceTab: {
     flex: 1,
