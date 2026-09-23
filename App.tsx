@@ -33,14 +33,14 @@ const darkBackgrounds: Record<string, string> = {
   "#FFFFFF": "#162338",
   WHITE: "#162338",
   "#F4F7FB": "#0B1423",
-  "#F2F7FC": "#142237",
+  "#F2F7FC": "#21334B",
   "#F7FAFD": "#121F32",
   "#F8FBFE": "#121F32",
   "#F8FAFC": "#121F32",
   "#FBFDFF": "#121F32",
   "#F7FBFF": "#121F32",
   "#F8FBFF": "#121F32",
-  "#F2F6FB": "#142237",
+  "#F2F6FB": "#21334B",
   "#F3F7FB": "#142237",
   "#F3F6F9": "#172438",
   "#EAF5FF": "#102C47",
@@ -66,6 +66,9 @@ const darkBackgrounds: Record<string, string> = {
   "#F5FAFF": "#132A43",
   "#F2F8FF": "#102C47",
   "#E3F1FF": "#173957",
+  "#FFF8E9": "#382E18",
+  "#F0FAF4": "#123326",
+  "#D9F4E5": "#1B4933",
 };
 
 const darkText: Record<string, string> = {
@@ -80,6 +83,9 @@ const darkText: Record<string, string> = {
   "#F28A18": "#FFC06B",
   "#B97A0D": "#F3C66B",
   "#B67A16": "#F3C66B",
+  "#D48B16": "#F3C66B",
+  "#A76A12": "#F3C66B",
+  "#B97913": "#F3C66B",
   "#00A1A7": "#58D7DB",
   "#713CE0": "#B79DFF",
   "#2CB66D": "#70D99A",
@@ -138,8 +144,8 @@ const darkFallbackColor = (
   if (role === "text" && lightness < 0.52) {
     if (b > r * 1.25 && b > g * 1.08) return "#69B8FF";
     if (g > r * 1.18 && g > b * 1.05) return "#6FD79A";
-    if (r > g * 1.2 && r > b * 1.15) return "#FF8D98";
     if (r > 120 && g > 80 && b < 70) return "#F3C66B";
+    if (r > g * 1.2 && r > b * 1.15) return "#FF8D98";
     return "#E6EDF7";
   }
   return value;
@@ -4774,7 +4780,12 @@ type ServiceCheckoutOrder = {
   intake?: { fields: { label: string; value: string }[]; photos: string[] };
 };
 
-type StaffAvailability = { areas: string[]; blockedDates: Record<string, "blocked" | "holiday" | "emergency"> };
+type StaffTimeBlock = { id: string; start: string; end: string };
+type StaffAvailability = {
+  areas: string[];
+  blockedDates: Record<string, "blocked" | "holiday" | "emergency">;
+  blockedTimes: Record<string, StaffTimeBlock[]>;
+};
 const londonServiceAreas = ["Central London", "North London", "South London", "East London", "West London", "Camden", "Islington", "Hackney", "Tower Hamlets", "Westminster", "Hammersmith & Fulham", "Greenwich", "Croydon", "Richmond", "Watford", "Epsom", "Dartford", "Bromley"];
 const addressAreaTags = (address: string) => {
   const value = address.toLowerCase();
@@ -4791,6 +4802,8 @@ const serviceOrderAddresses = (order: ServiceCheckoutOrder) => order.service ===
 const isOrderInWorkAreas = (order: ServiceCheckoutOrder, areas: string[]) => serviceOrderAddresses(order).every((address) => address.trim() && addressAreaTags(address).some((area) => areas.includes(area)));
 const bookingTimeRange = (value: string) => { const matches = [...value.matchAll(/\b(\d{1,2}):(\d{2})\b/g)]; const start = matches[0] ? Number(matches[0][1]) * 60 + Number(matches[0][2]) : 0; const end = matches[1] ? Number(matches[1][1]) * 60 + Number(matches[1][2]) : start + 90; return [start, end] as const; };
 const bookingTimesOverlap = (first: string, second: string) => { const [aStart, aEnd] = bookingTimeRange(first); const [bStart, bEnd] = bookingTimeRange(second); return aStart < bEnd && bStart < aEnd; };
+const staffTimeBlockOverlaps = (blocks: StaffTimeBlock[], time: string) => blocks.some((block) => bookingTimesOverlap(`${block.start}–${block.end}`, time));
+const staffBlockTimeOptions = Array.from({ length: 35 }, (_, index) => `${String(6 + Math.floor(index / 2)).padStart(2, "0")}:${index % 2 ? "30" : "00"}`);
 
 type SavedPaymentMethod = {
   id: string;
@@ -4929,7 +4942,7 @@ function ServicePaymentPage({
   );
 }
 
-function AirportTransferForm({ language, onCheckout, isUnavailable }: { language: Language; onCheckout: (order: ServiceCheckoutOrder) => void; isUnavailable?: (dayKey: string) => boolean }) {
+function AirportTransferForm({ language, onCheckout, isUnavailable, isTimeUnavailable }: { language: Language; onCheckout: (order: ServiceCheckoutOrder) => void; isUnavailable?: (dayKey: string) => boolean; isTimeUnavailable?: (dayKey: string, time: string) => boolean }) {
   const isEnglish = language === "EN";
   const { width } = useWindowDimensions();
   const compact = width < 380;
@@ -5364,6 +5377,7 @@ function AirportTransferForm({ language, onCheckout, isUnavailable }: { language
           />
         </View>
       </View>
+      {isTimeUnavailable?.(selectedDay, `${hour}:${minute}`) && <Text style={[styles.fieldHint, { color: palette.coral }]}>{tr(language, "This time overlaps a booking or blocked hours. Choose another time; the rest of the day may still be available.", "此时间与已有预订或封锁时段冲突。请选择其他时间；当天其余时间仍可能可预约。", "此時間與已有預訂或封鎖時段衝突。請選擇其他時間；當天其餘時間仍可能可預約。")}</Text>}
       <View style={styles.field}>
         <Text style={styles.fieldLabel}>{labels.flight}</Text>
         <TextInput
@@ -5588,7 +5602,8 @@ function AirportTransferForm({ language, onCheckout, isUnavailable }: { language
         </View>
       </View>
       <Pressable
-        style={styles.primaryButton}
+        disabled={!!isTimeUnavailable?.(selectedDay, `${hour}:${minute}`)}
+        style={[styles.primaryButton, isTimeUnavailable?.(selectedDay, `${hour}:${minute}`) && { opacity: 0.5 }]}
         onPress={() => onCheckout({
           service: "airport",
           title: labels.title,
@@ -6085,7 +6100,7 @@ function VisitDateDropdown({
   );
 }
 
-function CleaningServiceForm({ language, onCheckout, isUnavailable }: { language: Language; onCheckout: (order: ServiceCheckoutOrder) => void; isUnavailable?: (dayKey: string) => boolean }) {
+function CleaningServiceForm({ language, onCheckout, isUnavailable, isTimeUnavailable }: { language: Language; onCheckout: (order: ServiceCheckoutOrder) => void; isUnavailable?: (dayKey: string) => boolean; isTimeUnavailable?: (dayKey: string, time: string) => boolean }) {
   const isEnglish = language === "EN";
   const [cleanType, setCleanType] = useState<
     "Regular" | "Deep" | "End of tenancy" | "Shared areas"
@@ -6099,6 +6114,8 @@ function CleaningServiceForm({ language, onCheckout, isUnavailable }: { language
   const [selectedDay, setSelectedDay] = useState(() => bookingDateFromToday(7));
   const [address, setAddress] = useState("");
   const [timeSlot, setTimeSlot] = useState("09:00–12:00");
+  const availableTimeSlots = cleaningArrivalWindows.filter((slot) => !isTimeUnavailable?.(selectedDay, slot));
+  useEffect(() => { if (!availableTimeSlots.includes(timeSlot)) setTimeSlot(availableTimeSlots[0] || ""); }, [selectedDay, availableTimeSlots.join("|")]);
   const [parking, setParking] = useState("Free parking available");
   const [parkingFee, setParkingFee] = useState("£0");
   const [pets, setPets] = useState("No pets");
@@ -6368,9 +6385,11 @@ function CleaningServiceForm({ language, onCheckout, isUnavailable }: { language
       <SelectField
         label={labels.time}
         value={timeSlot}
-        options={cleaningArrivalWindows}
+        options={availableTimeSlots}
         onChange={setTimeSlot}
         schedule
+        formatOption={(value) => value || tr(language, "No available times", "暂无可预约时段", "暫無可預約時段")}
+        hint={tr(language, "Only times outside staff bookings and blocked hours are shown.", "仅显示员工已有预订和封锁时间之外的时段。", "只顯示員工已有預訂及封鎖時間以外的時段。")}
       />
       <View style={styles.field}>
         <Text style={styles.fieldLabel}>{labels.address}</Text>
@@ -6466,7 +6485,8 @@ function CleaningServiceForm({ language, onCheckout, isUnavailable }: { language
         </Text>
       </View>
       <Pressable
-        style={styles.primaryButton}
+        disabled={!timeSlot}
+        style={[styles.primaryButton, !timeSlot && { opacity: 0.5 }]}
         onPress={() => onCheckout({
           service: "cleaning",
           title: labels.title,
@@ -6499,7 +6519,7 @@ function CleaningServiceForm({ language, onCheckout, isUnavailable }: { language
   );
 }
 
-function MovingServiceForm({ language, onCheckout, isUnavailable }: { language: Language; onCheckout: (order: ServiceCheckoutOrder) => void; isUnavailable?: (dayKey: string) => boolean }) {
+function MovingServiceForm({ language, onCheckout, isUnavailable, isTimeUnavailable }: { language: Language; onCheckout: (order: ServiceCheckoutOrder) => void; isUnavailable?: (dayKey: string) => boolean; isTimeUnavailable?: (dayKey: string, time: string) => boolean }) {
   const [fromFloor, setFromFloor] = useState("Ground floor");
   const [toFloor, setToFloor] = useState("Ground floor");
   const [fromAccess, setFromAccess] = useState("Lift available");
@@ -6520,6 +6540,8 @@ function MovingServiceForm({ language, onCheckout, isUnavailable }: { language: 
   const [fromAddress, setFromAddress] = useState("");
   const [toAddress, setToAddress] = useState("");
   const [timeSlot, setTimeSlot] = useState("09:00–12:00");
+  const availableTimeSlots = movingPickupWindows.filter((slot) => !isTimeUnavailable?.(selectedDay, slot));
+  useEffect(() => { if (!availableTimeSlots.includes(timeSlot)) setTimeSlot(availableTimeSlots[0] || ""); }, [selectedDay, availableTimeSlots.join("|")]);
   const [photos, setPhotos] = useState<string[]>([]);
   const [movingInstructions, setMovingInstructions] = useState("");
   const floors = [
@@ -7054,9 +7076,11 @@ function MovingServiceForm({ language, onCheckout, isUnavailable }: { language: 
       <SelectField
         label={labels.time}
         value={timeSlot}
-        options={movingPickupWindows}
+        options={availableTimeSlots}
         onChange={setTimeSlot}
         schedule
+        formatOption={(value) => value || tr(language, "No available times", "暂无可预约时段", "暫無可預約時段")}
+        hint={tr(language, "Only times outside staff bookings and blocked hours are shown.", "仅显示员工已有预订和封锁时间之外的时段。", "只顯示員工已有預訂及封鎖時間以外的時段。")}
       />
       <Text style={styles.formSectionTitle}>{labels.photos}</Text>
       <Text style={styles.photoHelp}>{labels.photoHint}</Text>
@@ -7110,7 +7134,8 @@ function MovingServiceForm({ language, onCheckout, isUnavailable }: { language: 
         </Text>
       </View>
       <Pressable
-        style={styles.primaryButton}
+        disabled={!timeSlot}
+        style={[styles.primaryButton, !timeSlot && { opacity: 0.5 }]}
         onPress={() => onCheckout({
           service: "moving",
           title: labels.title,
@@ -7141,11 +7166,11 @@ function MovingServiceForm({ language, onCheckout, isUnavailable }: { language: 
   );
 }
 
-function ServiceForm({ type, language, onCheckout, isUnavailable }: { type: string; language: Language; onCheckout: (order: ServiceCheckoutOrder) => void; isUnavailable?: (dayKey: string) => boolean }) {
+function ServiceForm({ type, language, onCheckout, isUnavailable, isTimeUnavailable }: { type: string; language: Language; onCheckout: (order: ServiceCheckoutOrder) => void; isUnavailable?: (dayKey: string) => boolean; isTimeUnavailable?: (dayKey: string, time: string) => boolean }) {
   if (type === "Airport transfer")
-    return <AirportTransferForm language={language} onCheckout={onCheckout} isUnavailable={isUnavailable} />;
-  if (type === "Moving") return <MovingServiceForm language={language} onCheckout={onCheckout} isUnavailable={isUnavailable} />;
-  return <CleaningServiceForm language={language} onCheckout={onCheckout} isUnavailable={isUnavailable} />;
+    return <AirportTransferForm language={language} onCheckout={onCheckout} isUnavailable={isUnavailable} isTimeUnavailable={isTimeUnavailable} />;
+  if (type === "Moving") return <MovingServiceForm language={language} onCheckout={onCheckout} isUnavailable={isUnavailable} isTimeUnavailable={isTimeUnavailable} />;
+  return <CleaningServiceForm language={language} onCheckout={onCheckout} isUnavailable={isUnavailable} isTimeUnavailable={isTimeUnavailable} />;
 }
 
 type PlaceReviewCriterion = "taste" | "atmosphere" | "price" | "service" | "overall";
@@ -13923,12 +13948,25 @@ function AppContent({
   >(null);
   const [serviceOrder, setServiceOrder] = useState<ServiceCheckoutOrder | null>(null);
   const assignedBookingsForDate = (service: StaffService, date: string) => [...staffWorkspaceData[service].bookings, ...previewBookings.filter((booking) => booking.service === service)].filter((booking) => booking.date === date && !completedJobs.some((job) => job.booking.id === booking.id));
-  const isServiceDateUnavailable = (service: StaffService, dayKey: string) => { const date = formatStaffBookingDate(dayKey); return !!staffAvailability[service].blockedDates[date] || assignedBookingsForDate(service, date).length >= 3; };
+  const isServiceDateUnavailable = (service: StaffService, dayKey: string) => {
+    const date = formatStaffBookingDate(dayKey);
+    if (staffAvailability[service].blockedDates[date] || assignedBookingsForDate(service, date).length >= 3) return true;
+    if (service === "airport") return false;
+    const slots = service === "cleaning" ? cleaningArrivalWindows : movingPickupWindows;
+    return slots.every((slot) => isServiceTimeUnavailable(service, dayKey, slot));
+  };
+  const isServiceTimeUnavailable = (service: StaffService, dayKey: string, time: string) => {
+    const date = formatStaffBookingDate(dayKey);
+    return !!staffAvailability[service].blockedDates[date]
+      || staffTimeBlockOverlaps(staffAvailability[service].blockedTimes[date] || [], time)
+      || assignedBookingsForDate(service, date).some((booking) => bookingTimesOverlap(booking.time, time));
+  };
   const reviewServiceOrder = (order: ServiceCheckoutOrder) => {
     const service = order.service;
     const availability = staffAvailability[service];
     if (!order.bookingDate || availability.blockedDates[order.bookingDate] || assignedBookingsForDate(service, order.bookingDate).length >= 3) { Alert.alert(tr(language, "No staff available", "暂无员工可接单", "暫無員工可接單"), tr(language, "This date is blocked or fully booked. Choose another date.", "该日期已封锁或排满，请选择其他日期。", "該日期已封鎖或排滿，請選擇其他日期。")); return; }
     if (!isOrderInWorkAreas(order, availability.areas)) { Alert.alert(tr(language, "Outside staff work area", "超出员工服务范围", "超出員工服務範圍"), tr(language, "Enter a full London-area address served by an available staff member, then try again. No job is assigned outside their selected areas.", "请输入可用员工服务范围内的完整伦敦地区地址，再重试。不会向服务区域外的员工分配工作。", "請輸入可用員工服務範圍內的完整倫敦地區地址，再重試。不會向服務範圍外的員工分派工作。")); return; }
+    if (!order.bookingTime || staffTimeBlockOverlaps(availability.blockedTimes[order.bookingDate] || [], order.bookingTime)) { Alert.alert(tr(language, "Time slot blocked", "时段已封锁", "時段已封鎖"), tr(language, "This time overlaps staff time off. Choose an available time on the same date or another day.", "此时段与员工请假时间冲突。请选择当天其他可预约时段或另一天。", "此時段與員工休假時間衝突。請選擇當天其他可預約時段或另一天。")); return; }
     if (assignedBookingsForDate(service, order.bookingDate).some((booking) => bookingTimesOverlap(booking.time, order.bookingTime || ""))) { Alert.alert(tr(language, "Time slot unavailable", "时段不可预约", "時段不可預約"), tr(language, "The available staff member already has a booking at this time. Choose another slot.", "该员工此时已有预订，请选择其他时段。", "該員工此時已有預訂，請選擇其他時段。")); return; }
     setServiceOrder(order);
   };
@@ -14259,6 +14297,7 @@ function AppContent({
                   language={language}
                   onCheckout={reviewServiceOrder}
                   isUnavailable={(dayKey) => isServiceDateUnavailable(service as StaffService, dayKey)}
+                  isTimeUnavailable={(dayKey, time) => isServiceTimeUnavailable(service as StaffService, dayKey, time)}
                 />
               </ScrollView>
               {serviceOrder && (
@@ -14693,8 +14732,11 @@ function StaffWorkspace({ service, movingDriver, language, onLanguage, darkMode,
   const [completionError, setCompletionError] = useState("");
   const [scheduleView, setScheduleView] = useState<"day" | "month" | "history">("month");
   const blockedDates = availability.blockedDates;
+  const blockedTimes = availability.blockedTimes;
   const [scheduleManagerOpen, setScheduleManagerOpen] = useState(false);
   const [scheduleError, setScheduleError] = useState("");
+  const [blockStart, setBlockStart] = useState("09:00");
+  const [blockEnd, setBlockEnd] = useState("12:00");
   const [calendarMonth, setCalendarMonth] = useState(8);
   const [calendarYear, setCalendarYear] = useState(2026);
   const [selectedDay, setSelectedDay] = useState("24 Sep 2026");
@@ -14755,7 +14797,31 @@ function StaffWorkspace({ service, movingDriver, language, onLanguage, darkMode,
   const monthBookings = activeBookings.filter((booking) => { const date = new Date(booking.date); return date.getMonth() === calendarMonth && date.getFullYear() === calendarYear; });
   const visibleSchedule = (scheduleView === "day" ? monthBookings.filter((booking) => booking.date === selectedDay) : monthBookings).sort((a, b) => a.date === b.date ? a.time.localeCompare(b.time) : new Date(a.date).getTime() - new Date(b.date).getTime());
   const shiftCalendarMonth = (step: number) => { const next = new Date(calendarYear, calendarMonth + step, 1); setCalendarMonth(next.getMonth()); setCalendarYear(next.getFullYear()); setSelectedDay(`1 ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][next.getMonth()]} ${next.getFullYear()}`); setScheduleError(""); };
-  const markUnavailable = (kind: "blocked" | "holiday" | "emergency") => { if (kind !== "emergency" && activeBookings.some((booking) => booking.date === selectedDay)) { setScheduleError(t("Move or resolve existing bookings before blocking this date.", "请先调整或处理现有预订，再封锁该日期。", "請先調整或處理現有預訂，再封鎖該日期。")); return; } onAvailabilityChange({ ...availability, blockedDates: { ...blockedDates, [selectedDay]: kind } }); setScheduleError(kind === "emergency" && activeBookings.some((booking) => booking.date === selectedDay) ? t("Emergency marked. Existing jobs still need manual reassignment and client notification; this preview sends neither.", "已标记紧急情况。现有工作仍需人工改派及通知客户；此预览不会发送通知。", "已標記緊急情況。現有工作仍需人工改派及通知客戶；此預覽不會傳送通知。") : ""); };
+  const markUnavailable = (kind: "blocked" | "holiday" | "emergency") => {
+    if (kind !== "emergency" && activeBookings.some((booking) => booking.date === selectedDay)) { setScheduleError(t("Move or resolve existing bookings before blocking this date.", "请先调整或处理现有预订，再封锁该日期。", "請先調整或處理現有預訂，再封鎖該日期。")); return; }
+    const nextBlockedTimes = { ...blockedTimes };
+    delete nextBlockedTimes[selectedDay];
+    onAvailabilityChange({ ...availability, blockedDates: { ...blockedDates, [selectedDay]: kind }, blockedTimes: nextBlockedTimes });
+    setScheduleError(kind === "emergency" && activeBookings.some((booking) => booking.date === selectedDay) ? t("Emergency marked. Existing jobs still need manual reassignment and client notification; this preview sends neither.", "已标记紧急情况。现有工作仍需人工改派及通知客户；此预览不会发送通知。", "已標記緊急情況。現有工作仍需人工改派及通知客戶；此預覽不會傳送通知。") : "");
+  };
+  const addTimeBlock = () => {
+    if (blockedDates[selectedDay]) { setScheduleError(t("Clear the full-day mark before adding hours to block.", "添加时段前请先清除全天标记。", "加入時段前請先清除全日標記。")); return; }
+    if (blockStart >= blockEnd) { setScheduleError(t("End time must be after start time.", "结束时间必须晚于开始时间。", "結束時間必須晚於開始時間。")); return; }
+    const range = `${blockStart}–${blockEnd}`;
+    if (activeBookings.some((booking) => booking.date === selectedDay && bookingTimesOverlap(booking.time, range))) { setScheduleError(t("A confirmed job overlaps these hours. Move or resolve that job first.", "已有确认的工作与此时段冲突。请先调整或处理该工作。", "已有確認的工作與此時段衝突。請先調整或處理該工作。")); return; }
+    if (staffTimeBlockOverlaps(blockedTimes[selectedDay] || [], range)) { setScheduleError(t("This overlaps another blocked time. Choose a separate range.", "此时段与另一封锁时段重叠。请选择不同的时间范围。", "此時段與另一封鎖時段重疊。請選擇不同的時間範圍。")); return; }
+    const next = [...(blockedTimes[selectedDay] || []), { id: `block-${Date.now()}`, start: blockStart, end: blockEnd }].sort((a, b) => a.start.localeCompare(b.start));
+    onAvailabilityChange({ ...availability, blockedTimes: { ...blockedTimes, [selectedDay]: next } });
+    setScheduleError("");
+  };
+  const removeTimeBlock = (id: string) => {
+    const next = { ...blockedTimes };
+    const remaining = (next[selectedDay] || []).filter((block) => block.id !== id);
+    if (remaining.length) next[selectedDay] = remaining;
+    else delete next[selectedDay];
+    onAvailabilityChange({ ...availability, blockedTimes: next });
+    setScheduleError("");
+  };
   const formatStaffDate = (date: Date) => `${date.getDate()} ${["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][date.getMonth()]} ${date.getFullYear()}`;
   const invoiceRecords: StaffInvoice[] = [
     ...completedForService.map((job): StaffInvoice => ({ id: `INV-${job.booking.id}`, booking: job.booking, amount: null, issued: null, due: null, status: "draft" })),
@@ -14769,7 +14835,7 @@ function StaffWorkspace({ service, movingDriver, language, onLanguage, darkMode,
   const editSlotOptions = service === "cleaning" ? cleaningArrivalWindows : movingPickupWindows;
   const openBooking = (booking: StaffBooking) => { setSelectedBooking(booking); setEditDate(booking.date); setEditTime(service === "airport" ? booking.time.slice(0, 5) : booking.time); setEditDropoffEta(booking.dropoffEta || ""); setEditingBooking(false); setBookingEditError(""); setCompletionError(""); setCancelArmed(false); };
   const completeBooking = () => { if (!selectedBooking) return; const photos = completionPhotos[selectedBooking.id] || []; const before = beforePhotos[selectedBooking.id] || []; if ((service === "cleaning" || service === "moving") && (!before.length || !photos.length)) { setCompletionError(t("Add at least one before-service and one completion photo before marking this job complete. Both are required for invoice review.", "完成服务前请至少添加一张服务前照片和一张完工照片。发票审核需要两组照片。", "完成服務前請至少加入一張服務前相片及一張完工相片。發票審核需要兩組相片。")); return; } setBookingState((current) => ({ ...current, [selectedBooking.id]: "completed" })); onCompleteJob({ service, booking: selectedBooking, beforePhotos: before, photos }); setCompletionError(""); };
-  const saveBookingSlot = () => { if (!selectedBooking) return; if (blockedDates[editDate]) { setBookingEditError(t("This date is blocked or marked as holiday.", "该日期已封锁或标记为休假。", "該日期已封鎖或標記為休假。")); return; } if (service === "airport" ? !/^([01]\d|2[0-3]):[0-5]\d$/.test(editTime) : !editSlotOptions.includes(editTime)) { setBookingEditError(t("Choose a time offered in the student booking form.", "请选择学生预订表单中的时间段。", "請選擇學生預訂表單中的時段。")); return; } if (bookings.some((booking) => booking.id !== selectedBooking.id && booking.date === editDate && booking.time === editTime && bookingState[booking.id] !== "cancel-requested")) { setBookingEditError(t("Another booking already uses this time slot.", "已有其他预订使用此时间段。", "已有其他預訂使用此時段。")); return; } if (service === "moving" && editDropoffEta.trim()) { const eta = editDropoffEta.trim(); if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(eta) || eta < editTime.slice(0, 5)) { setBookingEditError(t("Enter a valid same-day drop-off ETA (HH:MM) after pickup begins.", "请输入取件开始后有效的当日送达预计时间（时:分）。", "請輸入取件開始後有效的當日送達預計時間（時:分）。")); return; } } const updated = { ...selectedBooking, date: editDate, time: editTime, ...(service === "moving" ? { dropoffEta: editDropoffEta.trim() || undefined } : {}) }; setBookings((current) => current.map((booking) => booking.id === updated.id ? updated : booking)); setSelectedBooking(updated); setEditingBooking(false); setBookingEditError(""); };
+  const saveBookingSlot = () => { if (!selectedBooking) return; if (blockedDates[editDate]) { setBookingEditError(t("This date is blocked or marked as holiday.", "该日期已封锁或标记为休假。", "該日期已封鎖或標記為休假。")); return; } if (service === "airport" ? !/^([01]\d|2[0-3]):[0-5]\d$/.test(editTime) : !editSlotOptions.includes(editTime)) { setBookingEditError(t("Choose a time offered in the student booking form.", "请选择学生预订表单中的时间段。", "請選擇學生預訂表單中的時段。")); return; } if (staffTimeBlockOverlaps(availability.blockedTimes[editDate] || [], editTime)) { setBookingEditError(t("This time overlaps blocked hours. Choose another time on this date.", "此时段与封锁时间冲突。请选择当天其他时间。", "此時段與封鎖時間衝突。請選擇當天其他時間。")); return; } if (bookings.some((booking) => booking.id !== selectedBooking.id && booking.date === editDate && bookingTimesOverlap(booking.time, editTime) && bookingState[booking.id] !== "cancel-requested")) { setBookingEditError(t("Another booking already uses this time slot.", "已有其他预订使用此时间段。", "已有其他預訂使用此時段。")); return; } if (service === "moving" && editDropoffEta.trim()) { const eta = editDropoffEta.trim(); if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(eta) || eta < editTime.slice(0, 5)) { setBookingEditError(t("Enter a valid same-day drop-off ETA (HH:MM) after pickup begins.", "请输入取件开始后有效的当日送达预计时间（时:分）。", "請輸入取件開始後有效的當日送達預計時間（時:分）。")); return; } } const updated = { ...selectedBooking, date: editDate, time: editTime, ...(service === "moving" ? { dropoffEta: editDropoffEta.trim() || undefined } : {}) }; setBookings((current) => current.map((booking) => booking.id === updated.id ? updated : booking)); setSelectedBooking(updated); setEditingBooking(false); setBookingEditError(""); };
   return <SafeAreaView style={styles.safe}>
     <AuthPreferences language={language} onLanguage={onLanguage} darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} />
     <View style={styles.workspaceHeading}><View style={{ flex: 1 }}><Text style={styles.workspaceEyebrow}>{t("APPROVED STAFF", "已批准员工", "已批准員工")}</Text><Text style={styles.workspaceTitle}>{data.title}</Text><Text style={styles.workspaceSubtitle}>{displayName} · {data.role}</Text></View><WorkspaceHeadingBadge kind="staff" language={language} /></View>
@@ -14788,10 +14854,31 @@ function StaffWorkspace({ service, movingDriver, language, onLanguage, darkMode,
         {scheduleView !== "history" && <>
         <View style={styles.workspaceCard}><View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}><Pressable accessibilityRole="button" accessibilityLabel={t("Previous month", "上个月", "上個月")} onPress={() => shiftCalendarMonth(-1)}><Ionicons name="chevron-back" size={20} color={palette.blue} /></Pressable><Text style={styles.workspaceCardTitle}>{new Date(calendarYear, calendarMonth, 1).toLocaleDateString(language === "EN" ? "en-GB" : "zh-CN", { month: "long", year: "numeric" })}</Text><Pressable accessibilityRole="button" accessibilityLabel={t("Next month", "下个月", "下個月")} onPress={() => shiftCalendarMonth(1)}><Ionicons name="chevron-forward" size={20} color={palette.blue} /></Pressable></View>
           <View style={{ flexDirection: "row" }}>{["M", "T", "W", "T", "F", "S", "S"].map((weekday, index) => <Text key={`${weekday}-${index}`} style={{ width: "14.285%", textAlign: "center", color: palette.muted, fontSize: 10, fontWeight: "800", paddingVertical: 6 }}>{weekday}</Text>)}</View>
-          <View style={{ flexDirection: "row", flexWrap: "wrap" }}>{Array.from({ length: (new Date(calendarYear, calendarMonth, 1).getDay() + 6) % 7 }, (_, index) => <View key={`blank-${index}`} style={{ width: "14.285%", height: 43 }} />)}{Array.from({ length: new Date(calendarYear, calendarMonth + 1, 0).getDate() }, (_, index) => index + 1).map((day) => { const date = formatCalendarDate(day); const count = activeBookings.filter((booking) => booking.date === date).length; const unavailable = blockedDates[date]; const selected = selectedDay === date; const full = count >= 3; return <Pressable key={day} accessibilityRole="button" accessibilityLabel={`${date} · ${unavailable ? unavailable === "holiday" ? t("holiday", "休假", "休假") : unavailable === "emergency" ? t("emergency", "紧急情况", "緊急情況") : t("blocked", "已封锁", "已封鎖") : full ? t("fully booked", "已排满", "已排滿") : count ? `${count} ${t("bookings", "笔预订", "筆預訂")}` : t("available", "可预约", "可預約")}`} accessibilityState={{ selected }} onPress={() => { setSelectedDay(date); setScheduleView("day"); setScheduleError(""); }} style={{ width: "14.285%", height: 43, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: selected ? palette.blue : unavailable === "emergency" ? "#FFF0F0" : unavailable ? "#FFF5DF" : "transparent" }}><Text style={{ color: selected ? "#FFFFFF" : palette.navy, fontWeight: count || unavailable ? "900" : "500", fontSize: 12 }}>{day}</Text><View style={{ flexDirection: "row", gap: 2, minHeight: 4 }}>{unavailable ? <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: selected ? "#FFFFFF" : unavailable === "emergency" ? palette.coral : "#D48B16" }} /> : Array.from({ length: Math.min(count, 3) }, (_, dot) => <View key={dot} style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: selected ? "#FFFFFF" : full ? palette.green : palette.blue }} />)}</View></Pressable>; })}</View>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 11, marginTop: 8 }}><Text style={styles.workspaceHint}>● {t("Booking", "有预订", "有預訂")}</Text><Text style={[styles.workspaceHint, { color: palette.green }]}>● {t("Fully booked", "已排满", "已排滿")}</Text><Text style={[styles.workspaceHint, { color: "#B97913" }]}>● {t("Blocked / holiday", "封锁 / 休假", "封鎖 / 休假")}</Text><Text style={[styles.workspaceHint, { color: palette.coral }]}>● {t("Emergency", "紧急情况", "緊急情況")}</Text></View>
+          <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
+            {Array.from({ length: (new Date(calendarYear, calendarMonth, 1).getDay() + 6) % 7 }, (_, index) => <View key={`blank-${index}`} style={{ width: "14.285%", height: 43 }} />)}
+            {Array.from({ length: new Date(calendarYear, calendarMonth + 1, 0).getDate() }, (_, index) => index + 1).map((day) => {
+              const date = formatCalendarDate(day);
+              const count = activeBookings.filter((booking) => booking.date === date).length;
+              const unavailable = blockedDates[date];
+              const timeBlocks = blockedTimes[date] || [];
+              const selected = selectedDay === date;
+              const full = count >= 3;
+              const timeBlockLabel = timeBlocks.map((block) => `${block.start}–${block.end}`).join(", ");
+              return <Pressable key={day} accessibilityRole="button" accessibilityLabel={`${date} · ${unavailable ? unavailable === "holiday" ? t("holiday", "休假", "休假") : unavailable === "emergency" ? t("emergency", "紧急情况", "緊急情況") : t("blocked all day", "全天封锁", "全日封鎖") : timeBlocks.length ? `${t("time blocked", "时段封锁", "時段封鎖")} ${timeBlockLabel}; ${t("other hours available", "其余时间可预约", "其餘時間可預約")}` : full ? t("fully booked", "已排满", "已排滿") : count ? `${count} ${t("bookings", "笔预订", "筆預訂")}` : t("available", "可预约", "可預約")}`} accessibilityState={{ selected }} onPress={() => { setSelectedDay(date); setScheduleView("day"); setScheduleError(""); }} style={{ width: "14.285%", height: 43, alignItems: "center", justifyContent: "center", borderRadius: 10, backgroundColor: selected ? palette.blue : unavailable === "emergency" ? "#FFF0F0" : unavailable ? "#FFF5DF" : timeBlocks.length ? "#FFF8E9" : "transparent" }}>
+                <Text style={{ color: selected ? "#FFFFFF" : palette.navy, fontWeight: count || unavailable || timeBlocks.length ? "900" : "500", fontSize: 12 }}>{day}</Text>
+                <View style={{ flexDirection: "row", gap: 2, minHeight: 4 }}>{unavailable ? <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: selected ? "#FFFFFF" : unavailable === "emergency" ? palette.coral : "#A76A12" }} /> : <>{timeBlocks.length > 0 && <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: selected ? "#FFFFFF" : "#D48B16" }} />}{Array.from({ length: Math.min(count, 3) }, (_, dot) => <View key={dot} style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: selected ? "#FFFFFF" : full ? palette.green : palette.blue }} />)}</>}</View>
+              </Pressable>;
+            })}
+          </View>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 11, marginTop: 8 }}><Text style={styles.workspaceHint}>● {t("Booking", "有预订", "有預訂")}</Text><Text style={[styles.workspaceHint, { color: palette.green }]}>● {t("Fully booked", "已排满", "已排滿")}</Text><Text style={[styles.workspaceHint, { color: "#D48B16" }]}>● {t("Time blocked", "时段封锁", "時段封鎖")}</Text><Text style={[styles.workspaceHint, { color: "#A76A12" }]}>● {t("Full day off", "全天休假", "全日休假")}</Text><Text style={[styles.workspaceHint, { color: palette.coral }]}>● {t("Emergency", "紧急情况", "緊急情況")}</Text></View>
         </View>
-        {scheduleView === "day" && <View style={[styles.workspaceCard, { marginTop: 10, marginBottom: 13 }]}><Text style={styles.workspaceCardTitle}>{t("Availability for", "日期安排", "日期安排")} {selectedDay}</Text><Text style={styles.workspaceCardText}>{blockedDates[selectedDay] === "emergency" ? t("Emergency · existing jobs need reassignment", "紧急情况 · 现有工作需要改派", "緊急情況 · 現有工作需要改派") : blockedDates[selectedDay] === "holiday" ? t("Holiday · unavailable for bookings", "休假 · 不接受预订", "休假 · 不接受預訂") : blockedDates[selectedDay] === "blocked" ? t("Blocked · unavailable for bookings", "已封锁 · 不接受预订", "已封鎖 · 不接受預訂") : activeBookings.filter((booking) => booking.date === selectedDay).length >= 3 ? t("Fully booked · 3 or more jobs", "已排满 · 至少 3 项服务", "已排滿 · 至少 3 項服務") : t("Available around scheduled jobs", "可在已有安排外接单", "可在已有安排外接單")}</Text><Pressable accessibilityRole="button" style={[styles.marketCategory, { alignSelf: "flex-start", marginTop: 8 }]} onPress={() => setScheduleManagerOpen(true)}><Ionicons name="create-outline" size={15} color={palette.blue} /><Text style={styles.marketCategoryText}>{t("Edit availability", "编辑可工作日期", "編輯可工作日期")}</Text></Pressable>{!!scheduleError && <Text style={[styles.workspaceHint, { color: palette.coral, marginTop: 8 }]}>{scheduleError}</Text>}</View>}
+        {scheduleView === "day" && <View style={[styles.workspaceCard, { marginTop: 10, marginBottom: 13 }]}>
+          <Text style={styles.workspaceCardTitle}>{t("Availability for", "日期安排", "日期安排")} {selectedDay}</Text>
+          <Text style={styles.workspaceCardText}>{blockedDates[selectedDay] === "emergency" ? t("Emergency · existing jobs need reassignment", "紧急情况 · 现有工作需要改派", "緊急情況 · 現有工作需要改派") : blockedDates[selectedDay] === "holiday" ? t("Holiday · unavailable for bookings", "休假 · 不接受预订", "休假 · 不接受預訂") : blockedDates[selectedDay] === "blocked" ? t("Blocked all day · unavailable for bookings", "全天封锁 · 不接受预订", "全日封鎖 · 不接受預訂") : (blockedTimes[selectedDay] || []).length ? t("Partly available · bookings can start outside blocked hours", "部分时间可预约 · 可在封锁时段以外开始工作", "部分時間可預約 · 可在封鎖時段以外開始工作") : activeBookings.filter((booking) => booking.date === selectedDay).length >= 3 ? t("Fully booked · 3 or more jobs", "已排满 · 至少 3 项服务", "已排滿 · 至少 3 項服務") : t("Available around scheduled jobs", "可在已有安排外接单", "可在已有安排外接單")}</Text>
+          {(blockedTimes[selectedDay] || []).map((block) => <View key={block.id} style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 }}><Ionicons name="time-outline" size={16} color="#B97913" /><Text style={[styles.workspaceCardText, { color: palette.navy }]}>{t("Blocked", "已封锁", "已封鎖")} {block.start}–{block.end}</Text></View>)}
+          <Pressable accessibilityRole="button" style={[styles.marketCategory, { alignSelf: "flex-start", marginTop: 8 }]} onPress={() => setScheduleManagerOpen(true)}><Ionicons name="create-outline" size={15} color={palette.blue} /><Text style={styles.marketCategoryText}>{t("Edit availability", "编辑可工作日期", "編輯可工作日期")}</Text></Pressable>
+          {!!scheduleError && <Text style={[styles.workspaceHint, { color: palette.coral, marginTop: 8 }]}>{scheduleError}</Text>}
+        </View>}
         <Text style={styles.workspaceSectionTitle}>{scheduleView === "day" ? selectedDay : t("This month’s bookings", "本月预订", "本月預訂")}</Text>
         {visibleSchedule.map((booking) => <Pressable key={booking.id} accessibilityRole="button" style={[styles.workspaceScheduleRow, { marginBottom: 10, alignItems: "flex-start" }]} onPress={() => openBooking(booking)}><View style={[styles.workspaceScheduleDate, { minWidth: 69, paddingHorizontal: 5 }]}><Text style={{ color: palette.blue, fontWeight: "900", fontSize: 12, textAlign: "center" }}>{booking.time.split("–")[0]}</Text></View><View style={{ flex: 1, gap: 3 }}><Text style={styles.workspaceCardTitle}>{booking.title}</Text><Text style={styles.workspaceCardText}>{booking.time} · {booking.student}</Text><View style={{ flexDirection: "row", alignItems: "flex-start", gap: 4 }}><Ionicons name="location-outline" size={13} color={palette.blue} /><Text style={[styles.workspaceCardText, { flex: 1 }]}>{booking.place}</Text></View>{bookingState[booking.id] === "cancel-requested" && <Text style={[styles.workspaceHint, { color: palette.coral }]}>{t("Cancellation requested", "已申请取消", "已申請取消")}</Text>}</View><Ionicons name="chevron-forward" size={17} color={palette.blue} /></Pressable>)}
         {!visibleSchedule.length && <Text style={styles.workspaceHint}>{t("No bookings on this date", "此日期没有预订", "此日期沒有預訂")}</Text>}
@@ -14799,7 +14886,7 @@ function StaffWorkspace({ service, movingDriver, language, onLanguage, darkMode,
         {scheduleView === "history" && <>
           <Text style={styles.workspaceSectionTitle}>{t("Previous & closed bookings", "过去及已结单预订", "過去及已結單預訂")}</Text>
           <Text style={styles.workspaceHint}>{t("Completed work and closed bookings are kept here for reference.", "已完成服务和已结单预订在此留存以供查阅。", "已完成服務及已結單預訂在此留存以供查閱。")}</Text>
-          {completedForService.map((job) => <Pressable key={job.booking.id} accessibilityRole="button" style={[styles.workspaceCard, { marginTop: 10 }]} onPress={() => openBooking(job.booking)}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{job.booking.title}</Text><Text style={styles.workspaceStatus}>{t("Completed", "已完成", "已完成")}</Text></View><Text style={styles.workspaceCardText}>{job.booking.date} · {job.booking.time} · {job.booking.student}</Text><Text style={styles.workspaceCardText}>{job.booking.place}</Text><Text style={styles.workspaceCardLink}>{t("View job details", "查看工作详情", "查看工作詳情")} ›</Text></Pressable>)}
+          {completedForService.map((job) => <Pressable key={job.booking.id} accessibilityRole="button" style={[styles.workspaceCard, { marginTop: 10, borderColor: palette.green, backgroundColor: "#F0FAF4" }]} onPress={() => openBooking(job.booking)}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{job.booking.title}</Text><Text style={[styles.workspaceStatus, { backgroundColor: "#D9F4E5", color: palette.green }]}>{t("Completed", "已完成", "已完成")}</Text></View><Text style={styles.workspaceCardText}>{job.booking.date} · {job.booking.time} · {job.booking.student}</Text><Text style={styles.workspaceCardText}>{job.booking.place}</Text><Text style={styles.workspaceCardLink}>{t("View job details", "查看工作详情", "查看工作詳情")} ›</Text></Pressable>)}
           {staffBookingHistory[service].map((booking) => <Pressable key={booking.id} accessibilityRole="button" style={[styles.workspaceCard, { marginTop: 10 }]} onPress={() => openBooking(booking)}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{booking.title}</Text><Text style={styles.workspaceStatus}>{booking.outcome === "completed" ? t("Completed", "已完成", "已完成") : t("Closed", "已结单", "已結單")}</Text></View><Text style={styles.workspaceCardText}>{booking.date} · {booking.time} · {booking.student}</Text><Text style={styles.workspaceCardText}>{booking.place}</Text><Text style={styles.workspaceCardLink}>{t("View job history", "查看工作记录", "查看工作紀錄")} ›</Text></Pressable>)}
         </>}
       </>}
@@ -14838,8 +14925,8 @@ function StaffWorkspace({ service, movingDriver, language, onLanguage, darkMode,
     </ScrollView>
     <WorkspaceTabs tabs={tabs} active={tab} onSelect={setTab} />
     <Sheet visible={selectedBooking !== null} title={t("Booking details", "预订详情", "預訂詳情")} onClose={() => setSelectedBooking(null)}>{selectedBooking && <ScrollView contentContainerStyle={styles.modalBody}>
-      <View style={[styles.workspaceCard, { backgroundColor: "#F5F9FF", padding: 16, marginBottom: 15, gap: 11 }]}>
-        <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}><Text style={[styles.workspaceSectionTitle, { flex: 1, marginTop: 0 }]}>{selectedBooking.title}</Text><Text style={styles.workspaceStatus}>{bookingStatusText(selectedBooking)}</Text></View>
+      <View style={[styles.workspaceCard, { backgroundColor: bookingState[selectedBooking.id] === "completed" || completedIds.has(selectedBooking.id) ? "#F0FAF4" : "#F5F9FF", borderColor: bookingState[selectedBooking.id] === "completed" || completedIds.has(selectedBooking.id) ? palette.green : palette.line, padding: 16, marginBottom: 15, gap: 11 }]}>
+        <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}><Text style={[styles.workspaceSectionTitle, { flex: 1, marginTop: 0 }]}>{selectedBooking.title}</Text><Text style={[styles.workspaceStatus, (bookingState[selectedBooking.id] === "completed" || completedIds.has(selectedBooking.id)) && { backgroundColor: "#D9F4E5", color: palette.green }]}>{bookingStatusText(selectedBooking)}</Text></View>
         <Text style={[styles.workspaceHint, { marginTop: -5 }]}>{t("Booking reference", "预订编号", "預訂編號")} · {selectedBooking.id}</Text>
         <View style={{ flexDirection: "row", gap: 9 }}><Ionicons name="person-outline" size={17} color={palette.blue} /><Text style={[styles.workspaceCardText, { flex: 1 }]}>{selectedBooking.student}</Text></View>
         <View style={{ flexDirection: "row", gap: 9 }}><Ionicons name="calendar-outline" size={17} color={palette.blue} /><Text style={[styles.workspaceCardText, { flex: 1 }]}>{selectedBooking.date}</Text></View>
@@ -14878,8 +14965,9 @@ function StaffWorkspace({ service, movingDriver, language, onLanguage, darkMode,
         <Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 9, borderColor: palette.coral }]} onPress={() => { if (cancelArmed) { setBookingState((current) => ({ ...current, [selectedBooking.id]: "cancel-requested" })); setCancelArmed(false); } else setCancelArmed(true); }}><Text style={[styles.secondaryButtonText, { color: palette.coral }]}>{cancelArmed ? t("Confirm cancellation request", "确认取消申请", "確認取消申請") : t("Request cancellation", "申请取消", "申請取消")}</Text></Pressable>
         <Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 9 }]} onPress={() => openStaffSupport(selectedBooking)}><Text style={styles.secondaryButtonText}>{t("Report a problem with this job", "报告此工作的问题", "報告此工作的問題")}</Text></Pressable>
       </>}
-      {(bookingState[selectedBooking.id] === "completed" || completedIds.has(selectedBooking.id)) && <View style={[styles.workspaceCard, { marginTop: 14 }]}>
-        <Text style={styles.workspaceCardTitle}>{t("Completion recorded", "已记录完工", "已記錄完工")}</Text>
+      {(bookingState[selectedBooking.id] === "completed" || completedIds.has(selectedBooking.id)) && <View style={[styles.workspaceCard, { marginTop: 14, borderColor: palette.green, backgroundColor: "#F0FAF4" }]}>
+        <View style={[styles.primaryButton, { backgroundColor: palette.green, gap: 8 }]}><Ionicons name="checkmark-circle" size={21} color="#FFFFFF" /><Text style={styles.primaryButtonText}>{t("Job completed", "服务已完成", "服務已完成")}</Text></View>
+        <Text style={[styles.workspaceCardTitle, { marginTop: 9, color: palette.green }]}>{t("Completion recorded", "已记录完工", "已記錄完工")}</Text>
         <Text style={styles.workspaceCardText}>{t("The customer can now leave a review. The direct customer chat has closed automatically; completion photos remain private booking evidence.", "客户现在可以评价服务。客户与员工的直接聊天已自动关闭；完工照片仅作私人订单凭证。", "客戶現在可以評價服務。客戶與員工的直接聊天已自動關閉；完工相片僅作私人訂單憑證。")}</Text>
         <Text style={styles.workspaceHint}>{serviceReviews.some((review) => review.bookingId === selectedBooking.id) ? t("Customer review received", "已收到客户评价", "已收到客戶評價") : t("Customer review pending", "等待客户评价", "等待客戶評價")}</Text>
         <Text style={[styles.workspaceCardText, { color: tipForBooking(selectedBooking.id) ? palette.green : palette.muted }]}>{tipForBooking(selectedBooking.id) ? `${t("Tip recorded for you", "已记录给您的小费", "已記錄給您的貼士")} · £${tipForBooking(selectedBooking.id)?.amount.toFixed(2)}` : t("No tip recorded for this job", "此工作尚无小费记录", "此工作尚無貼士記錄")}</Text>
@@ -14891,10 +14979,20 @@ function StaffWorkspace({ service, movingDriver, language, onLanguage, darkMode,
       <View style={[styles.workspaceNotice, { marginTop: 14 }]}><Ionicons name="information-circle-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("Updates and photos stay on this device in the preview. Real changes need booking approval, secure storage and client notifications.", "此预览中的更新与照片仅保存在本机。真实变更需预订审批、安全存储及客户通知。", "此預覽中的更新與相片只儲存在本機。真實變更需預訂審批、安全儲存及客戶通知。")}</Text></View>
     </ScrollView>}</Sheet>
     <Sheet visible={scheduleManagerOpen} title={t("Edit availability", "编辑可工作日期", "編輯可工作日期")} onClose={() => setScheduleManagerOpen(false)}><ScrollView contentContainerStyle={styles.modalBody}>
-      <Text style={styles.workspaceHint}>{t("Manage days off for your service. Changes here are local and do not notify clients or dispatch.", "管理服务休假日期。此处更改仅保存在本机，不会通知客户或调度团队。", "管理服務休假日期。此處更改只儲存在本機，不會通知客戶或調度團隊。")}</Text>
+      <Text style={styles.workspaceHint}>{t("Block a full day or just the hours you need off. Other hours stay bookable. Changes here are local and do not notify clients or dispatch.", "可封锁全天或只封锁需要休息的时段，其余时间仍可预约。此处更改仅保存在本机，不会通知客户或调度团队。", "可封鎖全日或只封鎖需要休息的時段，其餘時間仍可預約。此處更改只儲存在本機，不會通知客戶或調度團隊。")}</Text>
       <SelectField label={t("Choose date", "选择日期", "選擇日期")} value={selectedDay} options={Array.from({ length: new Date(calendarYear, calendarMonth + 1, 0).getDate() }, (_, index) => formatCalendarDate(index + 1))} onChange={(value) => { setSelectedDay(value); setScheduleError(""); }} schedule />
-      <View style={[styles.workspaceCard, { marginTop: 10 }]}><Text style={styles.workspaceCardTitle}>{selectedDay}</Text><Text style={styles.workspaceCardText}>{activeBookings.filter((booking) => booking.date === selectedDay).length} {t("scheduled jobs", "项已安排工作", "項已安排工作")}</Text><Text style={styles.workspaceHint}>{blockedDates[selectedDay] ? `${t("Marked", "已标记", "已標記")}: ${blockedDates[selectedDay]}` : t("Available unless the day is fully booked", "除排满外可以接单", "除排滿外可以接單")}</Text></View>
-      <View style={{ gap: 9, marginTop: 14 }}><Pressable accessibilityRole="button" style={styles.secondaryButton} onPress={() => markUnavailable("holiday")}><Ionicons name="sunny-outline" size={17} color={palette.blue} /><Text style={styles.secondaryButtonText}>{t("Mark holiday", "标记休假", "標記休假")}</Text></Pressable><Pressable accessibilityRole="button" style={styles.secondaryButton} onPress={() => markUnavailable("blocked")}><Ionicons name="calendar-outline" size={17} color={palette.blue} /><Text style={styles.secondaryButtonText}>{t("Block date", "封锁日期", "封鎖日期")}</Text></Pressable><Pressable accessibilityRole="button" style={[styles.secondaryButton, { borderColor: palette.coral }]} onPress={() => markUnavailable("emergency")}><Ionicons name="alert-circle-outline" size={17} color={palette.coral} /><Text style={[styles.secondaryButtonText, { color: palette.coral }]}>{t("Mark emergency", "标记紧急情况", "標記緊急情況")}</Text></Pressable>{blockedDates[selectedDay] && <Pressable accessibilityRole="button" style={styles.secondaryButton} onPress={() => { const next = { ...blockedDates }; delete next[selectedDay]; onAvailabilityChange({ ...availability, blockedDates: next }); setScheduleError(""); }}><Text style={styles.secondaryButtonText}>{t("Clear availability mark", "清除日期标记", "清除日期標記")}</Text></Pressable>}</View>
+      <View style={[styles.workspaceCard, { marginTop: 10 }]}><Text style={styles.workspaceCardTitle}>{selectedDay}</Text><Text style={styles.workspaceCardText}>{activeBookings.filter((booking) => booking.date === selectedDay).length} {t("scheduled jobs", "项已安排工作", "項已安排工作")}</Text><Text style={styles.workspaceHint}>{blockedDates[selectedDay] ? `${t("Marked for the full day", "已标记全天", "已標記全日")}: ${blockedDates[selectedDay]}` : (blockedTimes[selectedDay] || []).length ? t("Partly available outside blocked hours", "封锁时段以外仍可预约", "封鎖時段以外仍可預約") : t("Available unless the day is fully booked", "除排满外可以接单", "除排滿外可以接單")}</Text></View>
+      <Text style={[styles.workspaceSectionTitle, { marginTop: 20 }]}>{t("Block specific hours", "封锁指定时段", "封鎖指定時段")}</Text>
+      <Text style={styles.workspaceHint}>{t("For example, block 09:00–12:00 for an appointment; work can start from 12:00.", "例如因预约封锁 09:00–12:00，12:00 起仍可开始工作。", "例如因預約封鎖 09:00–12:00，12:00 起仍可開始工作。")}</Text>
+      <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
+        <View style={{ flex: 1 }}><SelectField label={t("From", "开始", "開始")} value={blockStart} options={staffBlockTimeOptions.slice(0, -1)} onChange={(value) => { setBlockStart(value); setScheduleError(""); }} /></View>
+        <View style={{ flex: 1 }}><SelectField label={t("Until", "结束", "結束")} value={blockEnd} options={staffBlockTimeOptions.slice(1)} onChange={(value) => { setBlockEnd(value); setScheduleError(""); }} /></View>
+      </View>
+      <Pressable accessibilityRole="button" style={[styles.primaryButton, { marginTop: 10 }]} onPress={addTimeBlock}><Ionicons name="add-circle-outline" size={18} color="#FFFFFF" /><Text style={styles.primaryButtonText}>{t("Block these hours", "封锁此时段", "封鎖此時段")}</Text></Pressable>
+      {(blockedTimes[selectedDay] || []).map((block) => <View key={block.id} style={[styles.workspaceCard, { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 10 }]}><Ionicons name="time-outline" size={20} color="#B97913" /><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{block.start}–{block.end}</Text><Text style={styles.workspaceCardText}>{t("Blocked · other hours available", "已封锁 · 其余时间可预约", "已封鎖 · 其餘時間可預約")}</Text></View><Pressable accessibilityRole="button" accessibilityLabel={`${t("Remove time block", "移除封锁时段", "移除封鎖時段")} ${block.start}–${block.end}`} onPress={() => removeTimeBlock(block.id)} style={{ padding: 8 }}><Ionicons name="trash-outline" size={18} color={palette.coral} /></Pressable></View>)}
+      <Text style={[styles.workspaceSectionTitle, { marginTop: 22 }]}>{t("Full-day changes", "全天安排", "全日安排")}</Text>
+      <Text style={styles.workspaceHint}>{t("A full-day mark replaces time blocks on this date.", "全天标记将替换此日期的时段封锁。", "全日標記將取代此日期的時段封鎖。")}</Text>
+      <View style={{ gap: 9, marginTop: 12 }}><Pressable accessibilityRole="button" style={styles.secondaryButton} onPress={() => markUnavailable("holiday")}><Ionicons name="sunny-outline" size={17} color={palette.blue} /><Text style={styles.secondaryButtonText}>{t("Mark holiday", "标记休假", "標記休假")}</Text></Pressable><Pressable accessibilityRole="button" style={styles.secondaryButton} onPress={() => markUnavailable("blocked")}><Ionicons name="calendar-outline" size={17} color={palette.blue} /><Text style={styles.secondaryButtonText}>{t("Block full day", "封锁全天", "封鎖全日")}</Text></Pressable><Pressable accessibilityRole="button" style={[styles.secondaryButton, { borderColor: palette.coral }]} onPress={() => markUnavailable("emergency")}><Ionicons name="alert-circle-outline" size={17} color={palette.coral} /><Text style={[styles.secondaryButtonText, { color: palette.coral }]}>{t("Mark emergency", "标记紧急情况", "標記緊急情況")}</Text></Pressable>{blockedDates[selectedDay] && <Pressable accessibilityRole="button" style={styles.secondaryButton} onPress={() => { const next = { ...blockedDates }; delete next[selectedDay]; onAvailabilityChange({ ...availability, blockedDates: next }); setScheduleError(""); }}><Text style={styles.secondaryButtonText}>{t("Clear full-day mark", "清除全天标记", "清除全日標記")}</Text></Pressable>}</View>
       {!!scheduleError && <Text style={[styles.workspaceError, { marginTop: 10 }]}>{scheduleError}</Text>}
     </ScrollView></Sheet>
     <Sheet visible={staffReviewsOpen} title={t("Reviews & ratings", "评价与评分", "評價及評分")} onClose={() => { setStaffReviewsOpen(false); setReplyReviewId(null); }}><ScrollView contentContainerStyle={styles.modalBody}>
@@ -15146,7 +15244,7 @@ function SellerWorkspace({ approvedPreview, initialCategories, language, onLangu
 
 type OrganisationEventStatus = "draft" | "pending" | "live" | "past" | "cancelled";
 type OrganisationEvent = { id: string; title: string; date: string; dateKey?: string; venue: string; capacity: number; price: number; voucher: string; status: OrganisationEventStatus; ticketsSold: number; signUps?: number; refundStatus?: "review" | "processing" | "completed"; ticketReleaseDate?: string; ticketReleaseTime?: string; category?: string; coverUri?: string | null; startTime?: string; endTime?: string; lastEntryTime?: string; summary?: string; isSample?: boolean };
-type OrganisationOffer = { id: string; code: string; discount: number; target: string; area?: "events" | "restaurant"; occasion?: string; startDate?: string; endDate?: string };
+type OrganisationOffer = { id: string; code: string; discount: number; target: string; area?: "events" | "restaurant"; kind?: "discount" | "combo"; occasion?: string; startDate?: string; endDate?: string };
 type OrganisationReview = { id: string; student: string; rating: number; text: string; reply: string };
 
 function OrganisationEventCard({ event, language, onOpen }: { event: OrganisationEvent; language: Language; onOpen: () => void }) {
@@ -15223,11 +15321,15 @@ function OrganisationWorkspace({ kind, language, onLanguage, darkMode, onToggleD
   const [offerDiscount, setOfferDiscount] = useState("");
   const [offerTarget, setOfferTarget] = useState("");
   const [offerArea, setOfferArea] = useState<"events" | "restaurant">("events");
-  const [offerScope, setOfferScope] = useState<"menu" | "items">("menu");
+  const [offerScope, setOfferScope] = useState<"menu" | "items" | "combo">("menu");
   const [offerItems, setOfferItems] = useState<string[]>([]);
+  const [comboMain, setComboMain] = useState("");
+  const [comboExtra, setComboExtra] = useState("");
+  const [comboPrice, setComboPrice] = useState("");
   const [offerOccasion, setOfferOccasion] = useState("");
   const [offerStartDate, setOfferStartDate] = useState("");
   const [offerEndDate, setOfferEndDate] = useState("");
+  const [offerDatePicker, setOfferDatePicker] = useState<"start" | "end" | null>(null);
   const [menuItems, setMenuItems] = useState(kind === "restaurant" ? restaurantProfile.menuItems : ["Lunch bowl", "Veggie wrap", "Iced tea"]);
   const [newMenuItem, setNewMenuItem] = useState("");
   const [coverUri, setCoverUri] = useState<string | null>(kind === "restaurant" ? restaurantProfile.coverUri : null);
@@ -15340,10 +15442,12 @@ function OrganisationWorkspace({ kind, language, onLanguage, darkMode, onToggleD
   };
   const addOffer = () => {
     const discount = Number(offerDiscount);
-    const target = offerForEvents ? offerTarget.trim() : offerScope === "items" ? offerItems.join(", ") : t("Entire menu", "全菜单", "全餐單");
-    if (!/^[A-Z0-9]{4,20}$/.test(offerCode.trim().toUpperCase()) || !Number.isInteger(discount) || discount < 1 || discount > 90 || !target || (!!offerStartDate !== !!offerEndDate)) { setFormError(t("Enter a 4–20 character code, a 1–90% discount, eligible items and both dates if scheduling an offer.", "请输入 4–20 位优惠码、1–90% 折扣、适用商品；如设置日期，请填写开始和结束日期。", "請輸入 4–20 位優惠碼、1–90% 折扣、適用商品；如設定日期，請填寫開始及結束日期。")); return; }
-    setOffers((current) => [{ id: `OF-${Date.now()}`, code: offerCode.trim().toUpperCase(), discount, target, area: offerForEvents ? "events" : "restaurant", occasion: offerOccasion.trim(), startDate: offerStartDate.trim(), endDate: offerEndDate.trim() }, ...current]);
-    setOfferCode(""); setOfferDiscount(""); setOfferTarget(""); setOfferItems([]); setOfferScope("menu"); setOfferOccasion(""); setOfferStartDate(""); setOfferEndDate(""); setFormError(""); setShowOfferForm(false);
+    const isCombo = !offerForEvents && offerScope === "combo";
+    const comboAmount = comboPrice.trim() ? Number(comboPrice) : null;
+    const target = offerForEvents ? offerTarget.trim() : isCombo ? comboMain && comboExtra && comboMain !== comboExtra ? `${comboMain} + ${comboExtra} (${comboAmount === null ? t("free extra", "赠送商品", "贈送商品") : `${t("combo price", "套餐价格", "套餐價格")} £${comboAmount.toFixed(2)}`})` : "" : offerScope === "items" ? offerItems.filter((item) => menuItems.includes(item)).join(", ") : t("Entire menu", "全菜单", "全餐單");
+    if (!/^[A-Z0-9]{4,20}$/.test(offerCode.trim().toUpperCase()) || !target || (!isCombo && (!Number.isInteger(discount) || discount < 1 || discount > 90)) || (isCombo && comboAmount !== null && (!Number.isFinite(comboAmount) || comboAmount <= 0)) || (!!offerStartDate !== !!offerEndDate) || (!!offerStartDate && offerEndDate < offerStartDate)) { setFormError(t("Check the code, eligible menu items, offer value and date range. Select both dates to schedule an offer.", "请检查优惠码、适用菜单商品、优惠金额及日期范围。预约优惠须选择两个日期。", "請檢查優惠碼、適用餐單商品、優惠金額及日期範圍。排期優惠須選擇兩個日期。")); return; }
+    setOffers((current) => [{ id: `OF-${Date.now()}`, code: offerCode.trim().toUpperCase(), discount: isCombo ? 0 : discount, target, area: offerForEvents ? "events" : "restaurant", kind: isCombo ? "combo" : "discount", occasion: offerOccasion.trim(), startDate: offerStartDate, endDate: offerEndDate }, ...current]);
+    setOfferCode(""); setOfferDiscount(""); setOfferTarget(""); setOfferItems([]); setOfferScope("menu"); setComboMain(""); setComboExtra(""); setComboPrice(""); setOfferOccasion(""); setOfferStartDate(""); setOfferEndDate(""); setFormError(""); setShowOfferForm(false);
   };
   const chooseCover = async () => { const uris = await selectPhotoUris(language, "library", { multiple: false, limit: 1, quality: 0.8 }); if (uris[0]) setCoverUri(uris[0]); };
   const chooseEventProfilePhoto = async () => { const uris = await selectPhotoUris(language, "library", { allowsEditing: true, aspect: [1, 1], quality: 0.8 }); if (uris[0]) setEventProfileUri(uris[0]); };
@@ -15363,7 +15467,7 @@ function OrganisationWorkspace({ kind, language, onLanguage, darkMode, onToggleD
         {isEvents ? <><Pressable accessibilityRole="button" style={[styles.workspaceCard, { gap: 7 }]} onPress={() => setTab("events")}><Text style={styles.workspaceCardTitle}>{t("Manage events", "管理活动", "管理活動")}</Text><Text style={styles.workspaceCardText}>{eventsList.length} {t("events · status and history", "场活动 · 状态与历史", "場活動 · 狀態及記錄")}</Text><Text style={styles.workspaceCardLink}>{t("Open events", "查看活动", "查看活動")}  ›</Text></Pressable><Pressable accessibilityRole="button" style={[styles.workspaceCard, { gap: 7 }]} onPress={() => setTab("finance")}><Text style={styles.workspaceCardTitle}>{t("Tickets & finance", "门票与财务", "門票及財務")}</Text><Text style={styles.workspaceCardText}>{t("Release plans, payment preferences and invoice records", "开售计划、付款偏好及发票记录", "開售計劃、付款偏好及發票記錄")}</Text><Text style={styles.workspaceCardLink}>{t("Open finance", "查看财务", "查看財務")}  ›</Text></Pressable>{!!cancelledEvents.length && <Pressable accessibilityRole="button" style={[styles.workspaceCard, { gap: 6, borderColor: "#F2C8CC" }]} onPress={() => { setEventFilter("cancelled"); setTab("events"); }}><Text style={styles.workspaceCardTitle}>{t("Cancelled events & refunds", "已取消活动与退款", "已取消活動及退款")}</Text><Text style={styles.workspaceCardText}>{cancelledEvents.length} {t("sample event needs refund tracking", "场示例活动需要跟进退款", "場示例活動需要跟進退款")}</Text><Text style={styles.workspaceCardLink}>{t("View cancelled events", "查看已取消活动", "查看已取消活動")}  ›</Text></Pressable>}</> : <>
           <View style={[styles.workspaceCard, { gap: 8, padding: 16 }]}><Text style={styles.workspaceCardTitle}>{t("Student reviews to answer", "待回复的学生评价", "待回覆的學生評價")}</Text>{allReviews.find((review) => !review.reply) ? <><Text style={styles.workspaceCardText}>{allReviews.find((review) => !review.reply)?.student} · ★ {allReviews.find((review) => !review.reply)?.rating.toFixed(1)}</Text><Text style={styles.workspaceCardText} numberOfLines={2}>{allReviews.find((review) => !review.reply)?.text}</Text></> : <Text style={styles.workspaceCardText}>{t("All visible reviews have a response.", "所有可见评价均已回复。", "所有可見評價均已回覆。")}</Text>}<Pressable accessibilityRole="button" onPress={() => { setTab("profile"); setProfileReviewsOpen(true); setReviewFilter("unanswered"); }}><Text style={styles.workspaceCardLink}>{t("Reply in Profile", "前往资料回复", "前往個人資料回覆")}  ›</Text></Pressable></View>
           <View style={[styles.workspaceCard, { gap: 8, padding: 16 }]}><Text style={styles.workspaceCardTitle}>{t("Menu & public page", "菜单与公开主页", "餐單及公開主頁")}</Text><Text style={styles.workspaceCardText}>{menuFile ? `${t("Menu uploaded", "菜单已上传", "餐單已上載")}: ${menuFile.name}` : t("No official menu uploaded yet", "尚未上传官方菜单", "尚未上載官方餐單")} · {menuItems.length} {t("highlights", "道精选菜品", "款精選菜式")}</Text><Text style={styles.workspaceCardText}>{restaurantHours.trim() ? `${t("Hours", "营业时间", "營業時間")}: ${restaurantHours}` : t("Opening hours need adding", "请补充营业时间", "請補充營業時間")}</Text><Pressable accessibilityRole="button" onPress={() => setTab("menu")}><Text style={styles.workspaceCardLink}>{t("Manage menu", "管理菜单", "管理餐單")}  ›</Text></Pressable></View>
-          <View style={[styles.workspaceCard, { gap: 8, padding: 16 }]}><Text style={styles.workspaceCardTitle}>{t("Student offer", "学生优惠", "學生優惠")}</Text>{visibleOffers[0] ? <Text style={styles.workspaceCardText}>{visibleOffers[0].discount}% {t("off", "折扣", "折扣")} · {visibleOffers[0].code} · {visibleOffers[0].target}</Text> : <Text style={styles.workspaceCardText}>{t("No restaurant offer in this preview", "此预览中尚无餐厅优惠", "此預覽中尚無餐廳優惠")}</Text>}<Pressable accessibilityRole="button" onPress={() => setTab("offers")}><Text style={styles.workspaceCardLink}>{t("Manage offers", "管理优惠", "管理優惠")}  ›</Text></Pressable></View>
+          <View style={[styles.workspaceCard, { gap: 8, padding: 16 }]}><Text style={styles.workspaceCardTitle}>{t("Student offer", "学生优惠", "學生優惠")}</Text>{visibleOffers[0] ? <Text style={styles.workspaceCardText}>{visibleOffers[0].kind === "combo" ? t("Combo deal", "组合优惠", "組合優惠") : `${visibleOffers[0].discount}% ${t("off", "折扣", "折扣")}`} · {visibleOffers[0].code} · {visibleOffers[0].target}</Text> : <Text style={styles.workspaceCardText}>{t("No restaurant offer in this preview", "此预览中尚无餐厅优惠", "此預覽中尚無餐廳優惠")}</Text>}<Pressable accessibilityRole="button" onPress={() => setTab("offers")}><Text style={styles.workspaceCardLink}>{t("Manage offers", "管理优惠", "管理優惠")}  ›</Text></Pressable></View>
           <Pressable accessibilityRole="button" style={[styles.workspaceCard, { flexDirection: "row", alignItems: "center", gap: 12 }]} onPress={() => setTab("messages")}><Ionicons name="chatbubbles-outline" size={22} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.workspaceCardTitle}>{t("Messages & support", "消息与支持", "訊息及支援")}</Text><Text style={styles.workspaceCardText}>{t("Contact UniMate operations or tech support", "联系优你伴运营或技术支持", "聯絡優你伴營運或技術支援")}</Text></View><Ionicons name="chevron-forward" size={18} color={palette.blue} /></Pressable>
         </>}
         <View style={styles.workspaceNotice}><Ionicons name="information-circle-outline" size={18} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{t("This official-account workspace is a local preview. Events, replies, vouchers and messages are not published or sent.", "此官方账号工作区仅供本地预览。活动、回复、优惠码及消息不会发布或发送。", "此官方帳戶工作區只供本機預覽。活動、回覆、優惠碼及訊息不會發佈或傳送。")}</Text></View>
@@ -15443,19 +15547,22 @@ function OrganisationWorkspace({ kind, language, onLanguage, darkMode, onToggleD
         {showOfferForm && <View style={styles.workspaceForm}>
           <Text style={styles.workspaceCardTitle}>{t("New student offer", "新学生优惠", "新學生優惠")}</Text>
           <TextInput style={styles.workspaceInput} value={offerCode} onChangeText={setOfferCode} autoCapitalize="characters" placeholder={t("Coupon code, e.g. STUDENT20", "优惠码，例如 STUDENT20", "優惠碼，例如 STUDENT20")} placeholderTextColor="#68778F" />
-          <TextInput style={styles.workspaceInput} value={offerDiscount} onChangeText={setOfferDiscount} keyboardType="number-pad" placeholder={t("Discount percentage", "折扣百分比", "折扣百分比")} placeholderTextColor="#68778F" />
+          {(offerForEvents || offerScope !== "combo") && <TextInput style={styles.workspaceInput} value={offerDiscount} onChangeText={setOfferDiscount} keyboardType="number-pad" placeholder={t("Discount percentage", "折扣百分比", "折扣百分比")} placeholderTextColor="#68778F" />}
           {isEvents && isRestaurant && <View style={styles.authRoleChoices}>{([ ["events", t("Event tickets", "活动门票", "活動門票")], ["restaurant", t("Restaurant menu", "餐厅菜单", "餐廳餐單")] ] as const).map(([value, label]) => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: offerArea === value }} style={[styles.authRoleChoice, offerArea === value && styles.authRoleChoiceActive]} onPress={() => setOfferArea(value)}><Text style={styles.authRoleChoiceText}>{label}</Text></Pressable>)}</View>}
           {offerForEvents ? <TextInput style={styles.workspaceInput} value={offerTarget} onChangeText={setOfferTarget} placeholder={t("Eligible event", "适用活动", "適用活動")} placeholderTextColor="#68778F" /> : <>
             <Text style={styles.workspaceCardText}>{t("Apply offer to", "优惠适用于", "優惠適用於")}</Text>
-            <View style={styles.authRoleChoices}>{([["menu", t("Entire menu", "全菜单", "全餐單")], ["items", t("Selected items", "指定商品", "指定商品")]] as const).map(([value, label]) => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: offerScope === value }} style={[styles.authRoleChoice, offerScope === value && styles.authRoleChoiceActive]} onPress={() => setOfferScope(value)}><Text style={styles.authRoleChoiceText}>{label}</Text></Pressable>)}</View>
+            <View style={styles.authRoleChoices}>{([["menu", t("Entire menu", "全菜单", "全餐單")], ["items", t("Selected items", "指定商品", "指定商品")], ["combo", t("Meal or combo deal", "套餐或组合优惠", "套餐或組合優惠")]] as const).map(([value, label]) => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: offerScope === value }} style={[styles.authRoleChoice, offerScope === value && styles.authRoleChoiceActive]} onPress={() => setOfferScope(value)}><Text style={styles.authRoleChoiceText}>{label}</Text></Pressable>)}</View>
             {offerScope === "items" && <View style={styles.authRoleChoices}>{menuItems.map((item) => <Pressable key={item} accessibilityRole="button" accessibilityState={{ selected: offerItems.includes(item) }} style={[styles.authRoleChoice, offerItems.includes(item) && styles.authRoleChoiceActive]} onPress={() => setOfferItems((current) => current.includes(item) ? current.filter((name) => name !== item) : [...current, item])}><Ionicons name={offerItems.includes(item) ? "checkbox" : "square-outline"} size={16} color={palette.blue} /><Text style={styles.authRoleChoiceText}>{item}</Text></Pressable>)}</View>}
+            {offerScope === "combo" && <View style={{ gap: 8 }}><Text style={styles.workspaceHint}>{t("Choose two different items from your official menu highlights. Leave the combo price empty to make the extra item free.", "从官方菜单精选中选择两种不同商品。套餐价格留空即赠送附加商品。", "從官方餐單精選中選擇兩款不同商品。套餐價格留空即贈送附加商品。")}</Text><Text style={styles.authFieldLabel}>{t("Buy this item", "购买此商品", "購買此商品")}</Text><View style={styles.authRoleChoices}>{menuItems.map((item) => <Pressable key={item} accessibilityRole="button" accessibilityState={{ selected: comboMain === item }} style={[styles.authRoleChoice, comboMain === item && styles.authRoleChoiceActive]} onPress={() => setComboMain(item)}><Text style={styles.authRoleChoiceText}>{item}</Text></Pressable>)}</View><Text style={styles.authFieldLabel}>{t("Get this item", "获得此商品", "獲得此商品")}</Text><View style={styles.authRoleChoices}>{menuItems.filter((item) => item !== comboMain).map((item) => <Pressable key={item} accessibilityRole="button" accessibilityState={{ selected: comboExtra === item }} style={[styles.authRoleChoice, comboExtra === item && styles.authRoleChoiceActive]} onPress={() => setComboExtra(item)}><Text style={styles.authRoleChoiceText}>{item}</Text></Pressable>)}</View><TextInput style={styles.workspaceInput} value={comboPrice} onChangeText={setComboPrice} keyboardType="decimal-pad" placeholder={t("Combo price in £ (optional; blank = free extra)", "套餐价格 £（选填；留空即赠送）", "套餐價格 £（選填；留空即贈送）")} placeholderTextColor="#68778F" /></View>}
+            {menuItems.length < 2 && <Text style={styles.workspaceHint}>{t("Add at least two items to the official menu highlights before creating a combo.", "创建组合优惠前，请在官方菜单精选中添加至少两款商品。", "建立組合優惠前，請在官方餐單精選中加入至少兩款商品。")}</Text>}
             <TextInput style={styles.workspaceInput} value={offerOccasion} onChangeText={setOfferOccasion} placeholder={t("Occasion, e.g. Valentine's Day (optional)", "节日主题，例如情人节（选填）", "節日主題，例如情人節（選填）")} placeholderTextColor="#68778F" />
-            <View style={styles.workspaceFormRow}><TextInput style={[styles.workspaceInput, { flex: 1 }]} value={offerStartDate} onChangeText={setOfferStartDate} placeholder={t("Start date", "开始日期", "開始日期")} placeholderTextColor="#68778F" /><TextInput style={[styles.workspaceInput, { flex: 1 }]} value={offerEndDate} onChangeText={setOfferEndDate} placeholder={t("End date", "结束日期", "結束日期")} placeholderTextColor="#68778F" /></View>
+            <View style={styles.workspaceFormRow}>{(["start", "end"] as const).map((which) => <Pressable key={which} accessibilityRole="button" accessibilityLabel={which === "start" ? t("Choose start date", "选择开始日期", "選擇開始日期") : t("Choose end date", "选择结束日期", "選擇結束日期")} style={[styles.workspaceInput, { flex: 1, minHeight: 54, flexDirection: "row", alignItems: "center", gap: 8 }]} onPress={() => setOfferDatePicker(which)}><Ionicons name="calendar-outline" size={18} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.workspaceHint}>{which === "start" ? t("Start date", "开始日期", "開始日期") : t("End date", "结束日期", "結束日期")}</Text><Text style={styles.workspaceCardText}>{(which === "start" ? offerStartDate : offerEndDate) ? formatBookingDate(which === "start" ? offerStartDate : offerEndDate, language) : t("Choose date", "选择日期", "選擇日期")}</Text></View></Pressable>)}</View>
+            <Text style={styles.workspaceHint}>{t("Optional: leave both dates empty for an unscheduled draft.", "选填：两个日期均留空可保存未排期草稿。", "選填：兩個日期均留空可儲存未排期草稿。")}</Text>
           </>}
           {!!formError && <Text style={styles.workspaceError}>{formError}</Text>}
           <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={addOffer}><Text style={styles.primaryButtonText}>{t("Save offer draft", "保存优惠草稿", "儲存優惠草稿")}</Text></Pressable>
         </View>}
-        {visibleOffers.map((offer) => <View key={offer.id} style={styles.workspaceCard}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{offer.code}</Text><Text style={styles.workspaceStatus}>{offer.discount}% {t("off", "折扣", "折扣")}</Text></View><Text style={styles.workspaceCardText}>{offer.target}</Text>{!!offer.occasion && <Text style={styles.workspaceCardText}>{offer.occasion}</Text>}{!!offer.startDate && <Text style={styles.workspaceCardText}>{offer.startDate} – {offer.endDate}</Text>}<Text style={styles.workspaceHint}>{t("Not redeemable in this preview", "此预览中不可兑换", "此預覽中不可兌換")}</Text></View>)}
+        {visibleOffers.map((offer) => <View key={offer.id} style={styles.workspaceCard}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{offer.code}</Text><Text style={styles.workspaceStatus}>{offer.kind === "combo" ? t("Combo deal", "组合优惠", "組合優惠") : `${offer.discount}% ${t("off", "折扣", "折扣")}`}</Text></View><Text style={styles.workspaceCardText}>{offer.target}</Text>{!!offer.occasion && <Text style={styles.workspaceCardText}>{offer.occasion}</Text>}{!!offer.startDate && <Text style={styles.workspaceCardText}>{formatBookingDate(offer.startDate, language)} – {formatBookingDate(offer.endDate || offer.startDate, language)}</Text>}<Text style={styles.workspaceHint}>{t("Not redeemable in this preview", "此预览中不可兑换", "此預覽中不可兌換")}</Text></View>)}
       </>}
       {tab === "messages" && <>{!selectedMessage && <DemoMessageRequests language={language} sender="Ava Patel" context={isEvents ? t("Event enquiry", "活动咨询", "活動查詢") : t("Restaurant enquiry", "餐厅咨询", "餐廳查詢")} message={isEvents ? t("Hi, could you tell me more about the next event before I book?", "你好，预订前能介绍一下下一场活动吗？", "你好，預訂前可以介紹一下下一場活動嗎？") : t("Hi, do you have space for a group this weekend?", "你好，这个周末能接待一组客人吗？", "你好，這個週末可以接待一組客人嗎？")} status={demoRequestStatus} onDecision={setDemoRequestStatus} />}<WorkspaceMessages language={language} threads={[
         ...(isEvents ? eventsList.filter((event) => event.ticketsSold > 0 || (event.signUps || 0) > 0).map((event) => ({ id: `attendees-${event.id}`, name: `${event.title} · ${t("group", "群聊", "群聊")}`, type: `${t("Event attendee group", "活动参加者群聊", "活動參加者群聊")} · ${event.price === 0 ? event.signUps || 0 : event.ticketsSold} ${event.price === 0 ? t("signed up", "人已报名", "人已報名") : t("ticket holders", "名持票者", "名持票者")}`, preview: event.status === "cancelled" ? t("Cancellation and refund updates for ticket holders.", "向持票者发布取消及退款进展。", "向持票者發佈取消及退款進展。") : t("Share event updates with attendees in this group.", "在此群聊中向参加者发送活动更新。", "在此群聊中向參加者傳送活動更新。"), time: t("Event group", "活动群聊", "活動群聊"), initials: "EV", color: palette.blue })) : []),
@@ -15600,9 +15707,15 @@ function OrganisationWorkspace({ kind, language, onLanguage, darkMode, onToggleD
         <Text style={styles.workspaceSectionTitle}>{t("Official menu", "官方菜单", "官方餐單")}</Text>
         <View style={styles.workspaceCard}>{menuFile ? <><Text style={styles.workspaceCardTitle}>{menuFile.name}</Text>{menuFile.mimeType?.startsWith("image/") ? <Image source={{ uri: menuFile.uri }} style={styles.restaurantMenuImage} resizeMode="contain" /> : <Pressable accessibilityRole="button" onPress={() => Linking.openURL(menuFile.uri).catch(() => Alert.alert(t("Could not open file", "无法打开文件", "無法開啟檔案")))}><Text style={styles.workspaceCardLink}>{t("Open menu file", "打开菜单文件", "開啟餐單檔案")}  ›</Text></Pressable>}</> : <Text style={styles.workspaceCardText}>{t("Menu coming soon", "菜单即将上线", "餐單即將上線")}</Text>}</View>
         <Text style={styles.workspaceSectionTitle}>{t("Menu highlights", "菜单精选", "餐單精選")}</Text><View style={styles.authRoleChoices}>{menuItems.map((item) => <View key={item} style={styles.authRoleChoice}><Text style={styles.authRoleChoiceText}>{item}</Text></View>)}</View>
-        <Text style={styles.workspaceSectionTitle}>{t("Student offers", "学生优惠", "學生優惠")}</Text>{offers.filter((offer) => offer.area === "restaurant").map((offer) => <View key={offer.id} style={styles.workspaceCard}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{offer.discount}% {t("off", "折扣", "折扣")}</Text><Text style={styles.workspaceStatus}>{offer.code}</Text></View><Text style={styles.workspaceCardText}>{offer.target}</Text>{!!offer.occasion && <Text style={styles.workspaceCardText}>{offer.occasion}</Text>}{!!offer.startDate && <Text style={styles.workspaceCardText}>{offer.startDate} – {offer.endDate}</Text>}</View>)}
+        <Text style={styles.workspaceSectionTitle}>{t("Student offers", "学生优惠", "學生優惠")}</Text>{offers.filter((offer) => offer.area === "restaurant").map((offer) => <View key={offer.id} style={styles.workspaceCard}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{offer.kind === "combo" ? t("Combo deal", "组合优惠", "組合優惠") : `${offer.discount}% ${t("off", "折扣", "折扣")}`}</Text><Text style={styles.workspaceStatus}>{offer.code}</Text></View><Text style={styles.workspaceCardText}>{offer.target}</Text>{!!offer.occasion && <Text style={styles.workspaceCardText}>{offer.occasion}</Text>}{!!offer.startDate && <Text style={styles.workspaceCardText}>{formatBookingDate(offer.startDate, language)} – {formatBookingDate(offer.endDate || offer.startDate, language)}</Text>}</View>)}
         <Text style={styles.workspaceSectionTitle}>{t("Student reviews", "学生评价", "學生評價")} · ★ {averageReviewRating}</Text><Text style={styles.workspaceHint}>{publicReviewCount} {t("ratings in this preview; selected comments are shown below.", "条预览评分；以下展示部分评论。", "條預覽評分；以下展示部分評論。")}</Text>{allReviews.map((review) => <View key={review.id} style={styles.workspaceCard}><View style={styles.workspaceCardTop}><Text style={styles.workspaceCardTitle}>{review.student}</Text><Text style={styles.workspaceReviewStars}>{"★".repeat(Math.round(review.rating))}{"☆".repeat(5 - Math.round(review.rating))} {review.rating.toFixed(1)}/5</Text></View><Text style={styles.workspaceCardText}>{review.text}</Text>{!!review.reply && <View style={styles.workspaceOwnerReply}><Text style={styles.workspaceCardTitle}>{t("Owner response", "商家回复", "商戶回覆")}</Text><Text style={styles.workspaceCardText}>{review.reply}</Text></View>}</View>)}
         {isEvents && <><Text style={styles.workspaceSectionTitle}>{t("Events", "活动", "活動")}</Text>{eventsList.map((event) => <View key={event.id} style={styles.workspaceCard}><Text style={styles.workspaceCardTitle}>{event.title}</Text><Text style={styles.workspaceCardText}>{event.date} · {event.venue}</Text></View>)}</>}
+      </ScrollView>
+    </Sheet>
+    <Sheet visible={offerDatePicker !== null} title={offerDatePicker === "start" ? t("Offer start date", "优惠开始日期", "優惠開始日期") : t("Offer end date", "优惠结束日期", "優惠結束日期")} onClose={() => setOfferDatePicker(null)}>
+      <ScrollView contentContainerStyle={styles.modalBody}>
+        <Text style={styles.workspaceHint}>{t("Choose a date for this restaurant offer. The end date must be on or after the start date.", "选择餐厅优惠日期。结束日期不得早于开始日期。", "選擇餐廳優惠日期。結束日期不得早於開始日期。")}</Text>
+        <AvailabilityCalendar key={offerDatePicker || "closed"} selected={offerDatePicker === "end" ? offerEndDate || offerStartDate || dateKey(new Date()) : offerStartDate || dateKey(new Date())} onSelect={(day) => { if (offerDatePicker === "start") { setOfferStartDate(day); if (offerEndDate && offerEndDate < day) setOfferEndDate(""); } else setOfferEndDate(day); setOfferDatePicker(null); }} language={language} compact bookingMonths={12} isUnavailable={(day) => offerDatePicker === "end" && !!offerStartDate && day < offerStartDate} />
       </ScrollView>
     </Sheet>
   </SafeAreaView>;
@@ -15685,9 +15798,9 @@ export default function App() {
   const [activeSellerApproved, setActiveSellerApproved] = useState(false);
   const [activeSellerCategories, setActiveSellerCategories] = useState<string[]>([]);
   const [staffAvailability, setStaffAvailability] = useState<Record<StaffService, StaffAvailability>>({
-    cleaning: { areas: ["Central London"], blockedDates: {} },
-    moving: { areas: ["Central London", "North London", "South London", "East London", "West London"], blockedDates: {} },
-    airport: { areas: ["Central London", "North London", "South London", "East London", "West London"], blockedDates: {} },
+    cleaning: { areas: ["Central London"], blockedDates: {}, blockedTimes: {} },
+    moving: { areas: ["Central London", "North London", "South London", "East London", "West London"], blockedDates: {}, blockedTimes: {} },
+    airport: { areas: ["Central London", "North London", "South London", "East London", "West London"], blockedDates: {}, blockedTimes: {} },
   });
   const [sessionId, setSessionId] = useState(0);
   const [previewBookings, setPreviewBookings] = useState<(StaffBooking & { service: StaffService })[]>([]);
