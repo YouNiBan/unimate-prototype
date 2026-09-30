@@ -8986,15 +8986,15 @@ function MomentsPrivacySheet({ visible, onClose, settings, onSettingsChange, acc
     </Sheet>;
 }
 
-function PostPhotoCarousel({ photos, language, onOpen }: { photos: string[]; language: Language; onOpen: (uri: string) => void }) {
+function PostPhotoCarousel({ photos, language, onOpen, maxHeight }: { photos: string[]; language: Language; onOpen: (uri: string) => void; maxHeight?: number }) {
   const [width, setWidth] = useState(390);
   const [index, setIndex] = useState(0);
   const slider = useRef<NativeScrollView>(null);
   useEffect(() => { slider.current?.scrollTo({ x: index * width, animated: false }); }, [width]);
   if (!photos.length) return null;
   return <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
-    <NativeScrollView ref={slider} horizontal pagingEnabled showsHorizontalScrollIndicator={false} scrollEventThrottle={32} onScroll={(event) => setIndex(Math.max(0, Math.min(photos.length - 1, Math.round(event.nativeEvent.contentOffset.x / width))))}>
-      {photos.map((uri, photoIndex) => <Pressable key={`${photoIndex}-${uri}`} accessibilityRole="button" accessibilityLabel={tr(language, `View photo ${photoIndex + 1}`, `查看照片 ${photoIndex + 1}`, `查看相片 ${photoIndex + 1}`)} style={{ width }} onPress={() => onOpen(uri)}><Image source={{ uri }} resizeMode="contain" style={{ width: "100%", aspectRatio: 1, backgroundColor: "#0E1726" }} /></Pressable>)}
+    <NativeScrollView ref={slider} horizontal pagingEnabled directionalLockEnabled nestedScrollEnabled showsHorizontalScrollIndicator={false} scrollEventThrottle={32} onScroll={(event) => setIndex(Math.max(0, Math.min(photos.length - 1, Math.round(event.nativeEvent.contentOffset.x / Math.max(1, width)))))}>
+      {photos.map((uri, photoIndex) => <Pressable key={`${photoIndex}-${uri}`} accessibilityRole="button" accessibilityLabel={tr(language, `View photo ${photoIndex + 1}`, `查看照片 ${photoIndex + 1}`, `查看相片 ${photoIndex + 1}`)} style={{ width }} onPress={() => onOpen(uri)}><Image source={{ uri }} resizeMode="contain" style={{ width: "100%", height: Math.min(width, maxHeight || width), backgroundColor: "#0E1726" }} /></Pressable>)}
     </NativeScrollView>
     {photos.length > 1 && <><View pointerEvents="none" style={{ position: "absolute", top: 12, right: 12, borderRadius: 18, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: "rgba(0,0,0,0.5)" }}><Text style={{ color: "#FFFFFF", fontSize: 12 }}>{index + 1}/{photos.length}</Text></View><View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center" }}>{photos.map((_, photoIndex) => <Pressable key={photoIndex} accessibilityRole="button" accessibilityLabel={tr(language, `Go to photo ${photoIndex + 1}`, `切换到照片 ${photoIndex + 1}`, `切換至相片 ${photoIndex + 1}`)} accessibilityState={{ selected: photoIndex === index }} onPress={() => { setIndex(photoIndex); slider.current?.scrollTo({ x: photoIndex * width, animated: true }); }} style={{ width: 24, height: 36, alignItems: "center", justifyContent: "center" }}><View style={{ width: photoIndex === index ? 7 : 5, height: photoIndex === index ? 7 : 5, borderRadius: 4, backgroundColor: photoIndex === index ? palette.blue : palette.muted }} /></Pressable>)}</View></>}
   </View>;
@@ -9016,6 +9016,8 @@ function StudentMoments({ embedded = false, profileAudience = "owner", followedP
 }) {
   const t = (en: string, zh: string, tw: string) => tr(language, en, zh, tw);
   const [composeOpen, setComposeOpen] = useState(false);
+  const [detailFeedIds, setDetailFeedIds] = useState<string[]>([]);
+  const { height: momentWindowHeight } = useWindowDimensions();
   const [audiencePickerOpen, setAudiencePickerOpen] = useState(false);
   const [shareMomentId, setShareMomentId] = useState<string | null>(null);
   const [repostDraftId, setRepostDraftId] = useState<string | null>(null);
@@ -9033,7 +9035,7 @@ function StudentMoments({ embedded = false, profileAudience = "owner", followedP
   const [audience, setAudience] = useState<"public" | "friends" | "private">("friends");
   const [coverBusy, setCoverBusy] = useState(false);
   const [coverError, setCoverError] = useState("");
-  useEffect(() => { setSelectedId(null); setMomentMenuId(null); }, [selectedAuthor]);
+  useEffect(() => { setSelectedId(null); setDetailFeedIds([]); setMomentMenuId(null); }, [selectedAuthor]);
   const historyLabel = (history: MomentsHistory) => ({
     all: t("All", "全部", "全部"), "6months": t("Last 6 months", "最近六个月", "最近六個月"),
     month: t("Last month", "最近一个月", "最近一個月"), "3days": t("Last 3 days", "最近三天", "最近三天"),
@@ -9053,7 +9055,7 @@ function StudentMoments({ embedded = false, profileAudience = "owner", followedP
   const [error, setError] = useState("");
   const [picking, setPicking] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  useEffect(() => { if (entry) setSelectedId(entry.id); }, [entry]);
+  useEffect(() => { if (entry) openMomentFeed(entry.id); }, [entry]);
   const [comment, setComment] = useState("");
   const [replyTo, setReplyTo] = useState<StudentMoment["comments"][number] | null>(null);
   const [commentPhoto, setCommentPhoto] = useState<string | null>(null);
@@ -9098,6 +9100,13 @@ function StudentMoments({ embedded = false, profileAudience = "owner", followedP
       .filter((moment) => !!selectedAuthor || (activityFilter || discoveryTab !== "explore" || discoveryTopic === "all" || discoveryTopic === "campus" || (moment.topic || "campus") === discoveryTopic) && `${moment.author} ${tr(language, ...moment.caption)} ${moment.eventTitle || ""}`.toLowerCase().includes(momentSearch.trim().toLowerCase()))
       .sort((a, b) => !selectedAuthor && discoveryTab === "foryou" ? (b.likes + Number(b.liked) + b.comments.length) - (a.likes + Number(a.liked) + a.comments.length) || b.createdAt - a.createdAt : b.createdAt - a.createdAt);
   const pinnedMoments = selectedAuthor ? visibleMoments.filter((moment) => moment.pinned) : [];
+  const openMomentFeed = (id: string) => {
+    if (!accessibleMoments.some((moment) => moment.id === id)) return;
+    const index = visibleMoments.findIndex((moment) => moment.id === id);
+    setDetailFeedIds(index >= 0 ? visibleMoments.slice(index).map((moment) => moment.id) : [id, ...visibleMoments.filter((moment) => moment.id !== id).map((moment) => moment.id)]);
+    setSelectedId(null);
+  };
+  const detailFeed = detailFeedIds.map((id) => accessibleMoments.find((moment) => moment.id === id)).filter((moment): moment is StudentMoment => !!moment);
   const openComposer = (nextAudience: "public" | "friends" | "private" = "friends") => {
     if (!canInteract) { onVerify(); return; }
     setAudience(nextAudience); setComposeOpen(true);
@@ -9198,7 +9207,7 @@ function StudentMoments({ embedded = false, profileAudience = "owner", followedP
   };
   const repostLabel = (moment: StudentMoment) => {
     const original = originalMoment(moment);
-    return moment.repostOf && original ? <Pressable accessibilityRole="button" accessibilityLabel={t("View original moment", "查看原动态", "查看原動態")} onPress={() => setSelectedId(original.id)} style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 8 }}><RepostIcon size={18} reposted color={palette.green} /><Text style={[styles.faqMeta, { flex: 1, color: palette.green }]}>{t(`Reposted from ${original.author}`, `转发自 ${original.author}`, `轉發自 ${original.author}`)}</Text></Pressable> : null;
+    return moment.repostOf && original ? <Pressable accessibilityRole="button" accessibilityLabel={t("View original moment", "查看原动态", "查看原動態")} onPress={() => openMomentFeed(original.id)} style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 8 }}><RepostIcon size={18} reposted color={palette.green} /><Text style={[styles.faqMeta, { flex: 1, color: palette.green }]}>{t(`Reposted from ${original.author}`, `转发自 ${original.author}`, `轉發自 ${original.author}`)}</Text></Pressable> : null;
   };
   const shareMomentButton = (moment: StudentMoment) => moment.publicPost && moment.audience !== "private" && moment.audience !== "friends" ? <Pressable accessibilityRole="button" accessibilityLabel={t("Share with friends", "分享给好友", "分享給好友")} style={{ minHeight: 44, minWidth: 38, alignItems: "center", justifyContent: "center" }} onPress={() => { if (!canInteract) { onVerify(); return; } setShareMomentId(moment.id); }}><Ionicons name="paper-plane-outline" size={20} color={palette.blue} /></Pressable> : null;
   const momentActionBar = (moment: StudentMoment) => <View style={{ flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44 }}>
@@ -9230,7 +9239,7 @@ function StudentMoments({ embedded = false, profileAudience = "owner", followedP
         <View style={styles.momentCoverIdentity}><Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 21, flexShrink: 1 }}>{selectedAuthorName}</Text><ChatPersonAvatar name={selectedAuthorName} photo={isOwnTimeline ? profilePhoto : undefined} size={62} /></View>
       </View>}
       {!!coverError && <Text style={{ color: palette.coral }}>{coverError}</Text>}
-      {!!selectedAuthor && ((!embedded && isOwnTimeline && !previewing) || pinnedMoments.length > 0) && <View style={{ marginVertical: 14 }}><Text style={styles.faqCardAuthor}>{t("Pinned posts", "置顶动态", "置頂動態")}</Text>{!pinnedMoments.length && <Text style={[styles.faqCardSummary, { marginTop: 8 }]}>{t("No pinned posts yet. Open ••• on one of your posts and choose Pin.", "暂无置顶动态。打开自己动态的 ••• 菜单，选择置顶。", "暫無置頂動態。開啟自己動態的 ••• 選單，選擇置頂。")}</Text>}<ScrollView horizontal contentContainerStyle={{ gap: 10, paddingVertical: 12 }}>{pinnedMoments.map((moment) => <Pressable key={moment.id} accessibilityRole="button" accessibilityLabel={t("Open pinned moment", "查看置顶动态", "查看置頂動態")} style={styles.momentPinnedTile} onPress={() => { setSelectedId(moment.id); setComment(""); }}>{moment.photos[0] ? <Image source={{ uri: moment.photos[0] }} style={{ width: "100%", height: 78, borderRadius: 5 }} /> : <Ionicons name={moment.audience === "private" ? "lock-closed-outline" : "document-text-outline"} size={29} color={palette.blue} />}<Text numberOfLines={2} style={styles.faqCardSummary}>{tr(language, ...moment.caption) || moment.eventTitle || t("Photo moment", "照片动态", "相片動態")}</Text></Pressable>)}</ScrollView></View>}
+      {!!selectedAuthor && ((!embedded && isOwnTimeline && !previewing) || pinnedMoments.length > 0) && <View style={{ marginVertical: 14 }}><Text style={styles.faqCardAuthor}>{t("Pinned posts", "置顶动态", "置頂動態")}</Text>{!pinnedMoments.length && <Text style={[styles.faqCardSummary, { marginTop: 8 }]}>{t("No pinned posts yet. Open ••• on one of your posts and choose Pin.", "暂无置顶动态。打开自己动态的 ••• 菜单，选择置顶。", "暫無置頂動態。開啟自己動態的 ••• 選單，選擇置頂。")}</Text>}<ScrollView horizontal contentContainerStyle={{ gap: 10, paddingVertical: 12 }}>{pinnedMoments.map((moment) => <Pressable key={moment.id} accessibilityRole="button" accessibilityLabel={t("Open pinned moment", "查看置顶动态", "查看置頂動態")} style={styles.momentPinnedTile} onPress={() => { openMomentFeed(moment.id); setComment(""); }}>{moment.photos[0] ? <Image source={{ uri: moment.photos[0] }} style={{ width: "100%", height: 78, borderRadius: 5 }} /> : <Ionicons name={moment.audience === "private" ? "lock-closed-outline" : "document-text-outline"} size={29} color={palette.blue} />}<Text numberOfLines={2} style={styles.faqCardSummary}>{tr(language, ...moment.caption) || moment.eventTitle || t("Photo moment", "照片动态", "相片動態")}</Text></Pressable>)}</ScrollView></View>}
       {isOwnTimeline && !previewing && <Pressable accessibilityRole="button" style={[styles.momentPinnedTile, { width: "100%", minHeight: 52, flexDirection: "row", borderRadius: 12, marginBottom: 16 }]} onPress={() => openComposer("friends")}><Ionicons name="add-circle-outline" size={22} color={palette.blue} /><Text style={styles.faqActionText}>{t("New Post", "新建动态", "新增動態")}</Text></Pressable>}
       {!embedded && !!selectedAuthor && <View style={styles.momentFeedHeading}><View><Text style={styles.pageTitle}>{t(`${selectedAuthorName}’s moments`, `${selectedAuthorName} 的朋友圈`, `${selectedAuthorName} 的朋友圈`)}</Text><Text style={styles.faqCardSummary}>{t("Everyday life, shared with friends.", "和朋友分享生活点滴。", "和朋友分享生活點滴。")}</Text></View></View>}
       {!!selectedPublisherId && <Pressable accessibilityRole="button" accessibilityLabel={followedPublishers.includes(selectedPublisherId) ? t("Unfollow organisation", "取消关注机构", "取消關注機構") : t("Follow organisation", "关注机构", "關注機構")} accessibilityState={{ selected: followedPublishers.includes(selectedPublisherId) }} onPress={() => canInteract ? onTogglePublisher(selectedPublisherId) : onVerify()} style={{ alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, borderRadius: 22, borderWidth: 1, borderColor: palette.blue, paddingHorizontal: 18, marginBottom: 18 }}><Ionicons name={followedPublishers.includes(selectedPublisherId) ? "checkmark" : "add"} size={18} color={palette.blue} /><Text style={styles.faqActionText}>{followedPublishers.includes(selectedPublisherId) ? t("Following", "已关注", "已關注") : t("Follow", "关注", "關注")}</Text></Pressable>}
@@ -9245,7 +9254,7 @@ function StudentMoments({ embedded = false, profileAudience = "owner", followedP
         </View>
       </View>}
       {!selectedAuthor && <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-start", marginTop: 14 }}>{[0, 1].map((column) => <View key={column} style={{ flex: 1, minWidth: 0, gap: 12 }}>{visibleMoments.filter((_, index) => index % 2 === column).map((moment, index) => <View key={moment.id} style={{ borderRadius: 12, overflow: "hidden", backgroundColor: "#F2F6FC" }}>
-        <Pressable accessibilityRole="button" accessibilityLabel={t(`Open moment by ${moment.author}`, `查看 ${moment.author} 的动态`, `查看 ${moment.author} 的動態`)} onPress={() => { setSelectedId(moment.id); setComment(""); }}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t(`Open moment by ${moment.author}`, `查看 ${moment.author} 的动态`, `查看 ${moment.author} 的動態`)} onPress={() => { openMomentFeed(moment.id); setComment(""); }}>
           {!!moment.photos[0] && <Image source={{ uri: moment.photos[0] }} style={{ width: "100%", aspectRatio: (index + column) % 2 === 0 ? 0.82 : 1.05 }} />}
           <View style={{ padding: 10, gap: 6 }}>{moment.publicPost && <Text style={[styles.faqMeta, { color: palette.blue }]}>{moment.publisherId ? t("PUBLIC · SAMPLE", "公开 · 示例", "公開 · 範例") : t("PUBLIC", "公开", "公開")}</Text>}<Text numberOfLines={3} style={{ fontSize: 14, lineHeight: 20, fontWeight: "700", color: palette.navy }}>{tr(language, ...moment.caption) || moment.eventTitle || t("A moment from my day", "生活点滴", "生活點滴")}</Text></View>
         <View style={{ paddingHorizontal: 10 }}>{!!moment.repostComment && <Text style={[styles.faqCardSummary, { color: palette.ink }]}>{moment.repostComment}</Text>}{repostLabel(moment)}</View>
@@ -9260,7 +9269,7 @@ function StudentMoments({ embedded = false, profileAudience = "owner", followedP
           {repostLabel(moment)}
           {moment.audience === "private" && <Text style={[styles.faqMeta, { marginBottom: 8 }]}>{t("🔒 Only me", "🔒 仅自己可见", "🔒 僅自己可見")}</Text>}
           {!!tr(language, ...moment.caption) && <Text style={styles.momentCaption}>{mentionText(tr(language, ...moment.caption))}</Text>}
-          {!!moment.photos.length && <View style={styles.momentPhotoGrid}>{moment.photos.map((uri, index) => <Pressable key={`${uri}-${index}`} accessibilityRole="button" accessibilityLabel={t(`Open photo ${index + 1}`, `查看照片 ${index + 1}`, `查看相片 ${index + 1}`)} onPress={() => setPhotoPreview(uri)} style={{ width: moment.photos.length === 1 ? "88%" : moment.photos.length === 2 || moment.photos.length === 4 ? "48%" : "31%" }}><Image source={{ uri }} style={[styles.momentPhoto, { borderRadius: 3 }, moment.photos.length === 1 && { aspectRatio: 4 / 3 }]} accessibilityLabel={t("Moment photo", "动态照片", "動態相片")} /></Pressable>)}</View>}
+          {!!moment.photos.length && <PostPhotoCarousel key={moment.id} photos={moment.photos} language={language} onOpen={setPhotoPreview} />}
           {!!tr(language, ...moment.location) && <View style={styles.momentLocation}><Ionicons name="location-outline" size={13} color={palette.blue} /><Text style={styles.faqMeta}>{tr(language, ...moment.location)}</Text></View>}
           {!!moment.eventTitle && eventCard(moment.eventTitle)}
           <View style={styles.momentTimelineMeta}>
@@ -9312,7 +9321,29 @@ function StudentMoments({ embedded = false, profileAudience = "owner", followedP
     <Sheet visible={audiencePickerOpen} title={t("Visible to", "谁可以看", "誰可以看")} onClose={() => setAudiencePickerOpen(false)} headerAction={<Pressable accessibilityRole="button" style={[styles.primaryButton, { minHeight: 36, paddingHorizontal: 16, paddingVertical: 8 }]} onPress={() => setAudiencePickerOpen(false)}><Text style={styles.primaryButtonText}>{t("Done", "完成", "完成")}</Text></Pressable>}>
       <View style={styles.modalBody}>{(["public", "friends", "private"] as const).map((value) => <Pressable key={value} accessibilityRole="radio" accessibilityState={{ checked: audience === value }} style={styles.momentSettingsRow} onPress={() => setAudience(value)}><Ionicons name={audience === value ? "checkmark-circle" : "ellipse-outline"} size={23} color={audience === value ? palette.blue : palette.muted} /><View style={{ flex: 1 }}><Text style={styles.faqCardAuthor}>{value === "public" ? t("Everyone", "所有人", "所有人") : value === "friends" ? t("Friends", "好友", "好友") : t("Only me", "仅自己", "僅自己")}</Text><Text style={[styles.faqMeta, { marginTop: 5 }]}>{value === "public" ? t("Public · can appear in For You and Explore", "公开 · 可出现在推荐和发现中", "公開 · 可出現在推薦和探索中") : value === "friends" ? t("Your accepted friends only", "仅已添加的好友", "僅已新增的好友") : t("Private · visible only to you", "私密 · 仅自己可见", "私密 · 僅自己可見")}</Text></View></Pressable>)}</View>
     </Sheet>
-    <Sheet visible={!!selected} title={t("Moment", "动态", "動態")} onClose={() => setSelectedId(null)}>
+    <Sheet visible={detailFeed.length > 0} title={t("Moments", "动态", "動態")} onClose={() => setDetailFeedIds([])}>
+      <ScrollView key={detailFeedIds[0]} directionalLockEnabled contentContainerStyle={{ paddingBottom: 24 }} showsVerticalScrollIndicator={false}>
+        {detailFeed.map((moment, index) => <View key={moment.id} style={{ minHeight: Math.max(420, momentWindowHeight - 100), borderBottomWidth: 8, borderBottomColor: "#F2F6FB", paddingBottom: 14 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 14 }}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t(`View ${moment.author}’s moments`, `查看 ${moment.author} 的动态`, `查看 ${moment.author} 的動態`)} onPress={() => { setDetailFeedIds([]); onSelectAuthor(moment.username); }}><ChatPersonAvatar name={moment.author} photo={moment.username === "self" ? profilePhoto : undefined} size={38} /></Pressable>
+            <View style={{ flex: 1 }}><Text style={styles.faqCardAuthor}>{moment.author}</Text><Text style={styles.faqMeta}>{moment.publicPost ? moment.publisherId ? t("Public · Sample post", "公开 · 示例动态", "公開 · 範例動態") : t("Public", "公开", "公開") : moment.audience === "private" ? t("Only me", "仅自己", "僅自己") : t("Friends", "好友", "好友")}</Text></View>
+            {!!moment.publisherId && <Pressable accessibilityRole="button" style={{ borderWidth: 1, borderColor: palette.blue, borderRadius: 20, paddingHorizontal: 14, minHeight: 36, justifyContent: "center" }} onPress={() => onTogglePublisher(moment.publisherId!)}><Text style={styles.faqActionText}>{followedPublishers.includes(moment.publisherId) ? t("Following", "已关注", "已關注") : t("Follow", "关注", "關注")}</Text></Pressable>}
+          </View>
+          <View style={{ paddingHorizontal: 16 }}>{!!moment.repostComment && <Text style={[styles.momentCaption, { fontWeight: "700" }]}>{moment.repostComment}</Text>}{repostLabel(moment)}</View>
+          <PostPhotoCarousel photos={moment.photos} language={language} maxHeight={Math.max(220, Math.min(480, momentWindowHeight * 0.48))} onOpen={setPhotoPreview} />
+          <View style={{ padding: 16, gap: 10 }}>
+            <Text numberOfLines={4} ellipsizeMode="tail" style={[styles.momentCaption, { fontSize: 16, lineHeight: 24 }]}>{mentionText(tr(language, ...moment.caption))}</Text>
+            <Pressable accessibilityRole="button" onPress={() => { setSelectedId(moment.id); setComment(""); }}><Text style={styles.faqActionText}>{t("Details & comments", "详情与评论", "詳情與留言")}</Text></Pressable>
+            {!!moment.eventTitle && eventCard(moment.eventTitle)}
+            {!!tr(language, ...moment.location) && <Text style={styles.faqMeta}>{tr(language, ...moment.location)}</Text>}
+            {momentActionBar(moment)}
+          </View>
+          {index < detailFeed.length - 1 && <View style={{ alignItems: "center", paddingVertical: 4 }}><Ionicons name="chevron-up" size={17} color={palette.muted} /><Text style={styles.faqMeta}>{t("Swipe up for the next moment", "上滑查看下一条动态", "上滑查看下一則動態")}</Text></View>}
+        </View>)}
+        <Text style={[styles.faqMeta, { textAlign: "center", padding: 16 }]}>{t("You’re all caught up", "已看完全部动态", "已看完全部動態")}</Text>
+      </ScrollView>
+    </Sheet>
+    <Sheet visible={!!selected} title={t("Details & comments", "详情与评论", "詳情與留言")} onClose={() => setSelectedId(null)}>
       <ScrollView ref={detailScroll} contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
         {!!selected && <>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 14 }}>
