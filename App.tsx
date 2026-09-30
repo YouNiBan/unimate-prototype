@@ -9116,15 +9116,21 @@ function StudentMoments({ language, accountName, canInteract, onVerify, accepted
     if (hours < 24) return t(`${hours} hr ago`, `${hours} 小时前`, `${hours} 小時前`);
     return new Date(timestamp).toLocaleDateString(language === "EN" ? "en-GB" : language === "简体" ? "zh-CN" : "zh-TW");
   };
-  const pickPhotos = async () => {
+  const pickMomentPhotos = async (source: PhotoSource) => {
     if (picking || photos.length >= 9) return;
     setPicking(true); setError("");
     try {
-      const selectedPhotos = await selectPhotoUris(language, "library", { multiple: true, limit: 9 - photos.length });
+      const selectedPhotos = await selectPhotoUris(language, source, { multiple: source === "library", limit: 9 - photos.length });
       setPhotos((current) => [...current, ...selectedPhotos].slice(0, 9));
     } catch {
       setError(t("Couldn't open your photos. Please try again.", "无法打开照片，请重试。", "無法開啟相片，請重試。"));
     } finally { setPicking(false); }
+  };
+  const pickPhotos = () => pickMomentPhotos("library");
+  const startPhotoMoment = (source: PhotoSource) => {
+    if (!canInteract) { onVerify(); return; }
+    openComposer();
+    void pickMomentPhotos(source);
   };
   const publish = () => {
     if (!canInteract) { setComposeOpen(false); onVerify(); return; }
@@ -9160,24 +9166,29 @@ function StudentMoments({ language, accountName, canInteract, onVerify, accepted
       {!selectedAuthor && <View style={[styles.momentProfileCover, { height: 240, marginBottom: 24 }]}>
         <Image source={{ uri: settings.coverUri || "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=900" }} style={StyleSheet.absoluteFillObject} />
         <LinearGradient colors={["transparent", "rgba(0,0,0,0.6)"]} style={StyleSheet.absoluteFillObject} />
-        <Pressable accessibilityRole="button" accessibilityLabel={t("Share a moment", "分享动态", "分享動態")} style={{ position: "absolute", top: 16, right: 16, padding: 8 }} onPress={() => openComposer()}><Ionicons name="camera" size={28} color="#FFFFFF" /></Pressable>
+        <Pressable accessibilityRole="button" accessibilityLabel={t("Change cover photo", "更换封面照片", "更換封面相片")} disabled={coverBusy} hitSlop={6} style={styles.momentCoverButton} onPress={changeCover}><Ionicons name="camera" size={20} color="#FFFFFF" /></Pressable>
         <View style={styles.momentCoverIdentity}><Text style={{ color: "#FFFFFF", fontSize: 21, fontWeight: "800" }}>{author}</Text><Pressable accessibilityRole="button" accessibilityLabel={t("Open my moments", "打开我的朋友圈", "開啟我的朋友圈")} onPress={() => onSelectAuthor("self")}><ChatPersonAvatar name={author} photo={profilePhoto} size={68} /></Pressable></View>
       </View>}
       {!!selectedAuthor && <View style={styles.momentProfileCover}>
         <Image source={{ uri: isOwnTimeline && settings.coverUri ? settings.coverUri : "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=900" }} style={StyleSheet.absoluteFillObject} />
         <LinearGradient colors={["transparent", "rgba(0,0,0,0.65)"]} style={StyleSheet.absoluteFillObject} />
-        {isOwnTimeline && !previewing && <Pressable accessibilityRole="button" disabled={coverBusy} style={styles.momentCoverButton} onPress={changeCover}><Ionicons name="camera-outline" size={17} color="#FFFFFF" /><Text style={{ color: "#FFFFFF", fontSize: 12 }}>{coverBusy ? t("Opening…", "正在打开…", "正在開啟…") : t("Change cover", "更换封面", "更換封面")}</Text></Pressable>}
+        {isOwnTimeline && !previewing && <Pressable accessibilityRole="button" accessibilityLabel={t("Change cover photo", "更换封面照片", "更換封面相片")} disabled={coverBusy} hitSlop={6} style={styles.momentCoverButton} onPress={changeCover}><Ionicons name="camera" size={20} color="#FFFFFF" /></Pressable>}
         <View style={styles.momentCoverIdentity}><Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 21, flexShrink: 1 }}>{selectedAuthorName}</Text><ChatPersonAvatar name={selectedAuthorName} photo={isOwnTimeline ? profilePhoto : undefined} size={62} /></View>
       </View>}
       {!!coverError && <Text style={{ color: palette.coral }}>{coverError}</Text>}
       {!!selectedAuthor && (isOwnTimeline || pinnedMoments.length > 0) && <View style={{ marginVertical: 14 }}><Text style={styles.faqCardAuthor}>{t("Pinned posts", "置顶动态", "置頂動態")}</Text>{!pinnedMoments.length && <Text style={[styles.faqCardSummary, { marginTop: 8 }]}>{t("No pinned posts yet. Open ••• on one of your posts and choose Pin.", "暂无置顶动态。打开自己动态的 ••• 菜单，选择置顶。", "暫無置頂動態。開啟自己動態的 ••• 選單，選擇置頂。")}</Text>}<ScrollView horizontal contentContainerStyle={{ gap: 10, paddingVertical: 12 }}>{pinnedMoments.map((moment) => <Pressable key={moment.id} accessibilityRole="button" accessibilityLabel={t("Open pinned moment", "查看置顶动态", "查看置頂動態")} style={styles.momentPinnedTile} onPress={() => { setSelectedId(moment.id); setComment(""); }}>{moment.photos[0] ? <Image source={{ uri: moment.photos[0] }} style={{ width: "100%", height: 78, borderRadius: 5 }} /> : <Ionicons name={moment.audience === "private" ? "lock-closed-outline" : "document-text-outline"} size={29} color={palette.blue} />}<Text numberOfLines={2} style={styles.faqCardSummary}>{tr(language, ...moment.caption) || moment.eventTitle || t("Photo moment", "照片动态", "相片動態")}</Text></Pressable>)}</ScrollView></View>}
       {isOwnTimeline && !previewing && <View style={{ flexDirection: "row", gap: 12, marginBottom: 16 }}>{(["friends", "private"] as const).map((value) => <Pressable key={value} accessibilityRole="button" style={[styles.momentPinnedTile, { flex: 1 }]} onPress={() => openComposer(value)}><Ionicons name={value === "private" ? "lock-closed" : "camera"} size={29} color={palette.blue} /><Text style={styles.faqActionText}>{value === "private" ? t("Private post", "私密动态", "私密動態") : t("Post", "发动态", "發動態")}</Text></Pressable>)}</View>}
-      <View style={styles.momentFeedHeading}><View><Text style={styles.pageTitle}>{selectedAuthor ? t(`${selectedAuthorName}’s moments`, `${selectedAuthorName} 的朋友圈`, `${selectedAuthorName} 的朋友圈`) : t("Moments", "朋友圈", "朋友圈")}</Text><Text style={styles.faqCardSummary}>{t("Everyday life, shared with friends.", "和朋友分享生活点滴。", "和朋友分享生活點滴。")}</Text></View><Pressable accessibilityRole="button" accessibilityLabel={t("Share a moment", "分享动态", "分享動態")} style={styles.momentCommentLike} onPress={() => openComposer()}><Ionicons name="camera-outline" size={27} color={palette.blue} /></Pressable></View>
-      {!selectedAuthor && <Pressable accessibilityRole="button" style={styles.momentComposer} onPress={() => openComposer()}>
-        <View style={styles.momentAvatar}><Text style={styles.momentInitials}>{author.slice(0, 1).toUpperCase()}</Text></View>
-        <Text style={[styles.faqCardSummary, { flex: 1 }]}>{t("Share a moment from your day…", "分享今天的生活点滴…", "分享今天的生活點滴…")}</Text>
-        <Ionicons name="images-outline" size={22} color={palette.blue} />
-      </Pressable>}
+      <View style={styles.momentFeedHeading}><View><Text style={styles.pageTitle}>{selectedAuthor ? t(`${selectedAuthorName}’s moments`, `${selectedAuthorName} 的朋友圈`, `${selectedAuthorName} 的朋友圈`) : t("Moments", "朋友圈", "朋友圈")}</Text><Text style={styles.faqCardSummary}>{t("Everyday life, shared with friends.", "和朋友分享生活点滴。", "和朋友分享生活點滴。")}</Text></View></View>
+      {!selectedAuthor && <View style={styles.momentComposer}>
+        <Pressable accessibilityRole="button" accessibilityLabel={t("Share a moment", "分享动态", "分享動態")} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10 }} onPress={() => openComposer()}>
+          <View style={styles.momentAvatar}><Text style={styles.momentInitials}>{author.slice(0, 1).toUpperCase()}</Text></View>
+          <Text style={[styles.faqCardSummary, { flex: 1 }]}>{t("Share a moment from your day…", "分享今天的生活点滴…", "分享今天的生活點滴…")}</Text>
+        </Pressable>
+        <View style={{ flexDirection: "row", gap: 2 }}>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("Take a moment photo", "拍摄动态照片", "拍攝動態相片")} disabled={picking} style={styles.chatToolButton} onPress={() => startPhotoMoment("camera")}><Ionicons name="camera-outline" size={23} color={palette.blue} /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={t("Choose moment photos", "选择动态照片", "選擇動態相片")} disabled={picking} style={styles.chatToolButton} onPress={() => startPhotoMoment("library")}><Ionicons name="images-outline" size={23} color={palette.blue} /></Pressable>
+        </View>
+      </View>}
       {visibleMoments.map((moment) => <View key={moment.id} style={styles.momentTimelinePost}>
         {selectedAuthor ? <View style={{ width: 48 }}><Text style={{ fontSize: 24, fontWeight: "800", color: palette.navy }}>{new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", day: "2-digit" }).format(moment.createdAt)}</Text><Text style={styles.faqMeta}>{new Intl.DateTimeFormat(language === "EN" ? "en-GB" : "zh-CN", { timeZone: "Europe/London", month: "short", year: "numeric" }).format(moment.createdAt)}</Text></View> : <Pressable accessibilityRole="button" accessibilityLabel={t(`View ${moment.author}’s moments`, `查看 ${moment.author} 的朋友圈`, `查看 ${moment.author} 的朋友圈`)} onPress={() => onSelectAuthor(moment.username)} style={styles.momentAvatar}><Text style={styles.momentInitials}>{moment.author.split(/\s+/).map((part) => part[0]).slice(0, 2).join("")}</Text></Pressable>}
         <View style={{ flex: 1, minWidth: 0 }}>
@@ -16700,7 +16711,7 @@ const styles = StyleSheet.create({
   forumAreaTabActive: { backgroundColor: "#FFFFFF" },
   momentsCover: { borderRadius: 19, padding: 22, marginBottom: 16 },
   momentProfileCover: { height: 195, borderRadius: 12, overflow: "hidden", marginBottom: 18 },
-  momentCoverButton: { position: "absolute", top: 12, right: 12, flexDirection: "row", gap: 6, padding: 9, backgroundColor: "rgba(0,0,0,0.45)", borderRadius: 7 },
+  momentCoverButton: { position: "absolute", top: 10, right: 10, width: 32, height: 32, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.24)", borderRadius: 16 },
   momentCoverIdentity: { position: "absolute", bottom: 14, right: 14, left: 14, flexDirection: "row", justifyContent: "flex-end", alignItems: "center", gap: 14 },
   momentPinnedTile: { width: 116, minHeight: 112, backgroundColor: "#F2F6FB", borderRadius: 8, padding: 10, gap: 7, alignItems: "center", justifyContent: "center" },
   momentSettingsRow: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 19, borderBottomWidth: 1, borderBottomColor: palette.line },
