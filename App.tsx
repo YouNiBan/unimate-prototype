@@ -9166,7 +9166,6 @@ function StudentMoments({ language, accountName, canInteract, onVerify, accepted
       {!selectedAuthor && <View style={[styles.momentProfileCover, { height: 240, marginBottom: 24 }]}>
         <Image source={{ uri: settings.coverUri || "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=900" }} style={StyleSheet.absoluteFillObject} />
         <LinearGradient colors={["transparent", "rgba(0,0,0,0.6)"]} style={StyleSheet.absoluteFillObject} />
-        <Pressable accessibilityRole="button" accessibilityLabel={t("Change cover photo", "更换封面照片", "更換封面相片")} disabled={coverBusy} hitSlop={6} style={styles.momentCoverButton} onPress={changeCover}><Ionicons name="camera" size={20} color="#FFFFFF" /></Pressable>
         <View style={styles.momentCoverIdentity}><Text style={{ color: "#FFFFFF", fontSize: 21, fontWeight: "800" }}>{author}</Text><Pressable accessibilityRole="button" accessibilityLabel={t("Open my moments", "打开我的朋友圈", "開啟我的朋友圈")} onPress={() => onSelectAuthor("self")}><ChatPersonAvatar name={author} photo={profilePhoto} size={68} /></Pressable></View>
       </View>}
       {!!selectedAuthor && <View style={styles.momentProfileCover}>
