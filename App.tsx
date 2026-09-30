@@ -3305,7 +3305,7 @@ function FriendRequestCard({
   );
 }
 
-function FriendsHub({ language, acceptedFriends, setAcceptedFriends, followedOrganisations, onToggleOrganisationFollow, onViewMoments }: { language: Language; acceptedFriends: string[]; setAcceptedFriends: (friends: string[]) => void; followedOrganisations: string[]; onToggleOrganisationFollow: (id: string) => void; onViewMoments: (username: string) => void }) {
+function FriendsHub({ initialProfile, language, acceptedFriends, setAcceptedFriends, followedOrganisations, onToggleOrganisationFollow, onViewMoments }: { initialProfile?: string | null; language: Language; acceptedFriends: string[]; setAcceptedFriends: (friends: string[]) => void; followedOrganisations: string[]; onToggleOrganisationFollow: (id: string) => void; onViewMoments: (username: string) => void }) {
   const [view, setView] = useState<
     "discover" | "requests" | "friends" | "following"
   >("discover");
@@ -3314,7 +3314,7 @@ function FriendsHub({ language, acceptedFriends, setAcceptedFriends, followedOrg
   >("you");
   const [selectedOrganisation, setSelectedOrganisation] = useState<OrganisationProfile | null>(null);
   const [selected, setSelected] = useState<(typeof friends)[number] | null>(
-    null,
+    friends.find((friend) => friend.username === initialProfile) || null,
   );
   const [selectedConnectionsTab, setSelectedConnectionsTab] = useState<"followers" | "following" | "friends" | "mutual" | null>(null);
   const [sent, setSent] = useState<string[]>([]);
@@ -3420,6 +3420,11 @@ function FriendsHub({ language, acceptedFriends, setAcceptedFriends, followedOrg
       Anime: tr(language, item, "动漫", "動漫"),
     })[item] || item;
   const friendIndex = selected ? friends.indexOf(selected) : 0;
+  const [expandedActivitiesFor, setExpandedActivitiesFor] = useState<string | null>(null);
+  const profileActivities = [
+    { id: "review", image: restaurants[friendIndex % restaurants.length].image, title: `${restaurants[friendIndex % restaurants.length].name} · ${(4.6 + friendIndex * 0.1).toFixed(1)} ★`, description: tr(language, "Restaurant review shared with friends", "与好友分享的餐厅评价", "與好友分享的餐廳評價") },
+    { id: "event", image: events[friendIndex % events.length].image, title: events[friendIndex % events.length].title, description: tr(language, "Attended event · Activity visible to friends", "已参加活动 · 动态对好友可见", "已參加活動 · 動態對好友可見") },
+  ];
   const courseLabel = selected
     ? language === "EN"
       ? selected.course
@@ -3592,6 +3597,7 @@ function FriendsHub({ language, acceptedFriends, setAcceptedFriends, followedOrg
           <Text style={styles.backText}>{labels.title}</Text>
         </Pressable>
         <View style={styles.friendProfileHero}>
+          {selectedIsFriend && <Pressable accessibilityRole="button" accessibilityLabel={tr(language, "View moments", "查看朋友圈", "查看朋友圈")} style={{ position: "absolute", top: 4, right: 0, alignItems: "center", gap: 5, padding: 8, borderRadius: 12, backgroundColor: palette.sky }} onPress={() => onViewMoments(selected.username)}><Ionicons name="images-outline" size={22} color={palette.blue} /><Text style={[styles.faqActionText, { fontSize: 11 }]}>{tr(language, "View moments", "查看朋友圈", "查看朋友圈")}</Text></Pressable>}
           <View style={styles.friendAvatarBadgeWrap}>
             <View style={[styles.avatar, styles.largeAvatar, { backgroundColor: selected.color }]}>
               <Text style={styles.largeAvatarText}>{selected.initials}</Text>
@@ -3683,21 +3689,9 @@ function FriendsHub({ language, acceptedFriends, setAcceptedFriends, followedOrg
             </View>
           ))}
         </View>
-        <Text style={styles.privateNote}>
-          {selectedIsFriend && selected.socialVisible
-            ? tr(
-                language,
-                "These details are shared with accepted friends.",
-                "这些资料仅向已接受的好友显示。",
-                "這些資料只向已接受的好友顯示。",
-              )
-            : selected.socialVisible
-              ? labels.hidden
-              : labels.privateSocial}
-        </Text>
+        {!(selectedIsFriend && selected.socialVisible) && <Text style={styles.privateNote}>{selected.socialVisible ? labels.hidden : labels.privateSocial}</Text>}
         {selectedIsFriend && (
           <>
-            <Pressable accessibilityRole="button" style={styles.momentEventCard} onPress={() => onViewMoments(selected.username)}><Ionicons name="images-outline" size={23} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.faqCardAuthor}>{tr(language, "View moments", "查看朋友圈", "查看朋友圈")}</Text><Text style={styles.faqCardSummary}>{tr(language, `${selected.fullName}’s photos and updates`, `${selected.fullName} 的照片与动态`, `${selected.fullName} 的相片與動態`)}</Text></View><Ionicons name="chevron-forward" size={18} color={palette.blue} /></Pressable>
             <Text style={styles.friendSectionTitle}>
               {tr(
                 language,
@@ -3706,47 +3700,8 @@ function FriendsHub({ language, acceptedFriends, setAcceptedFriends, followedOrg
                 "最近評價及活動",
               )}
             </Text>
-            <View style={styles.profileActivityCard}>
-              <Image
-                source={{
-                  uri: restaurants[friendIndex % restaurants.length].image,
-                }}
-                style={styles.profileActivityImage}
-              />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.friendName}>
-                  {restaurants[friendIndex % restaurants.length].name} ·{" "}
-                  {(4.6 + friendIndex * 0.1).toFixed(1)} ★
-                </Text>
-                <Text style={styles.friendInterests}>
-                  {tr(
-                    language,
-                    "Restaurant review shared with friends",
-                    "与好友分享的餐厅评价",
-                    "與好友分享的餐廳評價",
-                  )}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.profileActivityCard}>
-              <Image
-                source={{ uri: events[friendIndex % events.length].image }}
-                style={styles.profileActivityImage}
-              />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.friendName}>
-                  {events[friendIndex % events.length].title}
-                </Text>
-                <Text style={styles.friendInterests}>
-                  {tr(
-                    language,
-                    "Attended event · Activity visible to friends",
-                    "已参加活动 · 动态对好友可见",
-                    "已參加活動 · 動態對好友可見",
-                  )}
-                </Text>
-              </View>
-            </View>
+            {(expandedActivitiesFor === selected.username ? profileActivities : profileActivities.slice(0, 2)).map((activity) => <View key={activity.id} style={styles.profileActivityCard}><Image source={{ uri: activity.image }} style={styles.profileActivityImage} /><View style={{ flex: 1 }}><Text style={styles.friendName}>{activity.title}</Text><Text style={styles.friendInterests}>{activity.description}</Text></View></View>)}
+            {profileActivities.length > 2 && <Pressable accessibilityRole="button" accessibilityState={{ expanded: expandedActivitiesFor === selected.username }} style={styles.momentAction} onPress={() => setExpandedActivitiesFor(expandedActivitiesFor === selected.username ? null : selected.username)}><Text style={styles.faqActionText}>{expandedActivitiesFor === selected.username ? tr(language, "Show less", "收起", "收起") : tr(language, `See all (${profileActivities.length})`, `查看全部（${profileActivities.length}）`, `查看全部（${profileActivities.length}）`)}</Text><Ionicons name={expandedActivitiesFor === selected.username ? "chevron-up" : "chevron-down"} size={16} color={palette.blue} /></Pressable>}
           </>
         )}
         {selectedIsFriend ? (
@@ -7219,7 +7174,7 @@ type PlaceReview = {
 type RestaurantPublicProfile = { name: string; cuisine: string; address: string; hours: string; website: string; phone: string; priceLevel: string; introduction: string; coverUri: string | null; menuItems: string[]; menuFile: { name: string; uri: string; mimeType?: string } | null };
 const defaultRestaurantPublicProfile: RestaurantPublicProfile = { name: "Haidilao Hot Pot", cuisine: "Chinese · Hot pot", address: "Piccadilly Circus, London", hours: "", website: "", phone: "", priceLevel: "£££", introduction: "", coverUri: null, menuItems: ["Tomato hot pot", "Signature soup base", "Fresh vegetables"], menuFile: null };
 type VisitedPlace = { name: string; date: string };
-type ReviewPageEntry = { author: string; average: number; ratings: Record<PlaceReviewCriterion, number>; text: string; presetChinese?: string; presetEnglish?: string };
+type ReviewPageEntry = { id?: string; author: string; average: number; ratings: Record<PlaceReviewCriterion, number>; text: string; presetChinese?: string; presetEnglish?: string };
 
 const reviewTranslationCache = new Map<string, string>();
 
@@ -7360,6 +7315,10 @@ function FoodForum({ language, visitedPlaces, setVisitedPlaces, submittedReviews
   const [reviewsPlace, setReviewsPlace] = useState<(typeof restaurants)[number] | null>(null);
   const [bookingPlace, setBookingPlace] = useState<(typeof restaurants)[number] | null>(null);
   const [reviewCategoryFilter, setReviewCategoryFilter] = useState<PlaceReviewCriterion | "all">("all");
+  const [reviewVotes, setReviewVotes] = useState<Record<string, "like" | "dislike">>({});
+  const reviewReactions = (id: string) => <View style={{ flexDirection: "row", alignItems: "center", gap: 18, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: palette.line }}>
+    {(["like", "dislike"] as const).map((vote) => <Pressable key={vote} accessibilityRole="button" accessibilityLabel={vote === "like" ? tr(language, "Like review", "赞同评价", "讚好評價") : tr(language, "Dislike review", "不赞同评价", "不讚好評價")} accessibilityState={{ selected: reviewVotes[id] === vote }} style={{ minHeight: 36, flexDirection: "row", alignItems: "center", gap: 6 }} onPress={() => setReviewVotes((current) => { const next = { ...current }; if (next[id] === vote) delete next[id]; else next[id] = vote; return next; })}><Ionicons name={vote === "like" ? reviewVotes[id] === vote ? "thumbs-up" : "thumbs-up-outline" : reviewVotes[id] === vote ? "thumbs-down" : "thumbs-down-outline"} size={19} color={reviewVotes[id] === vote ? palette.blue : palette.muted} />{vote === "like" && <Text style={styles.faqActionText}>{reviewVotes[id] === "like" ? 1 : 0}</Text>}</Pressable>)}
+  </View>;
   const [reviewStarFilter, setReviewStarFilter] = useState(0);
   const [sentiment, setSentiment] = useState<
     "Loved it" | "It was fine" | "Not for me"
@@ -7399,6 +7358,7 @@ function FoodForum({ language, visitedPlaces, setVisitedPlaces, submittedReviews
   const reviewPageEntries: ReviewPageEntry[] = reviewsPlace ? [
     ...sampleReviews(reviewsPlace),
     ...submittedReviews.filter((review) => review.placeName === placeKey(reviewsPlace)).map((review) => ({
+      id: review.id,
       author: tr(language, "You", "你", "你"),
       average: review.average,
       ratings: review.ratings,
@@ -8031,6 +7991,7 @@ function FoodForum({ language, visitedPlaces, setVisitedPlaces, submittedReviews
                 <Text style={styles.reviewStars}>★★★★★</Text>
               </View>
               <TranslatedReviewText original={selected.quote} language={language} presetChinese={selected.translation} />
+              {reviewReactions(`${placeKey(selected)}:@londonlatte`)}
             </View>
             {submittedReviews.filter((review) => review.placeName === placeKey(selected)).map((review, index) => (
               <View style={styles.studentReviewCard} key={`${selected.name}-${index}`}>
@@ -8043,6 +8004,7 @@ function FoodForum({ language, visitedPlaces, setVisitedPlaces, submittedReviews
                   <Text style={styles.reviewStars}>★ {review.average.toFixed(1)}</Text>
                 </View>
                 {review.text ? <TranslatedReviewText original={review.text} language={language} /> : <Text style={styles.quote}>{tr(language, "Rated across five categories", "已按五项标准评分", "已按五項標準評分")}</Text>}
+                {reviewReactions(review.id)}
                 {reviewReplies[review.id] && <View style={styles.workspaceOwnerReply}><Text style={styles.workspaceCardTitle}>{tr(language, "Owner response", "商家回复", "商戶回覆")}</Text><Text style={styles.workspaceCardText}>{reviewReplies[review.id]}</Text></View>}
               </View>
             ))}
@@ -8121,6 +8083,7 @@ function FoodForum({ language, visitedPlaces, setVisitedPlaces, submittedReviews
                   <Text style={styles.reviewStars}>★ {reviewPageScore(review).toFixed(1)}</Text>
                 </View>
                 <TranslatedReviewText original={review.text} language={language} presetChinese={review.presetChinese} presetEnglish={review.presetEnglish} />
+                {reviewReactions(review.id || `${placeKey(reviewsPlace)}:${review.author}`)}
               </View>
             )) : <View style={styles.marketEmpty}><Text style={styles.marketEmptyTitle}>{tr(language, "No reviews match these filters", "没有符合筛选条件的点评", "沒有符合篩選條件的點評")}</Text></View>}
             <Text style={styles.reviewPageDemoNote}>{tr(language, "Tapping Translate sends review text to MyMemory. Machine translations may be imperfect.", "点击翻译会将点评文字发送给MyMemory。机器翻译可能不准确。", "點擊翻譯會將點評文字傳送給MyMemory。機器翻譯可能不準確。")}</Text>
@@ -9071,6 +9034,9 @@ function StudentMoments({ language, accountName, canInteract, onVerify, accepted
   };
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [momentMenuId, setMomentMenuId] = useState<string | null>(null);
+  const [reportMomentId, setReportMomentId] = useState<string | null>(null);
+  const [momentReportReason, setMomentReportReason] = useState("");
+  const [momentReportSaved, setMomentReportSaved] = useState(false);
   const [attachedEvent, setAttachedEvent] = useState<string | null>(null);
   const [eventPickerOpen, setEventPickerOpen] = useState(false);
   const [eventQuery, setEventQuery] = useState("");
@@ -9201,10 +9167,11 @@ function StudentMoments({ language, accountName, canInteract, onVerify, accepted
             <Text style={styles.faqMeta}>{relativeTime(moment.createdAt)}</Text>
             <Pressable accessibilityRole="button" accessibilityLabel={t("Moment actions", "动态操作", "動態操作")} disabled={previewing} accessibilityState={{ expanded: momentMenuId === moment.id }} style={styles.momentMoreButton} onPress={() => setMomentMenuId((current) => current === moment.id ? null : moment.id)}><Ionicons name="ellipsis-horizontal" size={21} color={palette.blue} /></Pressable>
           </View>
-          {momentMenuId === moment.id && !previewing && <View style={[styles.momentQuickActions, { flexWrap: "wrap" }]}>
+          {momentMenuId === moment.id && !previewing && <View style={[styles.momentQuickActions, { flexDirection: "column", alignItems: "stretch", width: 180, gap: 0, paddingVertical: 4 }]}>
             <Pressable accessibilityRole="button" accessibilityLabel={moment.liked ? t("Unlike moment", "取消点赞", "取消讚好") : t("Like moment", "点赞动态", "讚好動態")} style={styles.momentAction} onPress={() => { toggleLike(moment.id); setMomentMenuId(null); }}><Ionicons name={moment.liked ? "heart" : "heart-outline"} size={18} color={palette.blue} /><Text style={styles.faqActionText}>{moment.liked ? t("Unlike", "取消点赞", "取消讚好") : t("Like", "点赞", "讚好")}</Text></Pressable>
             <Pressable accessibilityRole="button" style={styles.momentAction} onPress={() => { setSelectedId(moment.id); setComment(""); setMomentMenuId(null); }}><Ionicons name="chatbubble-outline" size={18} color={palette.blue} /><Text style={styles.faqActionText}>{t("Comment", "评论", "留言")}</Text></Pressable>
-            {moment.username === "self" && <><Pressable accessibilityRole="button" style={styles.momentAction} onPress={() => togglePin(moment.id)}><Ionicons name="pin-outline" size={18} color={palette.blue} /><Text style={styles.faqActionText}>{moment.pinned ? t("Unpin", "取消置顶", "取消置頂") : t("Pin", "置顶", "置頂")}</Text></Pressable><Pressable accessibilityRole="button" style={styles.momentAction} onPress={() => toggleAudience(moment.id)}><Ionicons name={moment.audience === "private" ? "people-outline" : "lock-closed-outline"} size={18} color={palette.blue} /><Text style={styles.faqActionText}>{moment.audience === "private" ? t("Share with friends", "分享给好友", "分享給好友") : t("Make private", "设为私密", "設為私密")}</Text></Pressable></>}
+            <Pressable accessibilityRole="button" style={styles.momentAction} onPress={() => { setReportMomentId(moment.id); setMomentReportReason(""); setMomentReportSaved(false); setMomentMenuId(null); }}><Ionicons name="flag-outline" size={18} color={palette.blue} /><Text style={styles.faqActionText}>{t("Report post", "举报动态", "檢舉動態")}</Text></Pressable>
+            {isOwnTimeline && moment.username === "self" && <><Pressable accessibilityRole="button" style={styles.momentAction} onPress={() => togglePin(moment.id)}><Ionicons name="pin-outline" size={18} color={palette.blue} /><Text style={styles.faqActionText}>{moment.pinned ? t("Unpin", "取消置顶", "取消置頂") : t("Pin", "置顶", "置頂")}</Text></Pressable><Pressable accessibilityRole="button" style={styles.momentAction} onPress={() => toggleAudience(moment.id)}><Ionicons name={moment.audience === "private" ? "people-outline" : "lock-closed-outline"} size={18} color={palette.blue} /><Text style={styles.faqActionText}>{moment.audience === "private" ? t("Share with friends", "分享给好友", "分享給好友") : t("Make private", "设为私密", "設為私密")}</Text></Pressable></>}
           </View>}
           {(moment.likes > 0 || moment.liked || moment.comments.length > 0) && <View style={styles.momentReplies}>
             {(moment.likes > 0 || moment.liked) && <Pressable accessibilityRole="button" accessibilityLabel={moment.liked ? t("Unlike moment", "取消点赞", "取消讚好") : t("Like moment", "点赞动态", "讚好動態")} accessibilityState={{ selected: moment.liked }} style={[styles.momentAction, { minHeight: 32 }]} onPress={() => toggleLike(moment.id)}><Ionicons name={moment.liked ? "heart" : "heart-outline"} size={16} color={palette.blue} /><Text style={styles.faqActionText}>{moment.liked ? t("You and ", "你和其他 ", "你和其他 ") : ""}{moment.likes} {t(moment.liked ? "others" : "likes", "人赞过", "人讚好")}</Text></Pressable>}
@@ -9217,6 +9184,12 @@ function StudentMoments({ language, accountName, canInteract, onVerify, accepted
       {isOwnTimeline && settings.history !== "all" && <Text style={[styles.faqCardSummary, { textAlign: "center", marginVertical: 16 }]}>{t("Friends can see: ", "好友可见：", "好友可見：")}{historyLabel(settings.history)}</Text>}
       <Text style={styles.faqDisclaimer}>{t("Preview with sample moments. Your posts, likes and comments stay in this session and reset on reload.", "此预览包含示例动态。发布、点赞和评论仅在当前会话保留，刷新后重置。", "此預覽包含示例動態。發佈、讚好及留言只在目前會話保留，重新載入後重設。")}</Text>
     </ScrollView>
+    <Sheet visible={!!reportMomentId} title={t("Report post", "举报动态", "檢舉動態")} onClose={() => setReportMomentId(null)}>
+      <ScrollView contentContainerStyle={styles.modalBody}>
+        <Text style={styles.formDesc}>{momentReportSaved ? t("Report saved in this preview only. No report has been sent to a moderation team.", "举报仅保存在此预览中，尚未发送给审核团队。", "檢舉只儲存在此預覽中，尚未傳送給審核團隊。") : t("Why are you reporting this post? Reports in this prototype are not sent to a moderation team.", "为什么举报这条动态？此原型不会将举报发送给审核团队。", "為甚麼檢舉這則動態？此原型不會將檢舉傳送給審核團隊。")}</Text>
+        {!momentReportSaved && <>{([t("Spam or scam", "垃圾信息或诈骗", "垃圾訊息或詐騙"), t("Bullying or harassment", "霸凌或骚扰", "霸凌或騷擾"), t("Harmful or inappropriate content", "有害或不当内容", "有害或不當內容"), t("Other", "其他", "其他")]).map((reason) => <Pressable key={reason} accessibilityRole="radio" accessibilityState={{ checked: momentReportReason === reason }} style={[styles.momentAction, { justifyContent: "space-between", paddingVertical: 12 }]} onPress={() => setMomentReportReason(reason)}><Text style={styles.faqCardSummary}>{reason}</Text><Ionicons name={momentReportReason === reason ? "radio-button-on" : "radio-button-off"} size={21} color={palette.blue} /></Pressable>)}<Pressable accessibilityRole="button" disabled={!momentReportReason} style={[styles.primaryButton, { marginTop: 20, opacity: momentReportReason ? 1 : 0.45 }]} onPress={() => setMomentReportSaved(true)}><Text style={styles.primaryButtonText}>{t("Save demo report", "保存演示举报", "儲存示範檢舉")}</Text></Pressable></>}
+      </ScrollView>
+    </Sheet>
     <Sheet visible={composeOpen} title={t("Share a moment", "分享动态", "分享動態")} onClose={() => setComposeOpen(false)}>
       <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
         <Text style={styles.faqCardAuthor}>{author}</Text>
@@ -9484,6 +9457,7 @@ function Sheet({
   children: React.ReactNode;
 }) {
   const navigation = useContext(HomeNavigationContext);
+  const sheetDarkMode = useContext(DarkModeContext);
   useEffect(() => visible && navigation ? navigation.register(onClose) : undefined, [visible, navigation, onClose]);
   return (
     <Modal
@@ -9498,7 +9472,7 @@ function Sheet({
             <Ionicons name="close" size={28} color={palette.ink} />
           </Pressable>
           <Text style={styles.modalTitle}>{title}</Text>
-          {navigation ? <Pressable accessibilityRole="button" accessibilityLabel={navigation.label} onPress={navigation.goHome} style={{ width: 72, minHeight: 44, justifyContent: "center" }}><Image source={require("./assets/unimate-logo.png")} style={{ width: 72, height: 32 }} resizeMode="contain" /></Pressable> : <View style={{ width: 28 }} />}
+          {navigation ? <Pressable accessibilityRole="button" accessibilityLabel={navigation.label} onPress={navigation.goHome} style={{ width: 72, minHeight: 44, justifyContent: "center" }}><View style={{ width: 72, height: 32, justifyContent: "center" }}><Image source={require("./assets/unimate-logo.png")} style={[{ width: 72, height: 32 }, sheetDarkMode && styles.brandLogoDark]} resizeMode="contain" />{sheetDarkMode && <View style={{ position: "absolute", left: 0, top: 0, width: 24, height: 32, overflow: "hidden" }}><Image source={require("./assets/unimate-logo.png")} style={{ width: 72, height: 32 }} resizeMode="contain" /></View>}</View></Pressable> : <View style={{ width: 28 }} />}
         </View>
         {children}
       </SafeAreaView>
@@ -11543,6 +11517,7 @@ function BookingsPage({
 }
 
 function MessagesPage({
+  onViewFriendProfile,
   language,
   initialThread,
   onClearInitialThread,
@@ -11566,6 +11541,7 @@ function MessagesPage({
 }: {
   language: Language;
   initialThread?: string | null;
+  onViewFriendProfile?: (username: string) => void;
   onClearInitialThread?: () => void;
   eventAnnouncements: string[];
   previewBookings?: (StaffBooking & { service: StaffService })[];
@@ -12140,8 +12116,10 @@ function MessagesPage({
               <Ionicons name="arrow-back" size={23} color={palette.blue} />
             </Pressable>
             <Pressable
-              disabled={!staffProfiles[active.id]}
-              onPress={() => setProfileStaff(active.id)}
+              accessibilityRole="button"
+              accessibilityLabel={tr(language, "View profile", "查看资料", "查看資料")}
+              disabled={!staffProfiles[active.id] && !(onViewFriendProfile && friends.some((friend) => friend.username === active.title || friend.fullName === active.title))}
+              onPress={() => { const friend = friends.find((person) => person.username === active.title || person.fullName === active.title); if (friend && onViewFriendProfile) onViewFriendProfile(friend.username); else setProfileStaff(active.id); }}
             >
               {activeStaffPhoto ? (
                 <Image
@@ -14752,6 +14730,7 @@ function AppContent({
     try { if (Platform.OS === "web") localStorage.setItem("unimate-forum-translation-language", translationLanguage); } catch { /* Keep the preference for this session. */ }
   }, [translationLanguage]);
   const [friendsArea, setFriendsArea] = useState<"friends" | "moments">("moments");
+  const [friendProfileEntry, setFriendProfileEntry] = useState<string | null>(null);
   const [momentAuthor, setMomentAuthor] = useState<string | null>(null);
   const [momentsSettings, setMomentsSettings] = useState<MomentsSettings>(defaultMomentsSettings);
   const [momentsPrivacyOpen, setMomentsPrivacyOpen] = useState(false);
@@ -14880,7 +14859,7 @@ function AppContent({
       ) : tab === "friends" ? (
         <View style={{ flex: 1, minHeight: 0 }}>
           <View style={styles.forumAreaTabs}>{(["moments", "friends"] as const).map((area) => <Pressable key={area} accessibilityRole="tab" accessibilityState={{ selected: friendsArea === area }} style={[styles.forumAreaTab, friendsArea === area && styles.forumAreaTabActive]} onPress={() => setFriendsArea(area)}><Ionicons name={area === "friends" ? "people-outline" : "images-outline"} size={19} color={friendsArea === area ? palette.blue : palette.muted} /><Text style={[styles.faqChipText, { color: friendsArea === area ? palette.blue : palette.muted }]}>{area === "friends" ? tr(language, "My friends", "我的好友", "我的好友") : tr(language, "Moments", "朋友圈", "朋友圈")}</Text></Pressable>)}</View>
-          {friendsArea === "moments" ? <StudentMoments entry={momentEntry} settings={momentsSettings} onSettingsChange={setMomentsSettings} profilePhoto={studentProfilePhoto} selectedAuthor={momentAuthor} onSelectAuthor={setMomentAuthor} onOpenEvent={(title) => { setEventDeepLink(title); setTab("events"); }} language={language} accountName={accountName || "Sophie C"} canInteract={!studentFeaturesLocked} onVerify={() => setVerificationOpen(true)} acceptedFriends={acceptedFriends} moments={studentMoments} onMomentsChange={setStudentMoments} onFindFriends={() => setFriendsArea("friends")} /> : <FriendsHub onViewMoments={(username) => { setMomentAuthor(username); setFriendsArea("moments"); }} language={language} acceptedFriends={acceptedFriends} setAcceptedFriends={setAcceptedFriends} followedOrganisations={followedOrganisations} onToggleOrganisationFollow={toggleOrganisationFollow} />}
+          {friendsArea === "moments" ? <StudentMoments entry={momentEntry} settings={momentsSettings} onSettingsChange={setMomentsSettings} profilePhoto={studentProfilePhoto} selectedAuthor={momentAuthor} onSelectAuthor={setMomentAuthor} onOpenEvent={(title) => { setEventDeepLink(title); setTab("events"); }} language={language} accountName={accountName || "Sophie C"} canInteract={!studentFeaturesLocked} onVerify={() => setVerificationOpen(true)} acceptedFriends={acceptedFriends} moments={studentMoments} onMomentsChange={setStudentMoments} onFindFriends={() => setFriendsArea("friends")} /> : <FriendsHub initialProfile={friendProfileEntry} onViewMoments={(username) => { setMomentAuthor(username); setFriendsArea("moments"); }} language={language} acceptedFriends={acceptedFriends} setAcceptedFriends={setAcceptedFriends} followedOrganisations={followedOrganisations} onToggleOrganisationFollow={toggleOrganisationFollow} />}
         </View>
       ) : tab === "bookings" ? (
         <BookingsPage
@@ -14906,6 +14885,7 @@ function AppContent({
         />
       ) : tab === "messages" ? (
         <MessagesPage
+          onViewFriendProfile={(username) => { setFriendProfileEntry(username); setFriendsArea("friends"); setTab("friends"); }}
           language={language}
           previewBookings={previewBookings}
           statusUpdates={statusUpdates}
@@ -14958,7 +14938,7 @@ function AppContent({
           onToggleDarkMode={onToggleDarkMode}
         />
       ),
-    [tab, language, eventDeepLink, favourites, acceptedFriends, followedOrganisations, reservedEvents, pendingCancellation, messageDeepLink, darkMode, eventView, eventAnnouncements, paymentMethods, defaultPaymentId, visitedPlaces, forumPosts, forumComments, forumLikedIds, followedForums, forumEntry, friendsArea, translationLanguage, studentMoments, momentAuthor, momentEntry, momentsSettings, studentProfilePhoto, submittedReviews, restaurantReviewReplies, restaurantProfile, marketplaceConversations, studentDemoRequestStatus, pendingMarketListings, accountRole, onLogout, localStudentStatus, studentFeaturesLocked, accountName, onLanguage],
+    [tab, friendProfileEntry, language, eventDeepLink, favourites, acceptedFriends, followedOrganisations, reservedEvents, pendingCancellation, messageDeepLink, darkMode, eventView, eventAnnouncements, paymentMethods, defaultPaymentId, visitedPlaces, forumPosts, forumComments, forumLikedIds, followedForums, forumEntry, friendsArea, translationLanguage, studentMoments, momentAuthor, momentEntry, momentsSettings, studentProfilePhoto, submittedReviews, restaurantReviewReplies, restaurantProfile, marketplaceConversations, studentDemoRequestStatus, pendingMarketListings, accountRole, onLogout, localStudentStatus, studentFeaturesLocked, accountName, onLanguage],
   );
   const tabs = [
     { id: "home" as const, icon: "home", label: words[language].home },
@@ -20290,9 +20270,9 @@ const styles = StyleSheet.create({
   friendProfileActions: { flexDirection: "row", gap: 9, alignItems: "center" },
   friendMessageButton: { flex: 1 },
   manageFriendButton: {
-    minHeight: 51,
-    minWidth: 92,
-    borderRadius: 13,
+    height: 36,
+    paddingHorizontal: 10,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: "#D7E1ED",
     marginTop: 18,
