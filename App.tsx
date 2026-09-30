@@ -8823,7 +8823,7 @@ function Marketplace({
 }
 
 type ForumCategory = "arrival" | "money" | "travel" | "daily" | "post";
-type ForumPost = { id: string; title: string; body: string; category?: ForumCategory; author: string; createdAt: string; likes: number; tags?: string[]; coverPhoto?: string; photos?: string[]; links?: { label: string; url: string }[] };
+type ForumPost = { id: string; title: string; body: string; category?: ForumCategory; author: string; authorPhoto?: string; createdAt: string; likes: number; bookmarkCount?: number; tags?: string[]; coverPhoto?: string; photos?: string[]; links?: { label: string; url: string }[] };
 function safeForumUrl(value: string): string | null {
   try { const url = new URL(value.trim()); return ["https:", "http:"].includes(url.protocol) && !!url.hostname && !url.username && !url.password ? url.href : null; }
   catch { return null; }
@@ -8831,7 +8831,7 @@ function safeForumUrl(value: string): string | null {
 type ForumComment = { id: string; author: string; text: string; photo?: string; replyTo?: { id: string; author: string }; createdAt: string; timestamp?: number; likes?: number; dislikes?: number; vote?: "like" | "dislike" | null };
 type ForumCopy = [string, string, string];
 type ForumNotification = { id: string; discussionId: string; title: string; author: string; createdAt: string; read: boolean };
-type ForumGuide = { id: string; icon: string; category: ForumCategory; title: ForumCopy; summary: ForumCopy; paragraphs: ForumCopy[]; sources: { label: string; url: string }[]; likes: number };
+type ForumGuide = { id: string; icon: string; category: ForumCategory; title: ForumCopy; summary: ForumCopy; paragraphs: ForumCopy[]; sources: { label: string; url: string }[]; likes: number; bookmarkCount?: number };
 
 const forumGuides: ForumGuide[] = [
   { id: "bank", icon: "card-outline", category: "money", title: ["How do I open a UK student bank account?", "如何开设英国学生银行账户？", "如何開設英國學生銀行帳戶？"], summary: ["Identity checks, address evidence and choosing an account.", "了解身份核验、地址证明和账户选择。", "了解身份核實、地址證明及帳戶選擇。"], paragraphs: [
@@ -8942,6 +8942,7 @@ type StudentMoment = {
   likes: number;
   liked: boolean;
   likedBy?: string[];
+  bookmarkCount?: number;
   comments: { id: string; author: string; text: ForumCopy; photo?: string; createdAt?: number; replyTo?: { id: string; author: string }; likes?: number; liked?: boolean }[];
 };
 
@@ -9029,7 +9030,8 @@ function PostPhotoCarousel({ photos, language, onOpen }: { photos: string[]; lan
   </View>;
 }
 
-function StudentMoments({ followedPublishers, onTogglePublisher, language, accountName, canInteract, onVerify, acceptedFriends, moments, onMomentsChange, onFindFriends, onOpenEvent, selectedAuthor, onSelectAuthor, settings, onSettingsChange, profilePhoto, entry }: {
+function StudentMoments({ embedded = false, profileAudience = "owner", followedPublishers, onTogglePublisher, language, accountName, canInteract, onVerify, acceptedFriends, moments, onMomentsChange, onFindFriends, onOpenEvent, selectedAuthor, onSelectAuthor, settings, onSettingsChange, profilePhoto, entry }: {
+  embedded?: boolean; profileAudience?: "owner" | "friend" | "public";
   followedPublishers: string[];
   onTogglePublisher: (id: string) => void;
   entry?: { id: string; nonce: number } | null;
@@ -9046,7 +9048,8 @@ function StudentMoments({ followedPublishers, onTogglePublisher, language, accou
   const [discoveryTab, setDiscoveryTab] = useState<"following" | "foryou" | "explore">("foryou");
   const savedMoments = useSavedPosts("moments", accountName);
   const [savedOnly, setSavedOnly] = useState(false);
-  const saveMomentButton = (id: string) => <Pressable accessibilityRole="button" accessibilityLabel={savedMoments.ids.includes(id) ? t("Unsave moment", "取消收藏动态", "取消收藏動態") : t("Save moment", "收藏动态", "收藏動態")} accessibilityState={{ selected: savedMoments.ids.includes(id) }} onPress={() => savedMoments.toggle(id)} style={{ minWidth: 36, minHeight: 44, alignItems: "center", justifyContent: "center" }}><Ionicons name={savedMoments.ids.includes(id) ? "bookmark" : "bookmark-outline"} size={21} color={palette.blue} /></Pressable>;
+  const momentBookmarkCount = (id: string) => Math.max(0, moments.find((moment) => moment.id === id)?.bookmarkCount || 0) + Number(savedMoments.ids.includes(id));
+  const saveMomentButton = (id: string) => <Pressable accessibilityRole="button" accessibilityLabel={savedMoments.ids.includes(id) ? t("Unsave moment", "取消收藏动态", "取消收藏動態") : t("Save moment", "收藏动态", "收藏動態")} accessibilityHint={t(`${momentBookmarkCount(id)} bookmarks · local preview count`, `${momentBookmarkCount(id)} 次收藏 · 本机演示计数`, `${momentBookmarkCount(id)} 次收藏 · 本機示範計數`)} accessibilityState={{ selected: savedMoments.ids.includes(id) }} onPress={() => savedMoments.toggle(id)} style={{ minWidth: 36, minHeight: 44, flexDirection: "row", gap: 4, alignItems: "center", justifyContent: "center" }}><Ionicons name={savedMoments.ids.includes(id) ? "bookmark" : "bookmark-outline"} size={21} color={palette.blue} /><Text style={styles.faqActionText}>{momentBookmarkCount(id)}</Text></Pressable>;
   const [discoveryTopic, setDiscoveryTopic] = useState<"all" | "food" | "events" | "campus" | "beauty" | "travel" | "lifestyle">("all");
   const [campus, setCampus] = useState("UCL");
   const [momentSearch, setMomentSearch] = useState("");
@@ -9110,10 +9113,10 @@ function StudentMoments({ followedPublishers, onTogglePublisher, language, accou
   };
   const author = accountName.trim() || "Sophie C";
   const isOwnTimeline = selectedAuthor === "self";
-  const previewing = false;
+  const previewing = profileAudience !== "owner";
   const accessibleMoments = moments.filter((moment) => moment.username === "self" || (!settings.hideTheirPosts.includes(moment.username) && moment.audience !== "private" && (moment.publicPost || acceptedFriends.includes(moment.username))));
   const visibleMoments = isOwnTimeline
-    ? momentsVisibleTo(moments.filter((moment) => moment.username === "self"), settings, "owner")
+    ? momentsVisibleTo(moments.filter((moment) => moment.username === "self"), settings, profileAudience)
     : accessibleMoments.filter((moment) => selectedAuthor ? moment.username === selectedAuthor : moment.audience !== "private" && (savedOnly ? savedMoments.ids.includes(moment.id) : discoveryTab === "following" ? moment.username === "self" || acceptedFriends.includes(moment.username) || !!moment.publisherId && followedPublishers.includes(moment.publisherId) : discoveryTab === "explore" && discoveryTopic === "campus" ? (moment.university || friends.find((friend) => friend.username === moment.username)?.uni) === campus : !!moment.publicPost))
       .filter((moment) => !!selectedAuthor || (savedOnly || discoveryTab !== "explore" || discoveryTopic === "all" || discoveryTopic === "campus" || (moment.topic || "campus") === discoveryTopic) && `${moment.author} ${tr(language, ...moment.caption)} ${moment.eventTitle || ""}`.toLowerCase().includes(momentSearch.trim().toLowerCase()))
       .sort((a, b) => !selectedAuthor && discoveryTab === "foryou" ? (b.likes + Number(b.liked) + b.comments.length) - (a.likes + Number(a.liked) + a.comments.length) || b.createdAt - a.createdAt : b.createdAt - a.createdAt);
@@ -9186,10 +9189,20 @@ function StudentMoments({ followedPublishers, onTogglePublisher, language, accou
       ...moment, comments: moment.comments.map((reply) => reply.id === commentId ? { ...reply, liked: !reply.liked } : reply),
     } : moment));
   };
+  const detailScroll = useRef<NativeScrollView>(null);
+  const commentsOffset = useRef(0);
+  const momentActionBar = (moment: StudentMoment) => <View style={{ flexDirection: "row", alignItems: "center", gap: 18, minHeight: 44 }}>
+    <Pressable accessibilityRole="button" accessibilityLabel={moment.liked ? t("Unlike moment", "取消点赞", "取消讚好") : t("Like moment", "点赞动态", "讚好動態")} accessibilityState={{ selected: moment.liked }} disabled={previewing} style={[styles.momentAction, { minHeight: 44 }]} onPress={() => toggleLike(moment.id)}><Ionicons name={moment.liked ? "heart" : "heart-outline"} size={21} color={moment.liked ? palette.coral : palette.blue} /><Text style={styles.faqActionText}>{moment.likes + Number(moment.liked)}</Text></Pressable>
+    <Pressable accessibilityRole="button" accessibilityLabel={t("View comments", "查看评论", "查看留言")} style={[styles.momentAction, { minHeight: 44 }]} onPress={() => { if (selectedId === moment.id) detailScroll.current?.scrollTo({ y: commentsOffset.current, animated: true }); else { setSelectedId(moment.id); setComment(""); } }}><Ionicons name="chatbubble-outline" size={21} color={palette.blue} /><Text style={styles.faqActionText}>{moment.comments.length}</Text></Pressable>
+    {saveMomentButton(moment.id)}
+    <Pressable accessibilityRole="button" accessibilityLabel={t("Report post", "举报动态", "檢舉動態")} disabled={previewing} style={[styles.momentAction, { marginLeft: "auto", minWidth: 36, minHeight: 44, justifyContent: "center" }]} onPress={() => { setReportMomentId(moment.id); setMomentReportReason(""); setMomentReportSaved(false); setSelectedId(null); }}><Ionicons name="flag-outline" size={20} color={palette.muted} /></Pressable>
+  </View>;
+  const selectedPublisherId = selectedAuthor ? moments.find((moment) => moment.username === selectedAuthor && moment.publisherId)?.publisherId : undefined;
   const commentLikeButton = (momentId: string, reply: StudentMoment["comments"][number]) => <Pressable accessibilityRole="button" accessibilityLabel={reply.liked ? t(`Unlike ${reply.author}’s comment`, `取消赞同 ${reply.author} 的评论`, `取消讚好 ${reply.author} 的留言`) : t(`Like ${reply.author}’s comment`, `赞同 ${reply.author} 的评论`, `讚好 ${reply.author} 的留言`)} accessibilityState={{ selected: !!reply.liked }} disabled={previewing} style={[styles.momentCommentLike, previewing && { opacity: 0.5 }]} onPress={() => toggleCommentLike(momentId, reply.id)}><Ionicons name={reply.liked ? "heart" : "heart-outline"} size={16} color={reply.liked ? palette.coral : palette.muted} />{((reply.likes || 0) + (reply.liked ? 1 : 0)) > 0 && <Text style={styles.faqMeta}>{(reply.likes || 0) + (reply.liked ? 1 : 0)}</Text>}</Pressable>;
+  const TimelineContainer = embedded ? View : ScrollView;
   return <>
-    <ScrollView key={selectedAuthor || "all-moments"} style={{ backgroundColor: "#FFFFFF" }} contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-      {!!selectedAuthor && <Pressable accessibilityRole="button" style={styles.momentAction} onPress={() => onSelectAuthor(null)}><Ionicons name="arrow-back" size={18} color={palette.blue} /><Text style={styles.faqActionText}>{t("All friends’ moments", "全部好友动态", "全部好友動態")}</Text></Pressable>}
+    <TimelineContainer key={selectedAuthor || "all-moments"} style={{ backgroundColor: "#FFFFFF" }} contentContainerStyle={embedded ? undefined : styles.scroll} showsVerticalScrollIndicator={false}>
+      {!embedded && !!selectedAuthor && <Pressable accessibilityRole="button" style={styles.momentAction} onPress={() => onSelectAuthor(null)}><Ionicons name="arrow-back" size={18} color={palette.blue} /><Text style={styles.faqActionText}>{t("All friends’ moments", "全部好友动态", "全部好友動態")}</Text></Pressable>}
       {!selectedAuthor && <View style={{ gap: 12, marginBottom: 14 }}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}><View><Text style={styles.pageTitle}>{t("Moments", "朋友圈", "朋友圈")}</Text><Text style={styles.faqCardSummary}>{t("Your people. New discoveries.", "好友动态，发现精彩。", "好友動態，發現精彩。")}</Text></View><Pressable accessibilityRole="button" accessibilityLabel={t("Open my moments", "打开我的朋友圈", "開啟我的朋友圈")} onPress={() => onSelectAuthor("self")}><ChatPersonAvatar name={author} photo={profilePhoto} size={42} /></Pressable></View>
         <View style={{ flexDirection: "row", borderBottomWidth: 1, borderColor: palette.line }}>{(["following", "foryou", "explore"] as const).map((tab) => <Pressable key={tab} accessibilityRole="tab" accessibilityState={{ selected: !savedOnly && discoveryTab === tab }} onPress={() => { setDiscoveryTab(tab); setSavedOnly(false); setDiscoveryTopic("all"); }} style={{ flex: 1, alignItems: "center", paddingVertical: 12, borderBottomWidth: 3, borderBottomColor: !savedOnly && discoveryTab === tab ? palette.blue : "transparent" }}><Text style={{ fontSize: 16, fontWeight: "800", color: discoveryTab === tab ? palette.blue : palette.muted }}>{tab === "following" ? t("Following", "关注", "關注") : tab === "foryou" ? t("For You", "推荐", "推薦") : t("Explore", "发现", "探索")}</Text></Pressable>)}</View>
@@ -9198,16 +9211,17 @@ function StudentMoments({ followedPublishers, onTogglePublisher, language, accou
         {!savedOnly && discoveryTab === "explore" && discoveryTopic === "campus" && <><Text style={styles.faqCardSummary}>{t("Choose a university — no location sharing needed.", "选择大学，无需分享实时位置。", "選擇大學，無需分享即時位置。")}</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>{["UCL", "King’s College London", "LSE", "Imperial College London"].map((uni) => <Pressable key={uni} accessibilityRole="button" accessibilityState={{ selected: campus === uni }} onPress={() => setCampus(uni)} style={[styles.faqTopicChip, campus === uni && styles.faqTopicChipActive]}><Text style={styles.faqTopicText}>{uni}</Text></Pressable>)}</ScrollView></>}
         <Text style={styles.faqMeta}>{savedOnly ? t("Saved moments · bookmarks on this device", "收藏动态 · 书签保存在此设备", "收藏動態 · 書籤儲存在此裝置") : discoveryTab === "following" ? t("Friends and the places & events you follow", "好友，以及你关注的餐厅和活动", "好友，以及你關注的餐廳和活動") : discoveryTab === "foryou" ? t("Popular public posts · ranked by likes and comments", "热门公开动态 · 按点赞和评论排序", "熱門公開動態 · 按讚好和留言排序") : discoveryTopic === "campus" ? t(`Browsing ${campus} · public posts and your friends`, `浏览 ${campus} · 公开动态和好友`, `瀏覽 ${campus} · 公開動態和好友`) : t("Discover public posts by topic", "按主题发现公开动态", "按主題探索公開動態")}</Text>
       </View>}
-      {!!selectedAuthor && <View style={styles.momentProfileCover}>
+      {!embedded && !!selectedAuthor && <View style={styles.momentProfileCover}>
         <Image source={{ uri: isOwnTimeline && settings.coverUri ? settings.coverUri : "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=900" }} style={StyleSheet.absoluteFillObject} />
         <LinearGradient colors={["transparent", "rgba(0,0,0,0.65)"]} style={StyleSheet.absoluteFillObject} />
         {isOwnTimeline && !previewing && <Pressable accessibilityRole="button" accessibilityLabel={t("Change cover photo", "更换封面照片", "更換封面相片")} disabled={coverBusy} hitSlop={6} style={styles.momentCoverButton} onPress={changeCover}><Ionicons name="camera" size={20} color="#FFFFFF" /></Pressable>}
         <View style={styles.momentCoverIdentity}><Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 21, flexShrink: 1 }}>{selectedAuthorName}</Text><ChatPersonAvatar name={selectedAuthorName} photo={isOwnTimeline ? profilePhoto : undefined} size={62} /></View>
       </View>}
       {!!coverError && <Text style={{ color: palette.coral }}>{coverError}</Text>}
-      {!!selectedAuthor && (isOwnTimeline || pinnedMoments.length > 0) && <View style={{ marginVertical: 14 }}><Text style={styles.faqCardAuthor}>{t("Pinned posts", "置顶动态", "置頂動態")}</Text>{!pinnedMoments.length && <Text style={[styles.faqCardSummary, { marginTop: 8 }]}>{t("No pinned posts yet. Open ••• on one of your posts and choose Pin.", "暂无置顶动态。打开自己动态的 ••• 菜单，选择置顶。", "暫無置頂動態。開啟自己動態的 ••• 選單，選擇置頂。")}</Text>}<ScrollView horizontal contentContainerStyle={{ gap: 10, paddingVertical: 12 }}>{pinnedMoments.map((moment) => <Pressable key={moment.id} accessibilityRole="button" accessibilityLabel={t("Open pinned moment", "查看置顶动态", "查看置頂動態")} style={styles.momentPinnedTile} onPress={() => { setSelectedId(moment.id); setComment(""); }}>{moment.photos[0] ? <Image source={{ uri: moment.photos[0] }} style={{ width: "100%", height: 78, borderRadius: 5 }} /> : <Ionicons name={moment.audience === "private" ? "lock-closed-outline" : "document-text-outline"} size={29} color={palette.blue} />}<Text numberOfLines={2} style={styles.faqCardSummary}>{tr(language, ...moment.caption) || moment.eventTitle || t("Photo moment", "照片动态", "相片動態")}</Text></Pressable>)}</ScrollView></View>}
+      {!!selectedAuthor && ((isOwnTimeline && !previewing) || pinnedMoments.length > 0) && <View style={{ marginVertical: 14 }}><Text style={styles.faqCardAuthor}>{t("Pinned posts", "置顶动态", "置頂動態")}</Text>{!pinnedMoments.length && <Text style={[styles.faqCardSummary, { marginTop: 8 }]}>{t("No pinned posts yet. Open ••• on one of your posts and choose Pin.", "暂无置顶动态。打开自己动态的 ••• 菜单，选择置顶。", "暫無置頂動態。開啟自己動態的 ••• 選單，選擇置頂。")}</Text>}<ScrollView horizontal contentContainerStyle={{ gap: 10, paddingVertical: 12 }}>{pinnedMoments.map((moment) => <Pressable key={moment.id} accessibilityRole="button" accessibilityLabel={t("Open pinned moment", "查看置顶动态", "查看置頂動態")} style={styles.momentPinnedTile} onPress={() => { setSelectedId(moment.id); setComment(""); }}>{moment.photos[0] ? <Image source={{ uri: moment.photos[0] }} style={{ width: "100%", height: 78, borderRadius: 5 }} /> : <Ionicons name={moment.audience === "private" ? "lock-closed-outline" : "document-text-outline"} size={29} color={palette.blue} />}<Text numberOfLines={2} style={styles.faqCardSummary}>{tr(language, ...moment.caption) || moment.eventTitle || t("Photo moment", "照片动态", "相片動態")}</Text></Pressable>)}</ScrollView></View>}
       {isOwnTimeline && !previewing && <View style={{ flexDirection: "row", gap: 12, marginBottom: 16 }}>{(["friends", "private"] as const).map((value) => <Pressable key={value} accessibilityRole="button" style={[styles.momentPinnedTile, { flex: 1 }]} onPress={() => openComposer(value)}><Ionicons name={value === "private" ? "lock-closed" : "camera"} size={29} color={palette.blue} /><Text style={styles.faqActionText}>{value === "private" ? t("Private post", "私密动态", "私密動態") : t("Post", "发动态", "發動態")}</Text></Pressable>)}</View>}
-      {!!selectedAuthor && <View style={styles.momentFeedHeading}><View><Text style={styles.pageTitle}>{t(`${selectedAuthorName}’s moments`, `${selectedAuthorName} 的朋友圈`, `${selectedAuthorName} 的朋友圈`)}</Text><Text style={styles.faqCardSummary}>{t("Everyday life, shared with friends.", "和朋友分享生活点滴。", "和朋友分享生活點滴。")}</Text></View></View>}
+      {!embedded && !!selectedAuthor && <View style={styles.momentFeedHeading}><View><Text style={styles.pageTitle}>{t(`${selectedAuthorName}’s moments`, `${selectedAuthorName} 的朋友圈`, `${selectedAuthorName} 的朋友圈`)}</Text><Text style={styles.faqCardSummary}>{t("Everyday life, shared with friends.", "和朋友分享生活点滴。", "和朋友分享生活點滴。")}</Text></View></View>}
+      {!!selectedPublisherId && <Pressable accessibilityRole="button" accessibilityLabel={followedPublishers.includes(selectedPublisherId) ? t("Unfollow organisation", "取消关注机构", "取消關注機構") : t("Follow organisation", "关注机构", "關注機構")} accessibilityState={{ selected: followedPublishers.includes(selectedPublisherId) }} onPress={() => canInteract ? onTogglePublisher(selectedPublisherId) : onVerify()} style={{ alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, borderRadius: 22, borderWidth: 1, borderColor: palette.blue, paddingHorizontal: 18, marginBottom: 18 }}><Ionicons name={followedPublishers.includes(selectedPublisherId) ? "checkmark" : "add"} size={18} color={palette.blue} /><Text style={styles.faqActionText}>{followedPublishers.includes(selectedPublisherId) ? t("Following", "已关注", "已關注") : t("Follow", "关注", "關注")}</Text></Pressable>}
       {!selectedAuthor && !savedOnly && discoveryTab === "following" && <View style={styles.momentComposer}>
         <Pressable accessibilityRole="button" accessibilityLabel={t("Share a moment", "分享动态", "分享動態")} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 10 }} onPress={() => openComposer()}>
           <View style={styles.momentAvatar}><Text style={styles.momentInitials}>{author.slice(0, 1).toUpperCase()}</Text></View>
@@ -9223,8 +9237,7 @@ function StudentMoments({ followedPublishers, onTogglePublisher, language, accou
           {!!moment.photos[0] && <Image source={{ uri: moment.photos[0] }} style={{ width: "100%", aspectRatio: (index + column) % 2 === 0 ? 0.82 : 1.05 }} />}
           <View style={{ padding: 10, gap: 6 }}>{moment.publicPost && <Text style={[styles.faqMeta, { color: palette.blue }]}>{moment.publisherId ? t("PUBLIC · SAMPLE", "公开 · 示例", "公開 · 範例") : t("PUBLIC", "公开", "公開")}</Text>}<Text numberOfLines={3} style={{ fontSize: 14, lineHeight: 20, fontWeight: "700", color: palette.navy }}>{tr(language, ...moment.caption) || moment.eventTitle || t("A moment from my day", "生活点滴", "生活點滴")}</Text></View>
         </Pressable>
-        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, gap: 5 }}><Pressable accessibilityRole="button" accessibilityLabel={t(`View ${moment.author}’s moments`, `查看 ${moment.author} 的朋友圈`, `查看 ${moment.author} 的朋友圈`)} onPress={() => onSelectAuthor(moment.username)} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 5, minWidth: 0 }}><ChatPersonAvatar name={moment.author} photo={moment.username === "self" ? profilePhoto : undefined} size={23} /><Text numberOfLines={1} style={[styles.faqMeta, { flex: 1 }]}>{moment.author}</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel={moment.liked ? t("Unlike moment", "取消点赞", "取消讚好") : t("Like moment", "点赞动态", "讚好動態")} accessibilityState={{ selected: moment.liked }} onPress={() => toggleLike(moment.id)} style={{ minHeight: 44, flexDirection: "row", alignItems: "center", gap: 3 }}><Ionicons name={moment.liked ? "heart" : "heart-outline"} size={17} color={moment.liked ? palette.coral : palette.muted} /><Text style={styles.faqMeta}>{moment.likes + (moment.liked ? 1 : 0)}</Text></Pressable>{saveMomentButton(moment.id)}</View>
-        {!!moment.publisherId && <Pressable accessibilityRole="button" accessibilityState={{ selected: followedPublishers.includes(moment.publisherId) }} onPress={() => onTogglePublisher(moment.publisherId!)} style={{ paddingHorizontal: 10, paddingBottom: 12, paddingTop: 4 }}><Text style={styles.faqActionText}>{followedPublishers.includes(moment.publisherId) ? t("Following ✓", "已关注 ✓", "已關注 ✓") : t("+ Follow", "+ 关注", "+ 關注")}</Text></Pressable>}
+        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 10, gap: 5 }}><Pressable accessibilityRole="button" accessibilityLabel={t(`View ${moment.author}’s moments`, `查看 ${moment.author} 的朋友圈`, `查看 ${moment.author} 的朋友圈`)} onPress={() => onSelectAuthor(moment.username)} style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 5, minWidth: 0, minHeight: 44 }}><ChatPersonAvatar name={moment.author} photo={moment.username === "self" ? profilePhoto : undefined} size={28} /></Pressable><Pressable accessibilityRole="button" accessibilityLabel={moment.liked ? t("Unlike moment", "取消点赞", "取消讚好") : t("Like moment", "点赞动态", "讚好動態")} accessibilityState={{ selected: moment.liked }} onPress={() => toggleLike(moment.id)} style={{ minHeight: 44, flexDirection: "row", alignItems: "center", gap: 3 }}><Ionicons name={moment.liked ? "heart" : "heart-outline"} size={17} color={moment.liked ? palette.coral : palette.muted} /><Text style={styles.faqMeta}>{moment.likes + (moment.liked ? 1 : 0)}</Text></Pressable>{saveMomentButton(moment.id)}</View>
       </View>)}</View>)}</View>}
       {(selectedAuthor ? visibleMoments : []).map((moment) => <View key={moment.id} style={styles.momentTimelinePost}>
         {selectedAuthor ? <View style={{ width: 48 }}><Text style={{ fontSize: 24, fontWeight: "800", color: palette.navy }}>{new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", day: "2-digit" }).format(moment.createdAt)}</Text><Text style={styles.faqMeta}>{new Intl.DateTimeFormat(language === "EN" ? "en-GB" : "zh-CN", { timeZone: "Europe/London", month: "short", year: "numeric" }).format(moment.createdAt)}</Text></View> : <Pressable accessibilityRole="button" accessibilityLabel={t(`View ${moment.author}’s moments`, `查看 ${moment.author} 的朋友圈`, `查看 ${moment.author} 的朋友圈`)} onPress={() => onSelectAuthor(moment.username)} style={styles.momentAvatar}><Text style={styles.momentInitials}>{moment.author.split(/\s+/).map((part) => part[0]).slice(0, 2).join("")}</Text></Pressable>}
@@ -9245,17 +9258,17 @@ function StudentMoments({ followedPublishers, onTogglePublisher, language, accou
             <Pressable accessibilityRole="button" style={styles.momentAction} onPress={() => { setReportMomentId(moment.id); setMomentReportReason(""); setMomentReportSaved(false); setMomentMenuId(null); }}><Ionicons name="flag-outline" size={18} color={palette.blue} /><Text style={styles.faqActionText}>{t("Report post", "举报动态", "檢舉動態")}</Text></Pressable>
             {isOwnTimeline && moment.username === "self" && <><Pressable accessibilityRole="button" style={styles.momentAction} onPress={() => togglePin(moment.id)}><Ionicons name="pin-outline" size={18} color={palette.blue} /><Text style={styles.faqActionText}>{moment.pinned ? t("Unpin", "取消置顶", "取消置頂") : t("Pin", "置顶", "置頂")}</Text></Pressable><Pressable accessibilityRole="button" style={styles.momentAction} onPress={() => toggleAudience(moment.id)}><Ionicons name={moment.audience === "private" ? "people-outline" : "lock-closed-outline"} size={18} color={palette.blue} /><Text style={styles.faqActionText}>{moment.audience === "private" ? t("Share with friends", "分享给好友", "分享給好友") : t("Make private", "设为私密", "設為私密")}</Text></Pressable></>}
           </View>}
-          {(moment.likes > 0 || moment.liked || moment.comments.length > 0) && <View style={styles.momentReplies}>
-            {(moment.likes > 0 || moment.liked) && <Pressable accessibilityRole="button" accessibilityLabel={moment.liked ? t("Unlike moment", "取消点赞", "取消讚好") : t("Like moment", "点赞动态", "讚好動態")} accessibilityState={{ selected: moment.liked }} style={[styles.momentAction, { minHeight: 32 }]} onPress={() => toggleLike(moment.id)}><Ionicons name={moment.liked ? "heart" : "heart-outline"} size={16} color={palette.blue} /><Text style={styles.faqActionText}>{moment.liked ? t("You and ", "你和其他 ", "你和其他 ") : ""}{moment.likes} {t(moment.liked ? "others" : "likes", "人赞过", "人讚好")}</Text></Pressable>}
+          {momentActionBar(moment)}
+          {moment.comments.length > 0 && <View style={styles.momentReplies}>
             {moment.comments.slice(-3).map((reply) => <View key={reply.id} style={styles.momentInlineReply}><Pressable accessibilityRole="button" accessibilityLabel={t("View comments", "查看评论", "查看留言")} style={{ flex: 1 }} onPress={() => { setSelectedId(moment.id); setComment(""); }}><Text style={styles.faqCardSummary}><Text style={[styles.faqCardAuthor, { color: palette.blue }]}>{reply.author}: </Text>{reply.replyTo && <Text style={{ color: palette.blue }}>@{reply.replyTo.author}: </Text>}{mentionText(tr(language, ...reply.text))}{reply.photo ? t(" [Photo]", " [照片]", " [相片]") : ""}</Text></Pressable>{commentLikeButton(moment.id, reply)}</View>)}
             {moment.comments.length > 3 && <Pressable accessibilityRole="button" style={styles.momentAction} onPress={() => { setSelectedId(moment.id); setComment(""); }}><Text style={styles.faqActionText}>{t(`View all ${moment.comments.length} comments`, `查看全部 ${moment.comments.length} 条评论`, `查看全部 ${moment.comments.length} 則留言`)}</Text></Pressable>}
           </View>}
         </View>
       </View>)}
-      {!visibleMoments.length && <View style={styles.marketEmpty}><Ionicons name="search-outline" size={36} color={palette.blue} /><Text style={styles.marketEmptyTitle}>{selectedAuthor ? t("No shared moments yet", "暂无分享的动态", "暫無分享的動態") : savedOnly ? t("No saved moments here yet", "暂无收藏动态", "暫無收藏動態") : t("No matching moments yet", "暂无匹配的动态", "暫無相符的動態")}</Text><Text style={styles.formDesc}>{selectedAuthor ? t("Only moments shared with you appear here.", "这里只显示与你分享的动态。", "這裡只顯示與你分享的動態。") : savedOnly ? t("Tap a bookmark on a moment to keep it here.", "点击动态上的书签即可收藏。", "點按動態上的書籤即可收藏。") : t("Try another topic or university, or discover public posts in Explore.", "试试其他主题或大学，或到发现页查看公开动态。", "試試其他主題或大學，或到探索頁查看公開動態。")}</Text><Pressable accessibilityRole="button" style={styles.primaryButton} onPress={selectedAuthor ? onFindFriends : () => { setSavedOnly(false); setDiscoveryTab("explore"); setDiscoveryTopic("all"); setMomentSearch(""); }}><Text style={styles.primaryButtonText}>{selectedAuthor ? t("Find friends", "认识朋友", "認識朋友") : t("Explore moments", "发现动态", "探索動態")}</Text></Pressable></View>}
+      {!visibleMoments.length && <View style={styles.marketEmpty}><Ionicons name="search-outline" size={36} color={palette.blue} /><Text style={styles.marketEmptyTitle}>{isOwnTimeline && !previewing ? t("Your moments start here", "从这里记录生活", "從這裡記錄生活") : selectedAuthor ? t("No shared moments yet", "暂无分享的动态", "暫無分享的動態") : savedOnly ? t("No saved moments here yet", "暂无收藏动态", "暫無收藏動態") : t("No matching moments yet", "暂无匹配的动态", "暫無相符的動態")}</Text><Text style={styles.formDesc}>{isOwnTimeline && !previewing ? t("Share a photo, a thought or a favourite place.", "分享照片、心情或喜欢的地方。", "分享相片、心情或喜歡的地方。") : selectedAuthor ? t("Only moments shared with you appear here.", "这里只显示与你分享的动态。", "這裡只顯示與你分享的動態。") : savedOnly ? t("Tap a bookmark on a moment to keep it here.", "点击动态上的书签即可收藏。", "點按動態上的書籤即可收藏。") : t("Try another topic or university, or discover public posts in Explore.", "试试其他主题或大学，或到发现页查看公开动态。", "試試其他主題或大學，或到探索頁查看公開動態。")}</Text><Pressable accessibilityRole="button" style={styles.primaryButton} onPress={isOwnTimeline && !previewing ? () => openComposer() : selectedAuthor ? onFindFriends : () => { setSavedOnly(false); setDiscoveryTab("explore"); setDiscoveryTopic("all"); setMomentSearch(""); }}><Text style={styles.primaryButtonText}>{isOwnTimeline && !previewing ? t("Share a moment", "分享动态", "分享動態") : selectedAuthor ? t("Find friends", "认识朋友", "認識朋友") : t("Explore moments", "发现动态", "探索動態")}</Text></Pressable></View>}
       {isOwnTimeline && settings.history !== "all" && <Text style={[styles.faqCardSummary, { textAlign: "center", marginVertical: 16 }]}>{t("Friends can see: ", "好友可见：", "好友可見：")}{historyLabel(settings.history)}</Text>}
       <Text style={styles.faqDisclaimer}>{t("Preview with sample moments. Your posts, likes and comments stay in this session and reset on reload.", "此预览包含示例动态。发布、点赞和评论仅在当前会话保留，刷新后重置。", "此預覽包含示例動態。發佈、讚好及留言只在目前會話保留，重新載入後重設。")}</Text>
-    </ScrollView>
+    </TimelineContainer>
     <Sheet visible={!!reportMomentId} title={t("Report post", "举报动态", "檢舉動態")} onClose={() => setReportMomentId(null)}>
       <ScrollView contentContainerStyle={styles.modalBody}>
         <Text style={styles.formDesc}>{momentReportSaved ? t("Report saved in this preview only. No report has been sent to a moderation team.", "举报仅保存在此预览中，尚未发送给审核团队。", "檢舉只儲存在此預覽中，尚未傳送給審核團隊。") : t("Why are you reporting this post? Reports in this prototype are not sent to a moderation team.", "为什么举报这条动态？此原型不会将举报发送给审核团队。", "為甚麼檢舉這則動態？此原型不會將檢舉傳送給審核團隊。")}</Text>
@@ -9280,14 +9293,12 @@ function StudentMoments({ followedPublishers, onTogglePublisher, language, accou
       </ScrollView>
     </Sheet>
     <Sheet visible={!!selected} title={t("Moment", "动态", "動態")} onClose={() => setSelectedId(null)}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={detailScroll} contentContainerStyle={{ paddingBottom: 24 }} keyboardShouldPersistTaps="handled">
         {!!selected && <>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 14 }}>
             <Pressable accessibilityRole="button" accessibilityLabel={t("View author’s moments", "查看作者动态", "查看作者動態")} onPress={() => { setSelectedId(null); onSelectAuthor(selected.username); }}><ChatPersonAvatar name={selected.author} photo={selected.username === "self" ? profilePhoto : undefined} size={38} /></Pressable>
             <View style={{ flex: 1, minWidth: 0 }}><Text numberOfLines={1} style={styles.faqCardAuthor}>{selected.author}</Text>{selected.publicPost && <Text style={styles.faqMeta}>{selected.publisherId ? t("Public · Sample post", "公开 · 示例动态", "公開 · 範例動態") : t("Public", "公开", "公開")}</Text>}</View>
-            {saveMomentButton(selected.id)}
             {!!selected.publisherId && <Pressable accessibilityRole="button" style={{ borderWidth: 1, borderColor: palette.blue, borderRadius: 20, paddingHorizontal: 14, minHeight: 36, justifyContent: "center" }} onPress={() => onTogglePublisher(selected.publisherId!)}><Text style={styles.faqActionText}>{followedPublishers.includes(selected.publisherId) ? t("Following", "已关注", "已關注") : t("Follow", "关注", "關注")}</Text></Pressable>}
-            <Pressable accessibilityRole="button" accessibilityLabel={t("Report post", "举报动态", "檢舉動態")} style={styles.momentAction} onPress={() => { setReportMomentId(selected.id); setMomentReportReason(""); setMomentReportSaved(false); setSelectedId(null); }}><Ionicons name="flag-outline" size={18} color={palette.muted} /></Pressable>
           </View>
           <PostPhotoCarousel key={selected.id} photos={selected.photos} language={language} onOpen={setPhotoPreview} />
           <View style={{ padding: 18, gap: 10 }}>
@@ -9297,16 +9308,8 @@ function StudentMoments({ followedPublishers, onTogglePublisher, language, accou
             <Text style={styles.faqMeta}>{formatForumDate(new Date(selected.createdAt).toISOString(), language)}</Text>
             {selected.publisherId && <Text style={styles.faqMeta}>{t("Demo content, not posted by this business.", "演示内容，并非商家发布。", "示範內容，並非商家發佈。")}</Text>}
           </View>
-          <View style={[styles.momentReplies, { marginHorizontal: 18, backgroundColor: "transparent", padding: 0 }]}>
+          <View onLayout={(event) => { commentsOffset.current = event.nativeEvent.layout.y; }} style={[styles.momentReplies, { marginHorizontal: 18, backgroundColor: "transparent", padding: 0 }]}>
             <Text style={[styles.faqCardAuthor, { marginBottom: 14 }]}>{t(`Comments · ${selected.comments.length}`, `评论 · ${selected.comments.length}`, `留言 · ${selected.comments.length}`)}</Text>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingBottom: 10 }}>
-              <Ionicons name="heart-outline" size={21} color={palette.blue} />
-              <View style={{ flex: 1, flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-                {[...(selected.likedBy || []), ...(selected.liked ? [author] : [])].map((name, index) => <Pressable key={`${name}-${index}`} accessibilityRole="button" accessibilityLabel={t(`View ${name}’s moments`, `查看 ${name} 的朋友圈`, `查看 ${name} 的朋友圈`)} onPress={() => { const person = friends.find((friend) => friend.fullName === name); if (name === author || person) { setSelectedId(null); onSelectAuthor(name === author ? "self" : person!.username); } }} style={{ alignItems: "center" }}><ChatPersonAvatar name={name} photo={selected.liked && index === (selected.likedBy || []).length ? profilePhoto : undefined} size={36} /></Pressable>)}
-                {selected.likes > (selected.likedBy || []).length && <Text style={styles.faqMeta}>+{selected.likes - (selected.likedBy || []).length} {t("others", "人", "人")}</Text>}
-                {!selected.likes && !selected.liked && <Text style={styles.faqMeta}>{t("No likes yet", "暂无点赞", "暫無讚好")}</Text>}
-              </View>
-            </View>
             {selected.comments.map((reply) => <View key={reply.id} style={{ borderTopWidth: 1, borderTopColor: "#DCE5F1", paddingTop: 12, paddingBottom: 6, flexDirection: "row", gap: 10 }}>
               <ChatPersonAvatar name={reply.author} size={34} />
               <View style={{ flex: 1, minWidth: 0 }}>
@@ -9323,6 +9326,7 @@ function StudentMoments({ followedPublishers, onTogglePublisher, language, accou
         </>}
       </ScrollView>
       <View style={{ padding: 12, borderTopWidth: 1, borderTopColor: palette.line, backgroundColor: "#FFFFFF" }}>
+        {!!selected && momentActionBar(selected)}
         {!!replyTo && <View style={styles.momentInlineReply}><Text style={[styles.faqActionText, { flex: 1 }]}>{t("Replying to ", "回复 ", "回覆 ")}{replyTo.author}</Text><Pressable accessibilityRole="button" accessibilityLabel={t("Cancel reply", "取消回复", "取消回覆")} style={styles.momentCommentLike} onPress={() => setReplyTo(null)}><Ionicons name="close" size={19} color={palette.muted} /></Pressable></View>}
         {commentPhoto && <ChatAttachmentPreview attachment={{ name: t("Photo", "照片", "相片"), uri: commentPhoto, type: "image" }} onRemove={() => setCommentPhoto(null)} />}
         {!!commentPhotoError && <Text style={{ color: palette.coral }}>{commentPhotoError}</Text>}
@@ -9330,7 +9334,6 @@ function StudentMoments({ followedPublishers, onTogglePublisher, language, accou
         <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 6 }}>
           <View style={{ flex: 1, minWidth: 0 }}><MentionInput language={language} people={friends.filter((person) => acceptedFriends.includes(person.username))} accessibilityLabel={t("Write a comment", "写评论", "寫留言")} value={comment} onChangeText={setComment} multiline maxLength={500} editable={canInteract} style={{ backgroundColor: "#F2F6FB", borderRadius: 10, padding: 12, minHeight: 44, maxHeight: 100, color: palette.ink }} placeholder={replyTo ? t(`Reply to ${replyTo.author}…`, `回复 ${replyTo.author}…`, `回覆 ${replyTo.author}…`) : t("Comment…", "评论…", "留言…")} placeholderTextColor="#8B98AD" /></View>
           <Pressable accessibilityRole="button" accessibilityLabel={t("Choose comment emoji", "选择评论表情", "選擇留言表情")} style={styles.chatToolButton} onPress={() => setCommentEmojiOpen((current) => !current)}><Ionicons name="happy-outline" size={26} color={palette.blue} /></Pressable>
-          {!!selected && !comment.trim() && !replyTo && !commentPhoto && <Pressable accessibilityRole="button" accessibilityLabel={selected.liked ? t("Unlike moment", "取消点赞", "取消讚好") : t("Like moment", "点赞动态", "讚好動態")} accessibilityState={{ selected: selected.liked }} style={{ minHeight: 44, alignItems: "center", justifyContent: "center", paddingHorizontal: 4 }} onPress={() => toggleLike(selected.id)}><Ionicons name={selected.liked ? "heart" : "heart-outline"} size={23} color={selected.liked ? palette.coral : palette.blue} /><Text style={styles.faqMeta}>{selected.likes + (selected.liked ? 1 : 0)}</Text></Pressable>}
           <Pressable accessibilityRole="button" accessibilityLabel={t("Add comment photo", "添加评论照片", "新增留言相片")} disabled={commentPhotoBusy} style={styles.chatToolButton} onPress={pickCommentPhoto}><Ionicons name="image-outline" size={26} color={palette.blue} /></Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel={replyTo ? t("Post reply", "发布回复", "發佈回覆") : t("Post comment", "发布评论", "發佈留言")} disabled={commentPhotoBusy || (canInteract && !comment.trim() && !commentPhoto)} style={[styles.chatSend, (!comment.trim() && !commentPhoto) && styles.chatSendDisabled]} onPress={addComment}><Ionicons name="arrow-up" size={20} color="#FFFFFF" /></Pressable>
         </View>
@@ -9400,7 +9403,8 @@ const forumSourceLabels: Record<string, ForumCopy> = {
   "UKCISA · Healthcare": ["UKCISA · Healthcare", "UKCISA · 医疗服务", "UKCISA · 醫療服務"],
 };
 
-function StudentFaqForum({ language, translationLanguage, onTranslationLanguageChange, accountName, canInteract, onVerify, posts, onPostsChange, comments, onCommentsChange, likedIds, onLikedIdsChange, followedForums, onToggleFollow, entry }: {
+function StudentFaqForum({ profilePhoto, language, translationLanguage, onTranslationLanguageChange, accountName, canInteract, onVerify, posts, onPostsChange, comments, onCommentsChange, likedIds, onLikedIdsChange, followedForums, onToggleFollow, entry }: {
+  profilePhoto: string;
   onTranslationLanguageChange: (language: Language) => void;
   followedForums: Record<string, string[]>; onToggleFollow: (id: string) => void; entry: { id: string; nonce: number } | null;
   translationLanguage: Language;
@@ -9411,7 +9415,8 @@ function StudentFaqForum({ language, translationLanguage, onTranslationLanguageC
 }) {
   const [section, setSection] = useState<"all" | "guides" | "community" | "following" | "popular_forums" | "popular_posts" | "saved">("all");
   const savedForum = useSavedPosts("forum", accountName);
-  const saveForumButton = (id: string) => <Pressable accessibilityRole="button" accessibilityLabel={savedForum.ids.includes(id) ? tr(language, "Unsave post", "取消收藏帖子", "取消收藏帖子") : tr(language, "Save post", "收藏帖子", "收藏帖子")} accessibilityState={{ selected: savedForum.ids.includes(id) }} onPress={() => savedForum.toggle(id)} style={{ minWidth: 36, minHeight: 44, alignItems: "center", justifyContent: "center" }}><Ionicons name={savedForum.ids.includes(id) ? "bookmark" : "bookmark-outline"} size={21} color={palette.blue} /></Pressable>;
+  const forumBookmarkCount = (id: string) => Math.max(0, (posts.find((post) => post.id === id) || forumGuides.find((post) => post.id === id))?.bookmarkCount || 0) + Number(savedForum.ids.includes(id));
+  const saveForumButton = (id: string) => <Pressable accessibilityRole="button" accessibilityLabel={savedForum.ids.includes(id) ? tr(language, "Unsave post", "取消收藏帖子", "取消收藏帖子") : tr(language, "Save post", "收藏帖子", "收藏帖子")} accessibilityState={{ selected: savedForum.ids.includes(id) }} onPress={() => savedForum.toggle(id)} accessibilityHint={tr(language, `${forumBookmarkCount(id)} bookmarks · local preview count`, `${forumBookmarkCount(id)} 次收藏 · 本机演示计数`, `${forumBookmarkCount(id)} 次收藏 · 本機示範計數`)} style={[styles.faqAction, { minWidth: 36, minHeight: 44 }]}><Ionicons name={savedForum.ids.includes(id) ? "bookmark" : "bookmark-outline"} size={18} color={palette.blue} /><Text style={styles.faqActionText}>{forumBookmarkCount(id)}</Text></Pressable>;
   const [category, setCategory] = useState<ForumCategory | "all">("all");
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(entry?.id || null);
@@ -9488,7 +9493,7 @@ function StudentFaqForum({ language, translationLanguage, onTranslationLanguageC
     const links = enteredLinks.map((link) => ({ url: safeForumUrl(link.url)!, label: link.label.trim() || new URL(link.url.trim()).hostname }));
     if (title.length < 8 || body.length < 20) { setFormError(tr(language, "Add a title of at least 8 characters and details of at least 20 characters.", "标题至少 8 个字，内容至少 20 个字。", "標題至少 8 個字，內容至少 20 個字。")); return; }
     const id = `forum-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    onPostsChange((current) => [{ id, title, body, links, coverPhoto: draftCover || undefined, photos: draftPhotos, category: draftCategory, author: authorName, createdAt: new Date().toISOString(), tags: extractForumHashtags(draftTags + " " + title + " " + body), likes: 0 }, ...current]);
+    onPostsChange((current) => [{ id, title, body, links, coverPhoto: draftCover || undefined, photos: draftPhotos, category: draftCategory, author: authorName, authorPhoto: profilePhoto || undefined, createdAt: new Date().toISOString(), tags: extractForumHashtags(draftTags + " " + title + " " + body), likes: 0 }, ...current]);
     setDraftTitle(""); setDraftLinks([{ label: "", url: "" }]); setDraftPhotos([]); setDraftBody(""); setDraftTags(""); setDraftCategory(undefined); setFormError(""); setComposeOpen(false); setSection("all"); setCategory("all"); setQuery(""); setSelectedId(id);
   };
   const addComment = () => {
@@ -9537,13 +9542,13 @@ function StudentFaqForum({ language, translationLanguage, onTranslationLanguageC
           </View>
           <Text numberOfLines={3} style={[styles.faqCardSummary, { padding: 10, color: palette.ink }]}>{item.summary}</Text>
         </Pressable>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10 }}><ChatPersonAvatar name={item.author} size={22} /><Text numberOfLines={1} style={[styles.faqMeta, { flex: 1 }]}>{item.author}</Text></View>
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 10, paddingVertical: 4 }}>{likeButton(item.id, item.likes)}{saveForumButton(item.id)}<Pressable accessibilityRole="button" accessibilityLabel={tr(language, `Comments on ${item.title}`, `查看评论：${item.title}`, `查看留言：${item.title}`)} style={styles.faqAction} onPress={() => { setSelectedId(item.id); setCommentDraft(""); }}><Ionicons name="chatbubble-outline" size={16} color={palette.muted} /><Text style={styles.faqMeta}>{(comments[item.id] || []).length}</Text></Pressable></View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10 }}><ChatPersonAvatar name={item.author} photo={posts.find((post) => post.id === item.id)?.authorPhoto || (item.author === authorName ? profilePhoto : undefined)} size={22} /><Text numberOfLines={1} style={[styles.faqMeta, { flex: 1 }]}>{item.author}</Text></View>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 10, paddingVertical: 4 }}>{likeButton(item.id, item.likes)}<Pressable accessibilityRole="button" accessibilityLabel={tr(language, `Comments on ${item.title}`, `查看评论：${item.title}`, `查看留言：${item.title}`)} style={styles.faqAction} onPress={() => { setSelectedId(item.id); setCommentDraft(""); }}><Ionicons name="chatbubble-outline" size={16} color={palette.muted} /><Text style={styles.faqMeta}>{(comments[item.id] || []).length}</Text></Pressable>{saveForumButton(item.id)}</View>
       </View>)}</View>)}</View>
       {!visibleGuides.length && !visiblePosts.length && <View style={styles.marketEmpty}><Ionicons name="search-outline" size={32} color={palette.blue} /><Text style={styles.marketEmptyTitle}>{section === "saved" ? tr(language, "No saved posts here yet", "暂无收藏帖子", "暫無收藏帖子") : tr(language, "No matching discussions yet", "暂无匹配的讨论", "暫無相符的討論")}</Text><Text style={styles.formDesc}>{section === "saved" ? tr(language, "Tap the bookmark on a post to find it here later. Check your filters if a saved post is missing.", "点击帖子的书签即可收藏。若找不到已收藏帖子，请检查筛选条件。", "點按帖子的書籤即可收藏。若找不到已收藏帖子，請檢查篩選條件。") : tr(language, "Try another topic or ask the community.", "换个话题搜索，或向社区提问。", "換個話題搜尋，或向社區提問。")}</Text></View>}
       <Text style={styles.faqDisclaimer}>{tr(language, "Forum posts and reactions are local demo data. Official guides link to primary sources; check them for changes before acting.", "帖子和互动仅为本机演示数据。官方指南附有原始资料链接，办理事项前请确认最新要求。", "帖子及互動只屬本機示範資料。官方指南附有原始資料連結，辦理事項前請確認最新要求。")}</Text>
     </ScrollView>
-    <Sheet visible={selectedId !== null} title={tr(contentLanguage, "FAQ Forum", "留英问答", "留英問答")} onClose={() => setSelectedId(null)}>{selectedId && (guide || studentPost) && <><ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 20 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}><View style={styles.faqDetailHead}><Text style={styles.faqCategory}>{forumCategoryLabel(contentLanguage, selectedCategory)}</Text>{guide && <Text style={styles.faqOfficialBadge}>{tr(contentLanguage, "UNIMATE OFFICIAL", "优你伴官方", "優你伴官方")}</Text>}</View>{guide && <Image source={{ uri: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=600" }} style={{ width: "100%", aspectRatio: 4 / 3, borderRadius: 12, marginBottom: 14 }} />}{guide ? <Text style={styles.faqDetailTitle}>{selectedTitle}</Text> : <><PostPhotoCarousel key={studentPost?.id} photos={studentPost?.photos?.length ? studentPost.photos : studentPost?.coverPhoto ? [studentPost.coverPhoto] : []} language={language} onOpen={setForumPhotoPreview} /><ForumTranslatedText original={selectedTitle} style={styles.faqDetailTitle} /></>}<Text style={styles.faqCardAuthor}>{guide ? tr(contentLanguage, "UniMate team · Reviewed 25 Sep 2026", "优你伴团队 · 2026 年 9 月 25 日核对", "優你伴團隊 · 2026 年 9 月 25 日核對") : `${studentPost?.author} · ${studentPost ? formatForumDate(studentPost.createdAt, contentLanguage) : ""}`}</Text>{guide && <Text style={styles.faqMeta}>{tr(contentLanguage, "Posted", "发布于", "發佈於")} {formatForumDate(forumGuidePublishedAt, contentLanguage, false)}</Text>}{guide ? <Text style={styles.faqDetailParagraph} numberOfLines={longBody && !bodyExpanded ? 6 : undefined}>{fullBody}</Text> : <ForumTranslatedText original={fullBody} style={styles.faqDetailParagraph} numberOfLines={longBody && !bodyExpanded ? 6 : undefined} />}{longBody && <Pressable accessibilityRole="button" accessibilityState={{ expanded: bodyExpanded }} style={[styles.momentAction, { marginTop: 10, alignSelf: "flex-start", paddingVertical: 8 }]} onPress={() => setBodyExpanded((current) => !current)}><Text style={styles.faqActionText}>{bodyExpanded ? tr(contentLanguage, "Show less", "收起", "收起") : tr(contentLanguage, "Read more", "展开全文", "展開全文")}</Text><Ionicons name={bodyExpanded ? "chevron-up" : "chevron-down"} size={16} color={palette.blue} /></Pressable>}{hashtagChips(guide ? forumGuideTags[guide.id] || [] : studentPost ? forumPostTags(studentPost) : [])}{guide && <View style={styles.faqSourceCard}><Text style={styles.faqSourceTitle}>{tr(contentLanguage, "Check the official source", "查看官方资料", "查閱官方資料")}</Text>{guide.sources.map((source) => <Pressable key={source.url} accessibilityRole="link" onPress={() => Linking.openURL(source.url).catch(() => Alert.alert(tr(contentLanguage, "Could not open link", "无法打开链接", "無法開啟連結")))} style={styles.faqSourceLink}><Ionicons name="open-outline" size={16} color={palette.blue} /><Text style={styles.faqSourceText}>{tr(contentLanguage, ...(forumSourceLabels[source.label] || [source.label, source.label, source.label] as ForumCopy))}</Text></Pressable>)}</View>}{!!studentPost?.links?.length && <View style={styles.faqSourceCard}><Text style={styles.faqSourceTitle}>{tr(contentLanguage, "Useful links", "实用链接", "實用連結")}</Text><Text style={[styles.faqMeta, { marginBottom: 8 }]}>{tr(contentLanguage, "Shared by the author · not verified by UniMate", "作者分享 · 未经优你伴核实", "作者分享 · 未經優你伴核實")}</Text>{studentPost.links.filter((link) => safeForumUrl(link.url)).map((link, index) => <Pressable key={index} accessibilityRole="link" accessibilityLabel={`${link.label} · ${new URL(link.url).hostname}`} style={styles.faqSourceLink} onPress={() => Linking.openURL(safeForumUrl(link.url)!).catch(() => Alert.alert(tr(contentLanguage, "Could not open link", "无法打开链接", "無法開啟連結")))}><Ionicons name="open-outline" size={16} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.faqSourceText}>{link.label}</Text><Text style={styles.faqMeta}>{new URL(link.url).hostname}</Text></View></Pressable>)}</View>}<View style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 8 }}>{saveForumButton(selectedId)}<Pressable accessibilityRole="button" accessibilityState={{ selected: !!followedForums[selectedId] }} style={styles.momentAction} onPress={() => canInteract ? onToggleFollow(selectedId) : onVerify()}><Ionicons name={followedForums[selectedId] ? "notifications" : "notifications-outline"} size={18} color={palette.blue} /><Text style={styles.faqActionText}>{followedForums[selectedId] ? tr(contentLanguage, "Following", "已关注", "已關注") : tr(contentLanguage, "Follow discussion", "关注讨论", "關注討論")}</Text></Pressable></View><View style={styles.faqDetailActions}>{likeButton(selectedId, guide?.likes || studentPost?.likes || 0)}<View style={styles.faqAction}><Ionicons name="chatbubble-outline" size={18} color={palette.blue} /><Text style={styles.faqActionText}>{(comments[selectedId] || []).length} {tr(contentLanguage, "comments", "条评论", "則留言")}</Text></View>{translateButton}</View><Text style={styles.faqCommentsTitle}>{tr(contentLanguage, "Comments", "评论", "留言")}</Text><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>{(["liked", "newest", "oldest"] as const).map((sort) => <Pressable key={sort} accessibilityRole="button" accessibilityState={{ selected: commentSort === sort }} style={[styles.faqChip, commentSort === sort && styles.faqChipActive]} onPress={() => setCommentSort(sort)}><Text style={[styles.faqChipText, commentSort === sort && styles.faqChipTextActive]}>{sort === "liked" ? tr(contentLanguage, "Most liked", "最多点赞", "最多讚好") : sort === "newest" ? tr(contentLanguage, "Newest", "最新", "最新") : tr(contentLanguage, "Oldest", "最早", "最早")}</Text></Pressable>)}</View>{sortedComments.length ? sortedComments.map((comment) => <View key={comment.id} style={styles.faqComment}><View style={[styles.faqCommentTop, { flexWrap: "wrap", gap: 5 }]}><Text style={styles.faqCardAuthor}>{comment.author}</Text><Text style={styles.faqMeta}>{formatForumDate(comment.createdAt, contentLanguage)}</Text></View>{comment.replyTo && <Text style={styles.faqActionText}>@{comment.replyTo.author}</Text>}<ForumCommentContent comment={comment} language={contentLanguage} translationLanguage={translationLanguage} onReply={() => setReplyToComment(comment)} onPhoto={setForumPhotoPreview} /><View style={{ flexDirection: "row", gap: 20 }}>{(["like", "dislike"] as const).map((vote) => <Pressable key={vote} accessibilityRole="button" accessibilityLabel={vote === "like" ? tr(contentLanguage, "Like comment", "赞同评论", "讚好留言") : tr(contentLanguage, "Dislike comment", "不赞同评论", "不讚好留言")} accessibilityState={{ selected: comment.vote === vote }} style={styles.momentAction} onPress={() => voteOnComment(comment.id, vote)}><Ionicons name={(vote === "like" ? comment.vote === vote ? "thumbs-up" : "thumbs-up-outline" : comment.vote === vote ? "thumbs-down" : "thumbs-down-outline")} size={18} color={comment.vote === vote ? palette.blue : palette.muted} />{vote === "like" && <Text style={styles.faqActionText}>{(comment.likes || 0) + (comment.vote === "like" ? 1 : 0)}</Text>}</Pressable>)}</View></View>) : <View style={{ backgroundColor: "#F2F6FB", borderRadius: 14, padding: 18, gap: 7 }}><Text style={styles.faqCardAuthor}>{tr(contentLanguage, "Be the first to share your experience", "分享你的经验，开启讨论", "分享你的經驗，開啟討論")}</Text><Text style={styles.faqCardSummary}>{tr(contentLanguage, "Ask a follow-up question or share a useful tip. You can add a photo or @mention someone below.", "可以追问、分享实用建议，也可以在下方添加照片或 @提及朋友。", "可以追問、分享實用建議，也可以在下方新增相片或 @提及朋友。")}</Text></View>}</ScrollView>
+    <Sheet visible={selectedId !== null} title={tr(contentLanguage, "FAQ Forum", "留英问答", "留英問答")} onClose={() => setSelectedId(null)}>{selectedId && (guide || studentPost) && <><ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 20 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}><View style={styles.faqDetailHead}><Text style={styles.faqCategory}>{forumCategoryLabel(contentLanguage, selectedCategory)}</Text>{guide && <Text style={styles.faqOfficialBadge}>{tr(contentLanguage, "UNIMATE OFFICIAL", "优你伴官方", "優你伴官方")}</Text>}</View>{guide && <Image source={{ uri: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=600" }} style={{ width: "100%", aspectRatio: 4 / 3, borderRadius: 12, marginBottom: 14 }} />}{guide ? <Text style={styles.faqDetailTitle}>{selectedTitle}</Text> : <><PostPhotoCarousel key={studentPost?.id} photos={studentPost?.photos?.length ? studentPost.photos : studentPost?.coverPhoto ? [studentPost.coverPhoto] : []} language={language} onOpen={setForumPhotoPreview} /><ForumTranslatedText original={selectedTitle} style={styles.faqDetailTitle} /></>}<View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}><ChatPersonAvatar name={guide ? "UniMate team" : studentPost?.author || ""} photo={studentPost?.authorPhoto || (studentPost?.author === authorName ? profilePhoto : undefined)} size={38} /><View style={{ flex: 1 }}><Text style={styles.faqCardAuthor}>{guide ? tr(contentLanguage, "UniMate team", "优你伴团队", "優你伴團隊") : studentPost?.author}</Text><Text style={[styles.faqMeta, { marginTop: 3 }]}>{guide ? tr(contentLanguage, "Reviewed 25 Sep 2026", "2026 年 9 月 25 日核对", "2026 年 9 月 25 日核對") : studentPost ? formatForumDate(studentPost.createdAt, contentLanguage) : ""}</Text></View></View>{guide ? <Text style={styles.faqDetailParagraph} numberOfLines={longBody && !bodyExpanded ? 6 : undefined}>{fullBody}</Text> : <ForumTranslatedText original={fullBody} style={styles.faqDetailParagraph} numberOfLines={longBody && !bodyExpanded ? 6 : undefined} />}{longBody && <Pressable accessibilityRole="button" accessibilityState={{ expanded: bodyExpanded }} style={[styles.momentAction, { marginTop: 10, alignSelf: "flex-start", paddingVertical: 8 }]} onPress={() => setBodyExpanded((current) => !current)}><Text style={styles.faqActionText}>{bodyExpanded ? tr(contentLanguage, "Show less", "收起", "收起") : tr(contentLanguage, "Read more", "展开全文", "展開全文")}</Text><Ionicons name={bodyExpanded ? "chevron-up" : "chevron-down"} size={16} color={palette.blue} /></Pressable>}{hashtagChips(guide ? forumGuideTags[guide.id] || [] : studentPost ? forumPostTags(studentPost) : [])}{guide && <View style={styles.faqSourceCard}><Text style={styles.faqSourceTitle}>{tr(contentLanguage, "Check the official source", "查看官方资料", "查閱官方資料")}</Text>{guide.sources.map((source) => <Pressable key={source.url} accessibilityRole="link" onPress={() => Linking.openURL(source.url).catch(() => Alert.alert(tr(contentLanguage, "Could not open link", "无法打开链接", "無法開啟連結")))} style={styles.faqSourceLink}><Ionicons name="open-outline" size={16} color={palette.blue} /><Text style={styles.faqSourceText}>{tr(contentLanguage, ...(forumSourceLabels[source.label] || [source.label, source.label, source.label] as ForumCopy))}</Text></Pressable>)}</View>}{!!studentPost?.links?.length && <View style={styles.faqSourceCard}><Text style={styles.faqSourceTitle}>{tr(contentLanguage, "Useful links", "实用链接", "實用連結")}</Text><Text style={[styles.faqMeta, { marginBottom: 8 }]}>{tr(contentLanguage, "Shared by the author · not verified by UniMate", "作者分享 · 未经优你伴核实", "作者分享 · 未經優你伴核實")}</Text>{studentPost.links.filter((link) => safeForumUrl(link.url)).map((link, index) => <Pressable key={index} accessibilityRole="link" accessibilityLabel={`${link.label} · ${new URL(link.url).hostname}`} style={styles.faqSourceLink} onPress={() => Linking.openURL(safeForumUrl(link.url)!).catch(() => Alert.alert(tr(contentLanguage, "Could not open link", "无法打开链接", "無法開啟連結")))}><Ionicons name="open-outline" size={16} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.faqSourceText}>{link.label}</Text><Text style={styles.faqMeta}>{new URL(link.url).hostname}</Text></View></Pressable>)}</View>}<View style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 8 }}><Pressable accessibilityRole="button" accessibilityState={{ selected: !!followedForums[selectedId] }} style={styles.momentAction} onPress={() => canInteract ? onToggleFollow(selectedId) : onVerify()}><Ionicons name={followedForums[selectedId] ? "notifications" : "notifications-outline"} size={18} color={palette.blue} /><Text style={styles.faqActionText}>{followedForums[selectedId] ? tr(contentLanguage, "Following", "已关注", "已關注") : tr(contentLanguage, "Follow discussion", "关注讨论", "關注討論")}</Text></Pressable></View><View style={styles.faqDetailActions}>{likeButton(selectedId, guide?.likes || studentPost?.likes || 0)}<View accessible accessibilityLabel={tr(contentLanguage, `${(comments[selectedId] || []).length} comments`, `${(comments[selectedId] || []).length} 条评论`, `${(comments[selectedId] || []).length} 則留言`)} style={styles.faqAction}><Ionicons name="chatbubble-outline" size={18} color={palette.blue} /><Text style={styles.faqActionText}>{(comments[selectedId] || []).length}</Text></View>{saveForumButton(selectedId)}{translateButton}</View><Text style={styles.faqCommentsTitle}>{tr(contentLanguage, "Comments", "评论", "留言")}</Text><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>{(["liked", "newest", "oldest"] as const).map((sort) => <Pressable key={sort} accessibilityRole="button" accessibilityState={{ selected: commentSort === sort }} style={[styles.faqChip, commentSort === sort && styles.faqChipActive]} onPress={() => setCommentSort(sort)}><Text style={[styles.faqChipText, commentSort === sort && styles.faqChipTextActive]}>{sort === "liked" ? tr(contentLanguage, "Most liked", "最多点赞", "最多讚好") : sort === "newest" ? tr(contentLanguage, "Newest", "最新", "最新") : tr(contentLanguage, "Oldest", "最早", "最早")}</Text></Pressable>)}</View>{sortedComments.length ? sortedComments.map((comment) => <View key={comment.id} style={styles.faqComment}><View style={[styles.faqCommentTop, { flexWrap: "wrap", gap: 5 }]}><Text style={styles.faqCardAuthor}>{comment.author}</Text><Text style={styles.faqMeta}>{formatForumDate(comment.createdAt, contentLanguage)}</Text></View>{comment.replyTo && <Text style={styles.faqActionText}>@{comment.replyTo.author}</Text>}<ForumCommentContent comment={comment} language={contentLanguage} translationLanguage={translationLanguage} onReply={() => setReplyToComment(comment)} onPhoto={setForumPhotoPreview} /><View style={{ flexDirection: "row", gap: 20 }}>{(["like", "dislike"] as const).map((vote) => <Pressable key={vote} accessibilityRole="button" accessibilityLabel={vote === "like" ? tr(contentLanguage, "Like comment", "赞同评论", "讚好留言") : tr(contentLanguage, "Dislike comment", "不赞同评论", "不讚好留言")} accessibilityState={{ selected: comment.vote === vote }} style={styles.momentAction} onPress={() => voteOnComment(comment.id, vote)}><Ionicons name={(vote === "like" ? comment.vote === vote ? "thumbs-up" : "thumbs-up-outline" : comment.vote === vote ? "thumbs-down" : "thumbs-down-outline")} size={18} color={comment.vote === vote ? palette.blue : palette.muted} />{vote === "like" && <Text style={styles.faqActionText}>{(comment.likes || 0) + (comment.vote === "like" ? 1 : 0)}</Text>}</Pressable>)}</View></View>) : <View style={{ backgroundColor: "#F2F6FB", borderRadius: 14, padding: 18, gap: 7 }}><Text style={styles.faqCardAuthor}>{tr(contentLanguage, "Be the first to share your experience", "分享你的经验，开启讨论", "分享你的經驗，開啟討論")}</Text><Text style={styles.faqCardSummary}>{tr(contentLanguage, "Ask a follow-up question or share a useful tip. You can add a photo or @mention someone below.", "可以追问、分享实用建议，也可以在下方添加照片或 @提及朋友。", "可以追問、分享實用建議，也可以在下方新增相片或 @提及朋友。")}</Text></View>}</ScrollView>
       {forumCommentPhoto && <View style={{ paddingHorizontal: 12 }}><ChatAttachmentPreview attachment={{ uri: forumCommentPhoto, name: tr(contentLanguage, "Photo", "照片", "相片"), type: "image" }} onRemove={() => setForumCommentPhoto(null)} /></View>}
       {!!forumPhotoError && <Text style={{ color: palette.coral, paddingHorizontal: 12 }}>{forumPhotoError}</Text>}
       <SharedChatComposer key={selectedId} language={contentLanguage} people={friends} inputLabel={tr(contentLanguage, "Forum comment", "论坛评论", "論壇留言")} sendLabel={tr(contentLanguage, "Post comment", "发布评论", "發佈留言")} value={commentDraft} onChange={setCommentDraft} onSend={addComment} onAttach={addForumPhoto} attachDisabled={forumPhotoBusy} canSend={!forumPhotoBusy && (!canInteract || !!commentDraft.trim() || !!forumCommentPhoto)} editable={canInteract} maxLength={500} replyName={replyToComment?.author} onCancelReply={() => setReplyToComment(null)} placeholder={replyToComment ? tr(contentLanguage, `Reply to ${replyToComment.author}…`, `回复 ${replyToComment.author}…`, `回覆 ${replyToComment.author}…`) : tr(contentLanguage, "Comment…", "评论…", "留言…")} />
@@ -13110,6 +13115,7 @@ function LocationPicker({
 }
 
 function Profile({
+  openUnifiedProfile, coverUri, onCoverChange, renderMoments,
   language,
   onLanguage,
   onMomentsPrivacy,
@@ -13136,6 +13142,8 @@ function Profile({
   profilePhoto,
   onProfilePhotoChange,
 }: {
+  openUnifiedProfile?: number; coverUri: string; onCoverChange: (uri: string) => void;
+  renderMoments: (audience: "owner" | "friend" | "public", name: string) => React.ReactNode;
   language: Language;
   onLanguage: (language: Language) => void;
   onNavigate: (tab: Tab) => void;
@@ -13206,12 +13214,16 @@ function Profile({
   const [blockedOpen, setBlockedOpen] = useState(false);
   const [blockedProfiles, setBlockedProfiles] = useState([friends[2].username]);
   const [activityNotifications, setActivityNotifications] = useState(true);
-  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(!!openUnifiedProfile);
+  const [profileTab, setProfileTab] = useState<"moments" | "activity">("moments");
+  const [coverPicking, setCoverPicking] = useState(false);
+  const [profilePhotoError, setProfilePhotoError] = useState("");
+  useEffect(() => { if (openUnifiedProfile) { setPreviewOpen(true); setPreviewAudience("owner"); setProfileTab("moments"); } }, [openUnifiedProfile]);
   const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [connectionsTab, setConnectionsTab] = useState<"friends" | "mutual" | "following" | "followers">("friends");
   const [connectionOrganisation, setConnectionOrganisation] = useState<OrganisationProfile | null>(null);
-  const [previewAudience, setPreviewAudience] = useState<"public" | "friend">(
-    "public",
+  const [previewAudience, setPreviewAudience] = useState<"owner" | "public" | "friend">(
+    "owner",
   );
   const [editOpen, setEditOpen] = useState(false);
   const [contactOpen, setContactOpen] = useState(false);
@@ -13414,9 +13426,9 @@ function Profile({
             <Text style={styles.viewProfileButtonText}>
               {tr(
                 language,
-                "View profile as others see it",
-                "查看他人看到的个人资料",
-                "查看他人看到的個人資料",
+                "My profile & moments",
+                "我的资料与动态",
+                "我的資料與動態",
               )}
             </Text>
           </Pressable>
@@ -13443,9 +13455,9 @@ function Profile({
         visible={previewOpen}
         title={tr(
           language,
-          "Your public profile",
-          "你的公开资料",
-          "你的公開資料",
+          "My profile",
+          "我的个人主页",
+          "我的個人主頁",
         )}
         onClose={() => setPreviewOpen(false)}
       >
@@ -13453,8 +13465,12 @@ function Profile({
           contentContainerStyle={styles.publicProfileBody}
           showsVerticalScrollIndicator={false}
         >
+          <View style={{ height: 180, borderRadius: 16, overflow: "hidden", marginBottom: -36 }}>
+            <Image source={{ uri: coverUri || "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=900" }} style={StyleSheet.absoluteFillObject} />
+            {previewAudience === "owner" && <Pressable accessibilityRole="button" accessibilityLabel={tr(language, "Change profile cover", "更换主页封面", "更換主頁封面")} disabled={coverPicking} style={styles.momentCoverButton} onPress={async () => { setCoverPicking(true); setProfilePhotoError(""); try { const photos = await selectPhotoUris(language, "library", { allowsEditing: true, aspect: [16, 9], limit: 1 }); if (photos[0]) onCoverChange(photos[0]); } catch { setProfilePhotoError(tr(language, "Could not change the cover. Please try again.", "封面更新失败，请重试。", "封面更新失敗，請重試。")); } finally { setCoverPicking(false); } }}><Ionicons name="camera" size={20} color="#FFFFFF" /></Pressable>}
+          </View>
           <View style={styles.publicProfileHero}>
-            <View style={styles.publicProfilePhotoWrap}>
+            <Pressable accessibilityRole="button" accessibilityLabel={tr(language, "Change profile picture", "更换头像", "更換頭像")} disabled={previewAudience !== "owner"} onPress={() => setEditOpen(true)} style={[styles.publicProfilePhotoWrap, { borderWidth: 3, borderColor: "#FFFFFF", borderRadius: 48, backgroundColor: "#FFFFFF" }]}>
             {profilePhoto ? (
               <Image
                 source={{ uri: profilePhoto }}
@@ -13472,20 +13488,23 @@ function Profile({
               </View>
             )}
               <View style={styles.profileAvatarBadge}><VerificationBadge kind={accountRole === "student" && studentVerified ? "student" : "unverified"} language={language} /></View>
-            </View>
+            </Pressable>
             <Text style={styles.publicProfileName}>{displayName}</Text>
             <Text style={styles.friendUsername}>{username}</Text>
             <Text style={styles.profileUni}>
               {accountRole === "student" ? studentVerified ? tr(language, "University College London · Verified student", "伦敦大学学院 · 已认证学生", "倫敦大學學院 · 已認證學生") : studentStatus === "pending" ? tr(language, "Student · Verification pending", "学生 · 待审核", "學生 · 待審核") : tr(language, "Student · Verification needed", "学生 · 尚未认证", "學生 · 尚未認證") : accountRole === "staff" ? tr(language, "Staff account · Verification pending", "员工账号 · 待认证", "員工帳戶 · 待認證") : tr(language, "Organisation account · Verification pending", "机构账号 · 待认证", "機構帳戶 · 待認證")}
             </Text>
             <Text style={[styles.friendInterests, { marginTop: 6 }]}>{tr(language, "Member since", "加入时间", "加入時間")} · {memberSince}</Text>
-            {(previewAudience === "friend" || publicSections.age) && <Text style={[styles.friendInterests, { marginTop: 4 }]}>{tr(language, "Age", "年龄", "年齡")} · {age}</Text>}
-            {(previewAudience === "friend" || publicSections.origin) && <Text style={[styles.friendInterests, { marginTop: 4 }]}><Ionicons name="location-outline" size={13} color={palette.blue} /> {tr(language, "Originally from", "来自", "來自")} {originRegion}, {originCountry}</Text>}
+            {(previewAudience !== "public" || publicSections.age) && <Text style={[styles.friendInterests, { marginTop: 4 }]}>{tr(language, "Age", "年龄", "年齡")} · {age}</Text>}
+            {(previewAudience !== "public" || publicSections.origin) && <Text style={[styles.friendInterests, { marginTop: 4 }]}><Ionicons name="location-outline" size={13} color={palette.blue} /> {tr(language, "Originally from", "来自", "來自")} {originRegion}, {originCountry}</Text>}
           </View>
           <View style={styles.profileSocialStats}>
-            {([{ key: "followers", value: 0, label: tr(language, "Followers", "粉丝", "追蹤者") }, { key: "following", value: followedOrganisations.length + 2, label: tr(language, "Following", "关注中", "追蹤中") }, { key: "friends", value: acceptedFriends.length, label: tr(language, "Friends", "好友", "好友") }, { key: "mutual", value: acceptedFriends.length, label: tr(language, "Mutual", "共同好友", "共同好友") }] as const).map((stat) => <Pressable key={stat.key} accessibilityRole="button" accessibilityLabel={`${stat.label}: ${stat.value}`} accessibilityState={{ disabled: previewAudience !== "friend" }} disabled={previewAudience !== "friend"} style={styles.profileSocialStat} onPress={() => { if (previewAudience !== "friend") return; setConnectionsTab(stat.key); setPreviewOpen(false); setConnectionsOpen(true); }}><Text style={styles.profileSocialStatValue}>{stat.value}</Text><Text style={styles.profileSocialStatLabel}>{stat.label}</Text></Pressable>)}
+            {([{ key: "followers", value: 0, label: tr(language, "Followers", "粉丝", "追蹤者") }, { key: "following", value: followedOrganisations.length + 2, label: tr(language, "Following", "关注中", "追蹤中") }, { key: "friends", value: acceptedFriends.length, label: tr(language, "Friends", "好友", "好友") }, { key: "mutual", value: acceptedFriends.length, label: tr(language, "Mutual", "共同好友", "共同好友") }] as const).map((stat) => <Pressable key={stat.key} accessibilityRole="button" accessibilityLabel={`${stat.label}: ${stat.value}`} accessibilityState={{ disabled: previewAudience === "public" }} disabled={previewAudience === "public"} style={styles.profileSocialStat} onPress={() => { if (previewAudience === "public") return; setConnectionsTab(stat.key); setPreviewOpen(false); setConnectionsOpen(true); }}><Text style={styles.profileSocialStatValue}>{stat.value}</Text><Text style={styles.profileSocialStatLabel}>{stat.label}</Text></Pressable>)}
           </View>
+          {!!profilePhotoError && <Text style={{ color: palette.coral }}>{profilePhotoError}</Text>}
+          {previewAudience === "owner" && <Pressable accessibilityRole="button" style={[styles.faqTopicChip, { alignSelf: "center", marginBottom: 12 }]} onPress={() => setEditOpen(true)}><Text style={styles.faqActionText}>{tr(language, "Edit profile", "编辑资料", "編輯資料")}</Text></Pressable>}
           <View style={styles.profileAudienceTabs}>
+            <Pressable accessibilityRole="button" style={[styles.profileAudienceTab, previewAudience === "owner" && styles.profileAudienceTabActive]} onPress={() => setPreviewAudience("owner")}><Text style={[styles.profileAudienceText, previewAudience === "owner" && styles.profileAudienceTextActive]}>{tr(language, "My view", "自己视角", "自己視角")}</Text></Pressable>
             <Pressable
               style={[
                 styles.profileAudienceTab,
@@ -13507,15 +13526,18 @@ function Profile({
               <Text style={[styles.profileAudienceText, previewAudience === "friend" && styles.profileAudienceTextActive]}>{tr(language, "Friend view", "好友视角", "好友視角")}</Text>
             </Pressable>
           </View>
-          {(previewAudience === "friend" || publicSections.interests) && <View style={styles.publicProfileSection}>
-            <Text style={styles.publicProfileSectionTitle}>{tr(language, "Interests", "兴趣爱好", "興趣愛好")}</Text>
-            <View style={styles.publicProfileInterests}>{tags.map((item) => <Text key={item} style={styles.profileTag}>{item}</Text>)}</View>
-          </View>}
-          {(previewAudience === "friend" || publicSections.bio) && <View style={styles.publicProfileSection}>
+          {(previewAudience !== "public" || publicSections.bio) && <View style={styles.publicProfileSection}>
             <Text style={styles.publicProfileSectionTitle}>{tr(language, "Bio", "个人简介", "個人簡介")}</Text>
             <Text style={styles.publicBio}>{bio}</Text>
           </View>}
-          {previewAudience === "friend" ? (
+          <View style={[styles.profileAudienceTabs, { marginTop: 16 }]}>{(["moments", "activity"] as const).map((item) => <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: profileTab === item }} onPress={() => setProfileTab(item)} style={[styles.profileAudienceTab, profileTab === item && styles.profileAudienceTabActive]}><Text style={[styles.profileAudienceText, profileTab === item && styles.profileAudienceTextActive]}>{item === "moments" ? tr(language, "Moments", "动态", "動態") : tr(language, "Interests & activity", "兴趣与活动", "興趣與活動")}</Text></Pressable>)}</View>
+          {profileTab === "moments" ? renderMoments(previewAudience, displayName) : <>
+          {(previewAudience !== "public" || publicSections.interests) && <View style={styles.publicProfileSection}>
+            <Text style={styles.publicProfileSectionTitle}>{tr(language, "Interests", "兴趣爱好", "興趣愛好")}</Text>
+            <View style={styles.publicProfileInterests}>{tags.map((item) => <Text key={item} style={styles.profileTag}>{item}</Text>)}</View>
+          </View>}
+
+          {previewAudience !== "public" ? (
             <View style={styles.profileConnectionsCard}>
               <View style={styles.profileConnectionsHead}><View><Text style={styles.profileConnectionsTitle}>{tr(language, "Connections", "社交关系", "社交關係")}</Text><Text style={styles.profileConnectionsText}>{tr(language, "Accepted friends can see names and mutual connections.", "已接受的好友可以查看名单和共同好友。", "已接受的好友可以查看名單及共同好友。")}</Text></View><Ionicons name="lock-open-outline" size={19} color={palette.green} /></View>
               <View style={styles.profileConnectionFaces}>{friends.filter((friend) => acceptedFriends.includes(friend.username)).map((friend, index) => <View key={friend.username} style={[styles.avatar, styles.profileConnectionAvatar, { backgroundColor: friend.color, marginLeft: index ? -8 : 0 }]}><Text style={styles.avatarText}>{friend.initials}</Text></View>)}<Text style={styles.profileConnectionNames}>{friends.filter((friend) => acceptedFriends.includes(friend.username)).map((friend) => friend.fullName.split(" ")[0]).join(", ")}</Text></View>
@@ -13525,7 +13547,7 @@ function Profile({
             <View style={styles.profileConnectionsLocked}><Ionicons name="lock-closed-outline" size={18} color={palette.muted} /><Text style={styles.profileConnectionsLockedText}>{tr(language, "People who are not friends can see totals only. Names and connection lists stay private.", "非好友只能看到人数，姓名和社交关系列表保持私密。", "非好友只能看到人數，姓名及社交關係名單保持私隱。")}</Text></View>
           )}
           {!studentVerified && <Text style={{ color: palette.muted, fontSize: 12, lineHeight: 18, marginTop: 16 }}>{tr(language, "Recent activity and reviews will appear after verification and participation.", "完成认证并参与活动后，近期动态与点评会显示在这里。", "完成認證並參與活動後，近期動態與評價會顯示在這裡。")}</Text>}
-          {studentVerified && (previewAudience === "friend" || publicSections.activity || publicSections.reviews) && <View style={styles.profileActivityHead}>
+          {studentVerified && (previewAudience !== "public" || publicSections.activity || publicSections.reviews) && <View style={styles.profileActivityHead}>
             <Text style={styles.friendSectionTitle}>
               {tr(
                 language,
@@ -13536,7 +13558,7 @@ function Profile({
             </Text>
             <Ionicons name="shield-checkmark" size={18} color={palette.green} />
           </View>}
-          {studentVerified && (previewAudience === "friend" || publicSections.reviews) && <View style={styles.profileActivityCard}>
+          {studentVerified && (previewAudience !== "public" || publicSections.reviews) && <View style={styles.profileActivityCard}>
             <Image
               source={{ uri: restaurants[1].image }}
               style={styles.profileActivityImage}
@@ -13553,7 +13575,7 @@ function Profile({
               </Text>
             </View>
           </View>}
-          {studentVerified && (previewAudience === "friend" || publicSections.activity) && <View style={styles.profileActivityCard}>
+          {studentVerified && (previewAudience !== "public" || publicSections.activity) && <View style={styles.profileActivityCard}>
             <Image
               source={{ uri: events[1].image }}
               style={styles.profileActivityImage}
@@ -13577,6 +13599,7 @@ function Profile({
               </Text>
             </View>
           </View>}
+          </>}
           <View style={styles.privacyIntro}>
             <Ionicons
               name="information-circle"
@@ -14842,6 +14865,7 @@ function AppContent({
   }, [translationLanguage]);
   const [friendsArea, setFriendsArea] = useState<"friends" | "moments">("moments");
   const [friendProfileEntry, setFriendProfileEntry] = useState<string | null>(null);
+  const [unifiedProfileEntry, setUnifiedProfileEntry] = useState(0);
   const [momentAuthor, setMomentAuthor] = useState<string | null>(null);
   const [momentsSettings, setMomentsSettings] = useState<MomentsSettings>(defaultMomentsSettings);
   const [momentsPrivacyOpen, setMomentsPrivacyOpen] = useState(false);
@@ -14967,10 +14991,10 @@ function AppContent({
       ) : tab === "food" ? (
         <FoodForum language={language} visitedPlaces={visitedPlaces} setVisitedPlaces={setVisitedPlaces} submittedReviews={submittedReviews} setSubmittedReviews={setSubmittedReviews} reviewerName={accountName || "Sophie Chen"} reviewReplies={restaurantReviewReplies} restaurantProfile={restaurantProfile} />
       ) : tab === "forum" ? (
-        <StudentFaqForum onTranslationLanguageChange={setTranslationLanguage} language={language} followedForums={followedForums} onToggleFollow={toggleFollowForum} entry={forumEntry} translationLanguage={translationLanguage} accountName={accountName || "Sophie C"} canInteract={!studentFeaturesLocked} onVerify={() => setVerificationOpen(true)} posts={forumPosts} onPostsChange={setForumPosts} comments={forumComments} onCommentsChange={setForumComments} likedIds={forumLikedIds} onLikedIdsChange={setForumLikedIds} />
+        <StudentFaqForum profilePhoto={studentProfilePhoto} onTranslationLanguageChange={setTranslationLanguage} language={language} followedForums={followedForums} onToggleFollow={toggleFollowForum} entry={forumEntry} translationLanguage={translationLanguage} accountName={accountName || "Sophie C"} canInteract={!studentFeaturesLocked} onVerify={() => setVerificationOpen(true)} posts={forumPosts} onPostsChange={setForumPosts} comments={forumComments} onCommentsChange={setForumComments} likedIds={forumLikedIds} onLikedIdsChange={setForumLikedIds} />
       ) : tab === "friends" ? (
         <View style={{ flex: 1, minHeight: 0 }}>
-          <StudentMoments followedPublishers={followedOrganisations} onTogglePublisher={toggleOrganisationFollow} entry={momentEntry} settings={momentsSettings} onSettingsChange={setMomentsSettings} profilePhoto={studentProfilePhoto} selectedAuthor={momentAuthor} onSelectAuthor={setMomentAuthor} onOpenEvent={(title) => { setEventDeepLink(title); setTab("events"); }} language={language} accountName={accountName || "Sophie C"} canInteract={!studentFeaturesLocked} onVerify={() => setVerificationOpen(true)} acceptedFriends={acceptedFriends} moments={studentMoments} onMomentsChange={setStudentMoments} onFindFriends={() => { setFriendProfileEntry(null); setFriendsArea("friends"); setTab("messages"); }} />
+          <StudentMoments followedPublishers={followedOrganisations} onTogglePublisher={toggleOrganisationFollow} entry={momentEntry} settings={momentsSettings} onSettingsChange={setMomentsSettings} profilePhoto={studentProfilePhoto} selectedAuthor={momentAuthor} onSelectAuthor={(username) => { if (username === "self") { setUnifiedProfileEntry(Date.now()); setTab("profile"); } else setMomentAuthor(username); }} onOpenEvent={(title) => { setEventDeepLink(title); setTab("events"); }} language={language} accountName={accountName || "Sophie C"} canInteract={!studentFeaturesLocked} onVerify={() => setVerificationOpen(true)} acceptedFriends={acceptedFriends} moments={studentMoments} onMomentsChange={setStudentMoments} onFindFriends={() => { setFriendProfileEntry(null); setFriendsArea("friends"); setTab("messages"); }} />
         </View>
       ) : tab === "bookings" ? (
         <BookingsPage
@@ -15021,6 +15045,10 @@ function AppContent({
         />
       ) : (
         <Profile
+          openUnifiedProfile={unifiedProfileEntry}
+          coverUri={momentsSettings.coverUri}
+          onCoverChange={(coverUri) => setMomentsSettings((current) => ({ ...current, coverUri }))}
+          renderMoments={(audience, name) => (<StudentMoments key={audience} embedded profileAudience={audience} followedPublishers={followedOrganisations} onTogglePublisher={toggleOrganisationFollow}  settings={momentsSettings} onSettingsChange={setMomentsSettings} profilePhoto={studentProfilePhoto} selectedAuthor="self" onSelectAuthor={(username) => { if (username === "self") { setUnifiedProfileEntry(Date.now()); setTab("profile"); } else setMomentAuthor(username); }} onOpenEvent={(title) => { setEventDeepLink(title); setTab("events"); }} language={language} accountName={name} canInteract={!studentFeaturesLocked} onVerify={() => setVerificationOpen(true)} acceptedFriends={acceptedFriends} moments={studentMoments} onMomentsChange={setStudentMoments} onFindFriends={() => { setFriendProfileEntry(null); setFriendsArea("friends"); setTab("messages"); }} />)}
           language={language}
           onMomentsPrivacy={() => setMomentsPrivacyOpen(true)}
           onLanguage={setLanguage}
@@ -15051,7 +15079,7 @@ function AppContent({
           onToggleDarkMode={onToggleDarkMode}
         />
       ),
-    [tab, friendProfileEntry, language, eventDeepLink, favourites, acceptedFriends, followedOrganisations, reservedEvents, pendingCancellation, messageDeepLink, darkMode, eventView, eventAnnouncements, paymentMethods, defaultPaymentId, visitedPlaces, forumPosts, forumComments, forumLikedIds, followedForums, forumEntry, friendsArea, translationLanguage, studentMoments, momentAuthor, momentEntry, momentsSettings, studentProfilePhoto, submittedReviews, restaurantReviewReplies, restaurantProfile, marketplaceConversations, studentDemoRequestStatus, pendingMarketListings, accountRole, onLogout, localStudentStatus, studentFeaturesLocked, accountName, onLanguage],
+    [tab, unifiedProfileEntry, friendProfileEntry, language, eventDeepLink, favourites, acceptedFriends, followedOrganisations, reservedEvents, pendingCancellation, messageDeepLink, darkMode, eventView, eventAnnouncements, paymentMethods, defaultPaymentId, visitedPlaces, forumPosts, forumComments, forumLikedIds, followedForums, forumEntry, friendsArea, translationLanguage, studentMoments, momentAuthor, momentEntry, momentsSettings, studentProfilePhoto, submittedReviews, restaurantReviewReplies, restaurantProfile, marketplaceConversations, studentDemoRequestStatus, pendingMarketListings, accountRole, onLogout, localStudentStatus, studentFeaturesLocked, accountName, onLanguage],
   );
   const tabs = [
     { id: "home" as const, icon: "home", label: words[language].home },
