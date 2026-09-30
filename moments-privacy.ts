@@ -25,14 +25,15 @@ export function momentsHistoryCutoff(history: MomentsHistory, now: number): numb
 
 // The prototype and audience preview use the same rules. A production backend
 // must enforce these rules before returning posts or media to another account.
-export function momentsVisibleTo<T extends { createdAt: number; audience?: "friends" | "private" }>(
+export function momentsVisibleTo<T extends { createdAt: number; audience?: "public" | "friends" | "private" }>(
   posts: T[], settings: MomentsSettings, viewer: "owner" | "friend" | "public", viewerId = "", now = Date.now(),
 ): T[] {
   const sorted = [...posts].sort((a, b) => b.createdAt - a.createdAt);
   if (viewer === "owner") return sorted;
   if (settings.hideMyPostsFrom.includes(viewerId)) return [];
-  if (viewer === "public" && !settings.publicLastTen) return [];
   const cutoff = momentsHistoryCutoff(settings.history, now);
-  const eligible = sorted.filter((post) => post.audience !== "private" && post.createdAt >= cutoff);
-  return viewer === "public" ? eligible.slice(0, 10) : eligible;
+  const eligible = sorted.filter((post) => post.audience === "public" || (post.audience !== "private" && post.createdAt >= cutoff));
+  if (viewer !== "public") return eligible;
+  const publicPreview = settings.publicLastTen ? eligible.slice(0, 10) : [];
+  return eligible.filter((post) => post.audience === "public" || publicPreview.includes(post));
 }
