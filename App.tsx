@@ -16689,7 +16689,7 @@ const styles = StyleSheet.create({
   safe: {
     flex: 1,
     width: "100%",
-    maxWidth: 680,
+    maxWidth: 430,
     alignSelf: "center",
     backgroundColor: palette.white,
   },
@@ -18241,7 +18241,7 @@ const styles = StyleSheet.create({
   modal: {
     flex: 1,
     width: "100%",
-    maxWidth: 680,
+    maxWidth: 430,
     alignSelf: "center",
     backgroundColor: "white",
   },
