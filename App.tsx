@@ -313,6 +313,7 @@ type Tab =
   | "food"
   | "forum"
   | "friends"
+  | "connections"
   | "bookings"
   | "messages"
   | "profile";
@@ -9000,7 +9001,15 @@ function PostPhotoCarousel({ photos, language, onOpen, maxHeight }: { photos: st
   </View>;
 }
 
-function StudentMoments({ embedded = false, profileAudience = "owner", followedPublishers, onTogglePublisher, language, accountName, canInteract, onVerify, acceptedFriends, moments, onMomentsChange, onFindFriends, onOpenEvent, selectedAuthor, onSelectAuthor, settings, onSettingsChange, profilePhoto, entry, onShareMoment }: {
+type MomentsSection = "forum" | "explore" | "foryou" | "following";
+function MomentsNavigation({ language, selected, onSelect, showForum = true }: { language: Language; selected: MomentsSection | null; onSelect: (tab: MomentsSection) => void; showForum?: boolean }) {
+  return <View style={{ flexDirection: "row", borderBottomWidth: 1, borderColor: palette.line, marginBottom: 8 }}>{(["foryou", "following", "explore", "forum"] as const).filter((tab) => showForum || tab !== "forum").map((tab) => <Pressable key={tab} accessibilityRole="tab" accessibilityState={{ selected: selected === tab }} onPress={() => onSelect(tab)} style={{ flex: 1, alignItems: "center", justifyContent: "center", minHeight: 48, borderBottomWidth: 2, borderBottomColor: selected === tab ? palette.blue : "transparent" }}><Text style={{ fontSize: 14, fontWeight: selected === tab ? "800" : "600", color: selected === tab ? palette.blue : palette.muted }}>{tab === "forum" ? tr(language, "Forum", "论坛", "論壇") : tab === "explore" ? tr(language, "Explore", "发现", "探索") : tab === "foryou" ? tr(language, "For You", "推荐", "推薦") : tr(language, "Following", "关注", "關注")}</Text></Pressable>)}</View>;
+}
+
+function StudentMoments({ onOpenForum, initialDiscoveryTab = "foryou", onDiscoveryTabChange, embedded = false, profileAudience = "owner", followedPublishers, onTogglePublisher, language, accountName, canInteract, onVerify, acceptedFriends, moments, onMomentsChange, onFindFriends, onOpenEvent, selectedAuthor, onSelectAuthor, settings, onSettingsChange, profilePhoto, entry, onShareMoment }: {
+  onOpenForum?: () => void;
+  initialDiscoveryTab?: "explore" | "foryou" | "following";
+  onDiscoveryTabChange?: (tab: "explore" | "foryou" | "following") => void;
   onShareMoment: (momentId: string, username: string) => void;
   embedded?: boolean; profileAudience?: "owner" | "friend" | "public";
   followedPublishers: string[];
@@ -9023,7 +9032,7 @@ function StudentMoments({ embedded = false, profileAudience = "owner", followedP
   const [repostDraftId, setRepostDraftId] = useState<string | null>(null);
   const [repostComment, setRepostComment] = useState("");
   const [locationOpen, setLocationOpen] = useState(false);
-  const [discoveryTab, setDiscoveryTab] = useState<"following" | "foryou" | "explore">("foryou");
+  const [discoveryTab, setDiscoveryTab] = useState<"following" | "foryou" | "explore">(initialDiscoveryTab);
   const savedMoments = useSavedPosts("moments", accountName);
   const [activityFilter, setActivityFilter] = useState<"liked" | "commented" | "reposted" | "saved" | null>(null);
   const savedOnly = activityFilter === "saved";
@@ -9229,7 +9238,7 @@ function StudentMoments({ embedded = false, profileAudience = "owner", followedP
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
             <Text style={[styles.pageTitle, { flex: 1, minWidth: 0 }]}>{t("Moments", "朋友圈", "朋友圈")}</Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <Pressable accessibilityRole="button" accessibilityLabel={t("New Post", "新建动态", "新增動態")} accessibilityHint={t("Open the moment composer", "打开动态编辑器", "開啟動態編輯器")} onPress={() => openComposer()} style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, minHeight: 44, paddingHorizontal: 12, borderRadius: 22, backgroundColor: palette.blue }}>
+              <Pressable accessibilityRole="button" accessibilityLabel={t("New Post", "新建动态", "新增動態")} accessibilityHint={t("Open the moment composer", "打开动态编辑器", "開啟動態編輯器")} onPress={() => openComposer()} style={styles.headerPostButton}>
                 <Ionicons name="add" size={20} color="#FFFFFF" />
                 <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "800" }}>{t("New Post", "新建动态", "新增動態")}</Text>
               </Pressable>
@@ -9241,9 +9250,9 @@ function StudentMoments({ embedded = false, profileAudience = "owner", followedP
           </View>
           <Text style={styles.faqCardSummary}>{t("Your people. New discoveries.", "好友动态，发现精彩。", "好友動態，發現精彩。")}</Text>
         </View>
-        <View style={{ flexDirection: "row", borderBottomWidth: 1, borderColor: palette.line }}>{(["explore", "foryou", "following"] as const).map((tab) => <Pressable key={tab} accessibilityRole="tab" accessibilityState={{ selected: !activityFilter && discoveryTab === tab }} onPress={() => { setDiscoveryTab(tab); setActivityFilter(null); setDiscoveryTopic("all"); }} style={{ flex: 1, alignItems: "center", paddingVertical: 12, borderBottomWidth: 3, borderBottomColor: !activityFilter && discoveryTab === tab ? palette.blue : "transparent" }}><Text style={{ fontSize: 16, fontWeight: "800", color: !activityFilter && discoveryTab === tab ? palette.blue : palette.muted }}>{tab === "following" ? t("Following", "关注", "關注") : tab === "foryou" ? t("For You", "推荐", "推薦") : t("Explore", "发现", "探索")}</Text></Pressable>)}</View>
+        <MomentsNavigation language={language} selected={activityFilter ? null : discoveryTab} onSelect={(next) => { if (next === "forum") { onOpenForum?.(); return; } setDiscoveryTab(next); onDiscoveryTabChange?.(next); setActivityFilter(null); setDiscoveryTopic("all"); }} showForum={!!onOpenForum} />
         <TextInput accessibilityLabel={t("Search moments", "搜索动态", "搜尋動態")} value={momentSearch} onChangeText={setMomentSearch} placeholder={t("Search moments, food & events", "搜索动态、美食和活动", "搜尋動態、美食和活動")} placeholderTextColor={palette.muted} style={[styles.faqInput, { marginBottom: 0 }]} />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>{(["liked", "commented", "reposted", "saved"] as const).map((filter) => <Pressable key={filter} accessibilityRole="button" accessibilityState={{ selected: activityFilter === filter }} style={[styles.faqTopicChip, activityFilter === filter && styles.faqTopicChipActive]} onPress={() => { setActivityFilter((current) => current === filter ? null : filter); setDiscoveryTopic("all"); setMomentSearch(""); }}><Text style={[styles.faqTopicText, activityFilter === filter && styles.faqTopicTextActive]}>{filter === "liked" ? t("Liked", "赞过", "讚過") : filter === "commented" ? t("Commented", "评论过", "留言過") : filter === "reposted" ? t("Reposted", "转发过", "轉發過") : t("Saved", "收藏", "收藏")}</Text></Pressable>)}{!activityFilter && discoveryTab === "explore" && (["all", "campus", "food", "events", "beauty", "travel", "lifestyle"] as const).map((topic) => <Pressable key={topic} accessibilityRole="button" accessibilityState={{ selected: discoveryTopic === topic }} onPress={() => setDiscoveryTopic(topic)} style={[styles.faqTopicChip, discoveryTopic === topic && styles.faqTopicChipActive]}><Text style={styles.faqTopicText}>{topic === "all" ? t("All", "全部", "全部") : topic === "food" ? t("Food", "美食", "美食") : topic === "events" ? t("Events", "活动", "活動") : topic === "campus" ? t("University", "大学", "大學") : topic === "beauty" ? t("Beauty", "美妆", "美妝") : topic === "travel" ? t("Travel", "旅行", "旅行") : t("Lifestyle", "生活", "生活")}</Text></Pressable>)}</ScrollView>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}><Pressable accessibilityRole="button" accessibilityState={{ selected: !activityFilter && discoveryTopic === "all" }} style={[styles.faqTopicChip, !activityFilter && discoveryTopic === "all" && styles.faqTopicChipActive]} onPress={() => { setActivityFilter(null); setDiscoveryTopic("all"); setMomentSearch(""); }}><Text style={[styles.faqTopicText, !activityFilter && discoveryTopic === "all" && styles.faqTopicTextActive]}>{t("All", "全部", "全部")}</Text></Pressable>{(["liked", "commented", "reposted", "saved"] as const).map((filter) => <Pressable key={filter} accessibilityRole="button" accessibilityState={{ selected: activityFilter === filter }} style={[styles.faqTopicChip, activityFilter === filter && styles.faqTopicChipActive]} onPress={() => { setActivityFilter((current) => current === filter ? null : filter); setDiscoveryTopic("all"); setMomentSearch(""); }}><Text style={[styles.faqTopicText, activityFilter === filter && styles.faqTopicTextActive]}>{filter === "liked" ? t("Liked", "赞过", "讚過") : filter === "commented" ? t("Commented", "评论过", "留言過") : filter === "reposted" ? t("Reposted", "转发过", "轉發過") : t("Saved", "收藏", "收藏")}</Text></Pressable>)}{!activityFilter && discoveryTab === "explore" && (["campus", "food", "events", "beauty", "travel", "lifestyle"] as const).map((topic) => <Pressable key={topic} accessibilityRole="button" accessibilityState={{ selected: discoveryTopic === topic }} onPress={() => setDiscoveryTopic(topic)} style={[styles.faqTopicChip, discoveryTopic === topic && styles.faqTopicChipActive]}><Text style={styles.faqTopicText}>{topic === "food" ? t("Food", "美食", "美食") : topic === "events" ? t("Events", "活动", "活動") : topic === "campus" ? t("University", "大学", "大學") : topic === "beauty" ? t("Beauty", "美妆", "美妝") : topic === "travel" ? t("Travel", "旅行", "旅行") : t("Lifestyle", "生活", "生活")}</Text></Pressable>)}</ScrollView>
         {!activityFilter && discoveryTab === "explore" && discoveryTopic === "campus" && <><Text style={styles.faqCardSummary}>{t("Choose a university — no location sharing needed.", "选择大学，无需分享实时位置。", "選擇大學，無需分享即時位置。")}</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>{["UCL", "King’s College London", "LSE", "Imperial College London"].map((uni) => <Pressable key={uni} accessibilityRole="button" accessibilityState={{ selected: campus === uni }} onPress={() => setCampus(uni)} style={[styles.faqTopicChip, campus === uni && styles.faqTopicChipActive]}><Text style={styles.faqTopicText}>{uni}</Text></Pressable>)}</ScrollView></>}
         <Text style={styles.faqMeta}>{activityFilter && !savedOnly ? t("Your activity · this preview session", "你的互动 · 当前预览会话", "你的互動 · 目前預覽工作階段") : savedOnly ? t("Saved moments · bookmarks on this device", "收藏动态 · 书签保存在此设备", "收藏動態 · 書籤儲存在此裝置") : discoveryTab === "following" ? t("Friends and the places & events you follow", "好友，以及你关注的餐厅和活动", "好友，以及你關注的餐廳和活動") : discoveryTab === "foryou" ? t("Popular public posts · ranked by likes and comments", "热门公开动态 · 按点赞和评论排序", "熱門公開動態 · 按讚好和留言排序") : discoveryTopic === "campus" ? t(`Browsing ${campus} · public posts and your friends`, `浏览 ${campus} · 公开动态和好友`, `瀏覽 ${campus} · 公開動態和好友`) : t("Discover public posts by topic", "按主题发现公开动态", "按主題探索公開動態")}</Text>
       </View>}
@@ -9460,7 +9469,8 @@ const forumSourceLabels: Record<string, ForumCopy> = {
   "UKCISA · Healthcare": ["UKCISA · Healthcare", "UKCISA · 医疗服务", "UKCISA · 醫療服務"],
 };
 
-function StudentFaqForum({ profilePhoto, language, translationLanguage, onTranslationLanguageChange, accountName, canInteract, onVerify, posts, onPostsChange, comments, onCommentsChange, likedIds, onLikedIdsChange, followedForums, onToggleFollow, entry }: {
+function StudentFaqForum({ momentsNavigation, profilePhoto, language, translationLanguage, onTranslationLanguageChange, accountName, canInteract, onVerify, posts, onPostsChange, comments, onCommentsChange, likedIds, onLikedIdsChange, followedForums, onToggleFollow, entry }: {
+  momentsNavigation?: React.ReactNode;
   profilePhoto: string;
   onTranslationLanguageChange: (language: Language) => void;
   followedForums: Record<string, string[]>; onToggleFollow: (id: string) => void; entry: { id: string; nonce: number } | null;
@@ -9627,7 +9637,8 @@ function StudentFaqForum({ profilePhoto, language, translationLanguage, onTransl
       <View style={styles.modalBody}><Text style={styles.formDesc}>{tr(language, "Choose a language. This also updates your translation preference.", "选择语言，同时更新你的翻译偏好。", "選擇語言，同時更新你的翻譯偏好。")}</Text>{(["EN", "简体", "繁體"] as Language[]).map((target) => <Pressable key={target} accessibilityRole="button" style={styles.momentSettingsRow} onPress={() => { onTranslationLanguageChange(target); setTranslated(true); setTranslatePickerOpen(false); }}><Text style={styles.faqActionText}>{target === "EN" ? "English" : target === "简体" ? "简体中文" : "繁體中文"}</Text><Ionicons name="chevron-forward" size={18} color={palette.blue} /></Pressable>)}</View>
     </Sheet>
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}><View style={{ flex: 1 }}><Text style={styles.pageTitle}>{tr(language, "Forum", "社区论坛", "社區論壇")}</Text><Text style={styles.faqCardSummary}>{tr(language, "Good questions. Shared experiences.", "分享经验，一起寻找答案。", "分享經驗，一起尋找答案。")}</Text></View><Pressable accessibilityRole="button" accessibilityLabel={tr(language, "Ask the community", "向社区提问", "向社區提問")} style={{ flexDirection: "row", alignItems: "center", gap: 5, backgroundColor: palette.blue, borderRadius: 22, paddingHorizontal: 14, minHeight: 42 }} onPress={() => startForumDraft()}><Ionicons name="add" size={20} color="#FFFFFF" /><Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 13 }}>{tr(language, "Ask", "提问", "提問")}</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel={tr(language, "My forum posts", "我的论坛帖子", "我的論壇帖子")} onPress={() => setMyPostsOpen(true)} style={{ width: 46, height: 46, alignItems: "center", justifyContent: "center" }}><ChatPersonAvatar name={authorName} photo={profilePhoto} size={42} /><View pointerEvents="none" style={{ position: "absolute", right: 0, bottom: 0, width: 19, height: 19, borderRadius: 10, borderWidth: 2, borderColor: "#FFFFFF", backgroundColor: palette.blue, alignItems: "center", justifyContent: "center" }}><Ionicons name="pencil" size={10} color="#FFFFFF" /></View></Pressable></View>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}><View style={{ flex: 1 }}><Text style={styles.pageTitle}>{momentsNavigation ? tr(language, "Moments", "朋友圈", "朋友圈") : tr(language, "Forum", "社区论坛", "社區論壇")}</Text><Text style={styles.faqCardSummary}>{tr(language, "Good questions. Shared experiences.", "分享经验，一起寻找答案。", "分享經驗，一起尋找答案。")}</Text></View><Pressable accessibilityRole="button" accessibilityLabel={tr(language, "Ask the community", "向社区提问", "向社區提問")} style={styles.headerPostButton} onPress={() => startForumDraft()}><Ionicons name="add" size={20} color="#FFFFFF" /><Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 13 }}>{tr(language, "Ask", "提问", "提問")}</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel={tr(language, "My forum posts", "我的论坛帖子", "我的論壇帖子")} accessibilityHint={tr(language, "View and manage posts you have published", "查看和管理你发布的帖子", "查看和管理你發佈的帖子")} onPress={() => setMyPostsOpen(true)} style={{ minWidth: 54, minHeight: 48, alignItems: "center", justifyContent: "center", gap: 3 }}><Ionicons name="documents-outline" size={23} color={palette.blue} /><Text style={{ color: palette.blue, fontSize: 10, fontWeight: "700" }}>{tr(language, "My posts", "我的帖子", "我的帖子")}</Text></Pressable></View>
+      {momentsNavigation}
       <View style={styles.search}><Ionicons name="search-outline" size={18} color={palette.muted} /><TextInput style={styles.searchInput} value={query} onChangeText={setQuery} placeholder={tr(language, "Search questions, guides or #hashtags…", "搜索问题、指南或 #话题…", "搜尋問題、指南或 #話題…")} placeholderTextColor="#8B98AD" />{!!query && <Pressable accessibilityRole="button" accessibilityLabel={tr(language, "Clear search", "清除搜索", "清除搜尋")} onPress={() => setQuery("")}><Ionicons name="close-circle" size={20} color={palette.muted} /></Pressable>}</View>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.faqChipRow}>{(["all", "following", "saved", "popular_posts", "popular_forums", "guides", "community"] as const).map((item) => <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: section === item }} style={{ paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 3, borderBottomColor: section === item ? palette.blue : "transparent" }} onPress={() => setSection(item)}><Text style={{ fontSize: 15, fontWeight: "800", color: section === item ? palette.blue : palette.muted }}>{item === "saved" ? tr(language, "Saved", "收藏", "收藏") : item === "all" ? tr(language, "Explore", "发现", "探索") : item === "popular_forums" ? tr(language, "Popular forums", "热门话题", "熱門話題") : item === "popular_posts" ? tr(language, "Popular posts", "热门帖子", "熱門帖子") : item === "guides" ? tr(language, "Official guides", "官方指南", "官方指南") : item === "community" ? tr(language, "Student posts", "学生帖子", "學生帖子") : tr(language, "Following", "已关注", "已關注")}</Text></Pressable>)}</ScrollView>
       {section === "saved" && <Text style={[styles.faqCardSummary, { marginVertical: 8 }]}>{tr(language, "Your bookmarks · saved on this browser, not synced between devices. Preview posts still reset on reload.", "你的收藏 · 保存在此浏览器，不跨设备同步。演示帖子仍会在刷新后重置。", "你的收藏 · 儲存在此瀏覽器，不跨裝置同步。示範帖子仍會在重新載入後重設。")}</Text>}
@@ -14966,6 +14977,7 @@ function AppContent({
   const [momentAuthor, setMomentAuthor] = useState<string | null>(null);
   const [momentsSettings, setMomentsSettings] = useState<MomentsSettings>(defaultMomentsSettings);
   const [momentsPrivacyOpen, setMomentsPrivacyOpen] = useState(false);
+  const [momentsDiscoveryTab, setMomentsDiscoveryTab] = useState<"explore" | "foryou" | "following">("foryou");
   const [studentMoments, setStudentMoments] = useState<StudentMoment[]>(initialStudentMoments);
   const [sharedMomentMessages, setSharedMomentMessages] = useState<{ id: string; username: string; momentId: string }[]>([]);
   const shareMomentToFriend = (momentId: string, username: string) => {
@@ -15054,7 +15066,7 @@ function AppContent({
           onOpenVerification={() => setVerificationOpen(true)}
           setTab={setTab}
           openService={(nextService) => { setServiceOrder(null); setService(nextService); }}
-          openFriends={() => { setFriendProfileEntry(null); setFriendsArea("friends"); setTab("messages"); }}
+          openFriends={() => { setFriendProfileEntry(null); setFriendsArea("friends"); setTab("connections"); }}
           openMoments={() => { setMomentAuthor(null); setMomentEntry(null); setFriendsArea("moments"); setTab("friends"); }}
           openEvent={(eventTitle) => { setEventDeepLink(eventTitle); setTab("events"); }}
           favourites={favourites}
@@ -15095,10 +15107,10 @@ function AppContent({
       ) : tab === "food" ? (
         <FoodForum language={language} visitedPlaces={visitedPlaces} setVisitedPlaces={setVisitedPlaces} submittedReviews={submittedReviews} setSubmittedReviews={setSubmittedReviews} reviewerName={accountName || "Sophie Chen"} reviewReplies={restaurantReviewReplies} restaurantProfile={restaurantProfile} />
       ) : tab === "forum" ? (
-        <StudentFaqForum profilePhoto={studentProfilePhoto} onTranslationLanguageChange={setTranslationLanguage} language={language} followedForums={followedForums} onToggleFollow={toggleFollowForum} entry={forumEntry} translationLanguage={translationLanguage} accountName={accountName || "Sophie C"} canInteract={!studentFeaturesLocked} onVerify={() => setVerificationOpen(true)} posts={forumPosts} onPostsChange={setForumPosts} comments={forumComments} onCommentsChange={setForumComments} likedIds={forumLikedIds} onLikedIdsChange={setForumLikedIds} />
+        <StudentFaqForum momentsNavigation={<MomentsNavigation language={language} selected="forum" onSelect={(next) => { if (next !== "forum") { setMomentsDiscoveryTab(next); setMomentAuthor(null); setTab("friends"); } }} />} profilePhoto={studentProfilePhoto} onTranslationLanguageChange={setTranslationLanguage} language={language} followedForums={followedForums} onToggleFollow={toggleFollowForum} entry={forumEntry} translationLanguage={translationLanguage} accountName={accountName || "Sophie C"} canInteract={!studentFeaturesLocked} onVerify={() => setVerificationOpen(true)} posts={forumPosts} onPostsChange={setForumPosts} comments={forumComments} onCommentsChange={setForumComments} likedIds={forumLikedIds} onLikedIdsChange={setForumLikedIds} />
       ) : tab === "friends" ? (
         <View style={{ flex: 1, minHeight: 0 }}>
-          <StudentMoments onShareMoment={shareMomentToFriend} followedPublishers={followedOrganisations} onTogglePublisher={toggleOrganisationFollow} entry={momentEntry} settings={momentsSettings} onSettingsChange={setMomentsSettings} profilePhoto={studentProfilePhoto} selectedAuthor={momentAuthor} onSelectAuthor={(username) => { if (username === "self") { setUnifiedProfileEntry(Date.now()); setTab("profile"); } else if (username && friends.some((friend) => friend.username === username)) { setFriendProfileEntry(username); setFriendsArea("friends"); setTab("messages"); } else setMomentAuthor(username); }} onOpenEvent={(title) => { setEventDeepLink(title); setTab("events"); }} language={language} accountName={accountName || "Sophie C"} canInteract={!studentFeaturesLocked} onVerify={() => setVerificationOpen(true)} acceptedFriends={acceptedFriends} moments={studentMoments} onMomentsChange={setStudentMoments} onFindFriends={() => { setFriendProfileEntry(null); setFriendsArea("friends"); setTab("messages"); }} />
+          <StudentMoments onOpenForum={() => setTab("forum")} initialDiscoveryTab={momentsDiscoveryTab} onDiscoveryTabChange={setMomentsDiscoveryTab} onShareMoment={shareMomentToFriend} followedPublishers={followedOrganisations} onTogglePublisher={toggleOrganisationFollow} entry={momentEntry} settings={momentsSettings} onSettingsChange={setMomentsSettings} profilePhoto={studentProfilePhoto} selectedAuthor={momentAuthor} onSelectAuthor={(username) => { if (username === "self") { setUnifiedProfileEntry(Date.now()); setTab("profile"); } else if (username && friends.some((friend) => friend.username === username)) { setFriendProfileEntry(username); setFriendsArea("friends"); setTab("connections"); } else setMomentAuthor(username); }} onOpenEvent={(title) => { setEventDeepLink(title); setTab("events"); }} language={language} accountName={accountName || "Sophie C"} canInteract={!studentFeaturesLocked} onVerify={() => setVerificationOpen(true)} acceptedFriends={acceptedFriends} moments={studentMoments} onMomentsChange={setStudentMoments} onFindFriends={() => { setFriendProfileEntry(null); setFriendsArea("friends"); setTab("connections"); }} />
         </View>
       ) : tab === "bookings" ? (
         <BookingsPage
@@ -15122,12 +15134,11 @@ function AppContent({
             setTab("messages");
           }}
         />
-      ) : tab === "messages" ? (
-        friendsArea === "friends" ? <View style={{ flex: 1 }}><View style={{ paddingHorizontal: 20, paddingTop: 18 }}><Text style={[styles.pageTitle, { marginBottom: 14 }]}>{words[language].messages}</Text><MessagesFriendsTabs language={language} selected="friends" onChats={() => { setFriendProfileEntry(null); setFriendsArea("moments"); }} onFriends={() => setFriendProfileEntry(null)} /></View>{studentFeaturesLocked ? <StudentFeatureLocked language={language} status={localStudentStatus} feature="friends" onVerify={() => setVerificationOpen(true)} /> : <FriendsHub renderMoments={(username) => (<StudentMoments onShareMoment={shareMomentToFriend} embedded key={username} followedPublishers={followedOrganisations} onTogglePublisher={toggleOrganisationFollow}  settings={momentsSettings} onSettingsChange={setMomentsSettings} profilePhoto={studentProfilePhoto} selectedAuthor={username} onSelectAuthor={(username) => { if (username === "self") { setUnifiedProfileEntry(Date.now()); setTab("profile"); } else if (username && friends.some((friend) => friend.username === username)) { setFriendProfileEntry(username); setFriendsArea("friends"); setTab("messages"); } else setMomentAuthor(username); }} onOpenEvent={(title) => { setEventDeepLink(title); setTab("events"); }} language={language} accountName={accountName || "Sophie C"} canInteract={!studentFeaturesLocked} onVerify={() => setVerificationOpen(true)} acceptedFriends={acceptedFriends} moments={studentMoments} onMomentsChange={setStudentMoments} onFindFriends={() => { setFriendProfileEntry(null); setFriendsArea("friends"); setTab("messages"); }} />)} initialProfile={friendProfileEntry} onMessage={(username) => { setMessageDeepLink(username === "@londonlatte" ? "friend" : username); setFriendsArea("moments"); }} onViewMoments={(username) => { setMomentAuthor(username); setTab("friends"); }} language={language} acceptedFriends={acceptedFriends} setAcceptedFriends={setAcceptedFriends} followedOrganisations={followedOrganisations} onToggleOrganisationFollow={toggleOrganisationFollow} />}</View> :
+      ) : tab === "messages" || tab === "connections" ? (
+        tab === "connections" ? <View style={{ flex: 1 }}><View style={{ paddingHorizontal: 20, paddingTop: 18 }}><Text style={[styles.pageTitle, { marginBottom: 14 }]}>{tr(language, "Friends", "好友", "好友")}</Text></View>{studentFeaturesLocked ? <StudentFeatureLocked language={language} status={localStudentStatus} feature="friends" onVerify={() => setVerificationOpen(true)} /> : <FriendsHub renderMoments={(username) => (<StudentMoments onShareMoment={shareMomentToFriend} embedded key={username} followedPublishers={followedOrganisations} onTogglePublisher={toggleOrganisationFollow}  settings={momentsSettings} onSettingsChange={setMomentsSettings} profilePhoto={studentProfilePhoto} selectedAuthor={username} onSelectAuthor={(username) => { if (username === "self") { setUnifiedProfileEntry(Date.now()); setTab("profile"); } else if (username && friends.some((friend) => friend.username === username)) { setFriendProfileEntry(username); setFriendsArea("friends"); setTab("connections"); } else setMomentAuthor(username); }} onOpenEvent={(title) => { setEventDeepLink(title); setTab("events"); }} language={language} accountName={accountName || "Sophie C"} canInteract={!studentFeaturesLocked} onVerify={() => setVerificationOpen(true)} acceptedFriends={acceptedFriends} moments={studentMoments} onMomentsChange={setStudentMoments} onFindFriends={() => { setFriendProfileEntry(null); setFriendsArea("friends"); setTab("connections"); }} />)} initialProfile={friendProfileEntry} onMessage={(username) => { setMessageDeepLink(username === "@londonlatte" ? "friend" : username); setFriendsArea("moments"); setTab("messages"); }} onViewMoments={(username) => { setMomentAuthor(username); setTab("friends"); }} language={language} acceptedFriends={acceptedFriends} setAcceptedFriends={setAcceptedFriends} followedOrganisations={followedOrganisations} onToggleOrganisationFollow={toggleOrganisationFollow} />}</View> :
         <MessagesPage
           sharedMomentMessages={sharedMomentMessages} sharedMoments={studentMoments} onOpenSharedMoment={(id) => { setMomentAuthor(null); setMomentEntry({ id, nonce: Date.now() }); setTab("friends"); }}
-          onOpenFriends={() => { setFriendProfileEntry(null); setFriendsArea("friends"); }}
-          onViewFriendProfile={(username) => { setFriendProfileEntry(username); setFriendsArea("friends"); }}
+          onViewFriendProfile={(username) => { setFriendProfileEntry(username); setFriendsArea("friends"); setTab("connections"); }}
           language={language}
           previewBookings={previewBookings}
           statusUpdates={statusUpdates}
@@ -15153,7 +15164,7 @@ function AppContent({
           openUnifiedProfile={unifiedProfileEntry}
           coverUri={momentsSettings.coverUri}
           onCoverChange={(coverUri) => setMomentsSettings((current) => ({ ...current, coverUri }))}
-          renderMoments={(audience, name) => (<StudentMoments onShareMoment={shareMomentToFriend} key={audience} embedded profileAudience={audience} followedPublishers={followedOrganisations} onTogglePublisher={toggleOrganisationFollow}  settings={momentsSettings} onSettingsChange={setMomentsSettings} profilePhoto={studentProfilePhoto} selectedAuthor="self" onSelectAuthor={(username) => { if (username === "self") { setUnifiedProfileEntry(Date.now()); setTab("profile"); } else if (username && friends.some((friend) => friend.username === username)) { setFriendProfileEntry(username); setFriendsArea("friends"); setTab("messages"); } else setMomentAuthor(username); }} onOpenEvent={(title) => { setEventDeepLink(title); setTab("events"); }} language={language} accountName={name} canInteract={!studentFeaturesLocked} onVerify={() => setVerificationOpen(true)} acceptedFriends={acceptedFriends} moments={studentMoments} onMomentsChange={setStudentMoments} onFindFriends={() => { setFriendProfileEntry(null); setFriendsArea("friends"); setTab("messages"); }} />)}
+          renderMoments={(audience, name) => (<StudentMoments onShareMoment={shareMomentToFriend} key={audience} embedded profileAudience={audience} followedPublishers={followedOrganisations} onTogglePublisher={toggleOrganisationFollow}  settings={momentsSettings} onSettingsChange={setMomentsSettings} profilePhoto={studentProfilePhoto} selectedAuthor="self" onSelectAuthor={(username) => { if (username === "self") { setUnifiedProfileEntry(Date.now()); setTab("profile"); } else if (username && friends.some((friend) => friend.username === username)) { setFriendProfileEntry(username); setFriendsArea("friends"); setTab("connections"); } else setMomentAuthor(username); }} onOpenEvent={(title) => { setEventDeepLink(title); setTab("events"); }} language={language} accountName={name} canInteract={!studentFeaturesLocked} onVerify={() => setVerificationOpen(true)} acceptedFriends={acceptedFriends} moments={studentMoments} onMomentsChange={setStudentMoments} onFindFriends={() => { setFriendProfileEntry(null); setFriendsArea("friends"); setTab("connections"); }} />)}
           language={language}
           onMomentsPrivacy={() => setMomentsPrivacyOpen(true)}
           onLanguage={setLanguage}
@@ -15184,12 +15195,12 @@ function AppContent({
           onToggleDarkMode={onToggleDarkMode}
         />
       ),
-    [tab, unifiedProfileEntry, friendProfileEntry, language, eventDeepLink, favourites, acceptedFriends, followedOrganisations, reservedEvents, pendingCancellation, messageDeepLink, darkMode, eventView, eventAnnouncements, paymentMethods, defaultPaymentId, visitedPlaces, forumPosts, forumComments, forumLikedIds, followedForums, forumEntry, friendsArea, translationLanguage, studentMoments, momentAuthor, momentEntry, momentsSettings, studentProfilePhoto, submittedReviews, restaurantReviewReplies, restaurantProfile, marketplaceConversations, studentDemoRequestStatus, pendingMarketListings, accountRole, onLogout, localStudentStatus, studentFeaturesLocked, accountName, onLanguage],
+    [tab, momentsDiscoveryTab, unifiedProfileEntry, friendProfileEntry, language, eventDeepLink, favourites, acceptedFriends, followedOrganisations, reservedEvents, pendingCancellation, messageDeepLink, darkMode, eventView, eventAnnouncements, paymentMethods, defaultPaymentId, visitedPlaces, forumPosts, forumComments, forumLikedIds, followedForums, forumEntry, friendsArea, translationLanguage, studentMoments, momentAuthor, momentEntry, momentsSettings, studentProfilePhoto, submittedReviews, restaurantReviewReplies, restaurantProfile, marketplaceConversations, studentDemoRequestStatus, pendingMarketListings, accountRole, onLogout, localStudentStatus, studentFeaturesLocked, accountName, onLanguage],
   );
   const tabs = [
     { id: "home" as const, icon: "home", label: words[language].home },
+    { id: "connections" as const, icon: "people", label: tr(language, "Friends", "好友", "好友") },
     { id: "friends" as const, icon: "images", label: tr(language, "Moments", "朋友圈", "朋友圈") },
-    { id: "forum" as const, icon: "people-circle-outline", label: words[language].forum },
     {
       id: "messages" as const,
       icon: "chatbubbles",
@@ -15250,10 +15261,12 @@ function AppContent({
               onPress={() => {
                 setEventDeepLink(null);
                 if (item.id === "home") setEventView("browse");
+                if (item.id === "connections") { setFriendProfileEntry(null); setFriendsArea("friends"); }
+                if (item.id === "messages") { setFriendProfileEntry(null); setFriendsArea("moments"); }
                 setTab(item.id);
               }}
             >
-              <View>{item.id === "forum" ? <ForumIcon size={24} color={tab === item.id ? palette.blue : palette.muted} /> : <Ionicons
+              <View>{item.id === "friends" ? <View style={{ width: 26, height: 26, overflow: "hidden", opacity: tab === "friends" || tab === "forum" ? 1 : 0.65 }}><Image source={require("./assets/unimate-logo.png")} resizeMode="contain" style={{ position: "absolute", width: 88, height: 35, left: -3, top: -4 }} /></View> : <Ionicons
                 name={
                   (tab === item.id || item.icon.endsWith("-outline") ? item.icon : `${item.icon}-outline`) as any
                 }
@@ -15263,7 +15276,7 @@ function AppContent({
               <Text
                 style={[
                   styles.tabText,
-                  tab === item.id && styles.tabTextActive,
+                  (tab === item.id || (item.id === "friends" && tab === "forum")) && styles.tabTextActive,
                 ]}
               >
                 {item.label}
@@ -16918,6 +16931,7 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
+  headerPostButton: { width: 110, height: 44, flexShrink: 0, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, paddingHorizontal: 12, borderRadius: 22, backgroundColor: palette.blue },
   appFrame: { flex: 1, backgroundColor: "#F4F7FB" },
   demoSwitchButton: { position: "absolute", right: 18, bottom: 82, zIndex: 20, flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 18, backgroundColor: "#184D94", shadowColor: "#092B5B", shadowOpacity: 0.18, shadowRadius: 7, elevation: 4 },
   demoSwitchText: { color: "#FFFFFF", fontSize: 10, fontWeight: "800" },
