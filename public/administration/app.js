@@ -1,0 +1,369 @@
+const app = document.querySelector('#app'), notice = document.querySelector('#notice'), dialog = document.querySelector('#detail');
+let session, section = 'overview', page = 1, requestVersion = 0, search = '', statusFilter = '', bookingDivision='all', menuExpanded=false;
+const names = {overview:'Overview',users:'Users',events:'Event approvals',approvals:'Approvals',posts:'Posts',reports:'Reports',bookings:'Bookings',teams:'Teams',schedule:'Staff calendar',messages:'Message centre',admins:'Admin accounts',audit:'Activity log',settings:'Account settings'};
+let selectedTeam='all',teamQuery='',teamPage=1,staffView='pending';
+names.teams='Staff Approval';
+names.documents='Company documents';names.invoices='Invoices';
+names.students='Accounts to approve';names.users='Approved user records';
+names.approvals='Application approvals';names.reports='Post reports';names.comment_reports='Comment reports';names.account_reports='Account reports';
+const teamNames={office:'Admin Office workers',cleaners:'Cleaners',drivers:'Drivers',movers:'Movers'};
+const roleLabel=role=>({owner:'UniMate Owner',superadmin:'SuperAdmin',admin:'Admin',viewer:'Read-only (legacy)'})[role]||role;
+const fullAccess=()=>['owner','superadmin'].includes(session.admin.role);
+let language='EN';try{const saved=localStorage.getItem('unimate-admin-language');if(['EN','简体','繁體'].includes(saved))language=saved;}catch{}
+const words={
+  'Message centre':['消息中心','訊息中心'],'New conversation':['新对话','新對話'],'Your to-do list':['待办事项','待辦事項'],'New':['新','新'],'Seen':['已查看','已查看'],'Open task':['处理任务','處理任務'],'Save locally':['保存到本地','儲存至本地'],
+  'UniMate Owner workspace':['UniMate 所有者工作区','UniMate 擁有者工作區'],'Full access':['完整权限','完整權限'],'All available administration tools':['所有可用管理工具','所有可用管理工具'],'Not connected yet':['尚未连接','尚未連接'],
+  'Manage user records and account status.':['管理用户记录及账户状态。','管理用戶記錄及帳戶狀態。'],'Review events before publication.':['发布前审核活动。','發佈前審核活動。'],'Review pending application records.':['审核待处理的申请记录。','審核待處理的申請記錄。'],'Browse and moderate local content.':['查看及管理本地内容。','查看及管理本地內容。'],'Review content reported by 3 distinct users.':['审核被3名不同用户举报的内容。','審核被3名不同用戶舉報的內容。'],'Review decisions and access changes.':['查看审核决定及权限变更。','查看審核決定及權限變更。'],'Manage your password, SuperAdmins and Admins.':['管理您的密码、超级管理员及管理员。','管理您的密碼、超級管理員及管理員。'],'All financial booking records are visible to you.':['您可查看所有预订金额记录。','您可查看所有預訂金額記錄。'],
+  'Event approvals':['活动审批','活動審批'],'Cleaning':['清洁','清潔'],'Moving':['搬家','搬家'],'Airport transfer':['机场接送','機場接送'],'All bookings':['所有预订','所有預訂'],'Other bookings':['其他预订','其他預訂'],'Back to Account settings':['返回账户设置','返回帳戶設定'],
+  'Overview':['概览','概覽'],'Users':['用户','用戶'],'Approvals':['审批','審批'],'Posts':['帖子','貼文'],'Reports':['举报','舉報'],'Bookings':['预订','預訂'],'Admin accounts':['管理员账户','管理員帳戶'],'Activity log':['操作记录','操作記錄'],'Account settings':['账户设置','帳戶設定'],
+  'ADMINISTRATION':['管理后台','管理後台'],'Sign out':['退出登录','登出'],'Welcome back':['欢迎回来','歡迎回來'],'Sign in':['登录','登入'],'Create account':['创建账户','建立帳戶'],'Create your admin account':['创建管理员账户','建立管理員帳戶'],'Your name':['您的姓名','您的姓名'],'Name':['姓名','姓名'],'Email address':['电子邮箱','電子郵箱'],'Password':['密码','密碼'],'Confirm password':['确认密码','確認密碼'],
+  'Refresh':['刷新','重新整理'],'Search':['搜索','搜尋'],'All statuses':['所有状态','所有狀態'],'Record':['记录','記錄'],'Status':['状态','狀態'],'Date':['日期','日期'],'Details':['详情','詳情'],'View':['查看','查看'],'Manage':['管理','管理'],'Close':['关闭','關閉'],'Previous':['上一页','上一頁'],'Next':['下一页','下一頁'],'Loading…':['加载中…','載入中…'],
+  'Your account':['您的账户','您的帳戶'],'Change password':['更改密码','更改密碼'],'Current password':['当前密码','目前密碼'],'New password':['新密码','新密碼'],'Confirm new password':['确认新密码','確認新密碼'],'Update password & sign out':['更新密码并退出','更新密碼並登出'],'Manage admin access':['管理管理员权限','管理管理員權限'],'Manage admin accounts':['管理管理员账户','管理管理員帳戶'],
+  'Add admin account':['添加管理员账户','新增管理員帳戶'],'Access level':['权限级别','權限級別'],'Account status':['账户状态','帳戶狀態'],'Reason for access change':['权限变更原因','權限變更原因'],'Save access':['保存权限','儲存權限'],'Create admin account':['创建管理员账户','建立管理員帳戶'],'Manage admin access':['管理管理员权限','管理管理員權限'],
+  'Active':['启用','啟用'],'Deactivated':['已停用','已停用'],'active':['启用','啟用'],'deactivated':['已停用','已停用'],'pending':['待审批','待審批'],'approved':['已批准','已批准'],'rejected':['已拒绝','已拒絕'],'published':['已发布','已發布'],'hidden':['已隐藏','已隱藏'],'open':['待处理','待處理'],'resolved':['已处理','已處理'],'dismissed':['已驳回','已駁回'],'suspended':['已暂停','已暫停'],
+  'Community members':['社区成员','社群成員'],'Awaiting approval':['待审批','待審批'],'Open reports':['待处理举报','待處理舉報'],'Booking records':['预订记录','預訂記錄'],'Your administration workspace':['您的管理工作区','您的管理工作區'],
+  'Notifications':['通知','通知'],'No pending reviews':['暂无待审核事项','暫無待審核事項'],'Review approvals':['查看审批','查看審批'],'Review reports':['查看举报','查看舉報'],'Pending approvals':['待审批事项','待審批事項'],'Reported content':['被举报内容','被舉報內容'],'Use light mode':['使用浅色模式','使用淺色模式'],'Use dark mode':['使用深色模式','使用深色模式'],'Language':['语言','語言'],
+  'These are pending review tasks in this local dashboard, not push or email notifications.':['这是本地后台的待审核任务，不是推送或邮件通知。','這是本地後台的待審核任務，不是推播或電郵通知。'],
+  'A clear view of your community and what needs attention.':['了解社区动态和待处理事项。','了解社群動態和待處理事項。'],'Review records and keep every decision accountable.':['查看记录，追踪每项决定。','查看記錄，追蹤每項決定。'],'No records yet. Your local workspace is ready.':['暂无记录。本地工作区已准备就绪。','暫無記錄。本地工作區已準備就緒。'],
+  'Local only · Separate from the live UniMate app.':['仅限本地 · 独立于线上 UniMate 应用。','僅限本地 · 獨立於線上 UniMate 應用。'],
+  'Sign in to your local administration workspace.':['登录您的本地管理工作区。','登入您的本地管理工作區。'],
+  'PUBLIC DEMO — Fictional sample records only. Read-only: no real accounts, documents or live services.':['本地工作区 — 这些记录尚未连接线上 UniMate 应用。示例数据均为虚构。','本地工作區 — 這些記錄尚未連接線上 UniMate 應用。範例資料均為虛構。']
+};
+const localizedNodes=new Map();
+const t=text=>words[text]?.[language==='简体'?0:1]&&language!=='EN'?words[text][language==='简体'?0:1]:text;
+function el(tag, text, cls) { const n=document.createElement(tag); if(text!==undefined){const node=document.createTextNode(t(text));n.append(node);if(words[text])localizedNodes.set(node,text);} if(cls)n.className=cls; return n; }
+function applyLanguage(){document.documentElement.lang=language==='EN'?'en':language==='简体'?'zh-Hans':'zh-Hant';for(const [node,source] of localizedNodes){if(node.isConnected)node.textContent=t(source);else localizedNodes.delete(node);}document.querySelectorAll('[data-language]').forEach(select=>{select.value=language;select.setAttribute('aria-label',t('Language'));});updateThemeButtons();document.querySelectorAll('[data-notifications]').forEach(b=>b.setAttribute('aria-label',t('Notifications')));}
+function brandLogo() {
+  const frame=el('div',undefined,'brand-logo'),img=el('img');img.src='./unimate-logo.png';img.alt='UNIMATE 优你伴 Administration';img.width=160;img.height=64;
+  const mark=img.cloneNode();mark.alt='';mark.setAttribute('aria-hidden','true');mark.className='brand-colour-mark';
+  frame.append(img,mark);if(session?.admin){frame.setAttribute('role','button');frame.tabIndex=0;frame.setAttribute('aria-label','UniMate home dashboard');const home=()=>{section='overview';page=1;search='';statusFilter='';init().catch(e=>message(e.message));};frame.onclick=home;frame.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();home();}};}return frame;
+}
+const systemTheme=window.matchMedia('(prefers-color-scheme: dark)');
+let themePreference='system';
+try{const saved=localStorage.getItem('unimate-admin-theme');if(['light','dark','system'].includes(saved))themePreference=saved;}catch{}
+function applyTheme(){document.documentElement.dataset.theme=themePreference==='system'?(systemTheme.matches?'dark':'light'):themePreference;updateThemeButtons();}
+systemTheme.addEventListener('change',applyTheme);applyTheme();
+function icon(name){
+  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');for(const [k,v] of Object.entries({viewBox:'0 0 24 24',fill:'none',stroke:'currentColor','stroke-width':'1.65','stroke-linecap':'round','stroke-linejoin':'round','aria-hidden':'true'}))svg.setAttribute(k,v);
+  const paths={moon:'M20.8 13A8.9 8.9 0 0 1 11 3.2 9 9 0 1 0 20.8 13Z',sun:'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.4 1.4M17.6 17.6 19 19M5 19l1.4-1.4M17.6 6.4 19 5',bell:'M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4',globe:'M21 12a9 9 0 1 0-18 0 9 9 0 0 0 18 0M3 12h18M12 3c-5 5-5 13 0 18 5-5 5-13 0-18M5 7h14M5 17h14'};
+  Object.assign(paths,{Home:'M3 10 12 3l9 7M5 9v12h5v-7h4v7h5V9',People:'M16 21v-3a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v3M13 7a4 4 0 1 0-8 0 4 4 0 0 0 8 0M18 4a4 4 0 0 1 0 8M18 15a4 4 0 0 1 4 4v2',Reviews:'M9 4H4v17h16V4h-5M9 2h6v4H9ZM8 13l3 3 5-6',Bookings:'M3 6h18v15H3ZM3 10h18M7 3v5M17 3v5',Activity:'M4 3h16v18H4ZM8 16v-4M12 16V8M16 16v-6','Message centre':'M3 3h15v12H8l-5 4ZM7 7h7M7 11h5M18 8h3v13l-5-3h-5',Settings:'M20 21v-3a5 5 0 0 0-5-5H9a5 5 0 0 0-5 5v3M16 6a4 4 0 1 0-8 0 4 4 0 0 0 8 0'});
+  const path=document.createElementNS(svg.namespaceURI,'path');path.setAttribute('d',paths[name]);svg.append(path);return svg;
+}
+function updateThemeButtons(){document.querySelectorAll('[data-theme-toggle]').forEach(b=>{const dark=document.documentElement.dataset.theme==='dark';b.replaceChildren(icon(dark?'sun':'moon'));b.setAttribute('aria-label',t(dark?'Use light mode':'Use dark mode'));b.title=t(dark?'Use light mode':'Use dark mode');});}
+function headerControls(){
+  const controls=el('div',undefined,'header-controls'),toggle=button('',()=>{themePreference=document.documentElement.dataset.theme==='dark'?'light':'dark';try{localStorage.setItem('unimate-admin-theme',themePreference);}catch{}applyTheme();},'icon-button');toggle.dataset.themeToggle='';controls.append(toggle);
+  if(session?.admin){const bell=button('',()=>notifications().catch(error=>message(error.message)),'icon-button');bell.dataset.notifications='';bell.setAttribute('aria-label',t('Notifications'));bell.title=t('Notifications');bell.append(icon('bell'));controls.append(bell);}
+  const languageBox=el('div',undefined,'language-pill'),select=el('select');select.dataset.language='';select.setAttribute('aria-label',t('Language'));
+  for(const value of ['EN','简体','繁體']){const option=el('option',value);option.value=value;select.append(option);}select.value=language;
+  select.onchange=()=>{language=select.value;try{localStorage.setItem('unimate-admin-language',language);}catch{}applyLanguage();};languageBox.append(icon('globe'),select);controls.append(languageBox);return controls;
+}
+async function refreshNotifications(){if(!session?.admin)return;try{const data=await api('tasks');const count=data.unseen;document.querySelectorAll('[data-notifications]').forEach(b=>{b.querySelector('.notification-count')?.remove();if(count){b.append(el('span',count>99?'99+':String(count),'notification-count'));}b.title=t('Your to-do list')+' · '+count+' new / '+data.total+' pending';b.setAttribute('aria-label',t('Notifications')+' · '+count);});}catch{/* Leave the control available to retry. */}}
+async function notifications(taskPage=1){
+  dialog.replaceChildren(el('h2','Your to-do list'),el('p','Loading…'));dialog.append(button('Close',()=>dialog.close()));if(!dialog.open)dialog.showModal();
+  try{const data=await api('tasks?page='+taskPage);if(!dialog.open)return;dialog.replaceChildren(el('h2','Your to-do list'),el('p',data.unseen+' new · '+data.total+' pending. Opening a task marks it seen, not completed.','muted'));
+    for(const task of data.rows){const row=el('section',undefined,'notification-item');row.append(el('span',task.is_new?'New':'Seen','badge'),el('h3',task.title),el('p',task.category+' · '+new Date(task.created_at).toLocaleString(),'muted'),button('Open task',async()=>{try{const result=await api(task.resource+'/'+encodeURIComponent(task.record_id));await api('tasks/seen',{resource:task.resource,record_id:task.record_id});dialog.close();details(result.row,result.canManage,task.resource);await refreshNotifications();}catch(error){message(error.message);}}));dialog.append(row);}
+    if(!data.total)dialog.append(el('p','No pending reviews','empty'));
+    const pager=el('div',undefined,'pager');if(taskPage>1)pager.append(button('Previous',()=>notifications(taskPage-1)));if(taskPage*25<data.total)pager.append(button('Next',()=>notifications(taskPage+1)));dialog.append(pager,button('Close',()=>dialog.close()));await refreshNotifications();
+  }catch(error){if(dialog.open){dialog.replaceChildren(el('h2','Notifications'),el('p',error.message),button('Close',()=>dialog.close()));}}
+}
+function button(text, action, cls) { const b=el('button',text,cls); b.type='button'; b.onclick=action; return b; }
+function message(text) { notice.textContent=text; }
+async function api(path,data){return previewApi(path,data);}
+
+function field(form,label,name,type='text') {
+  if(['bookingId','memberId'].includes(name)){
+    const l=el('label',name==='bookingId'?'Booking':'Staff member'),q=el('input'),select=el('select'),find=button('Find',async()=>{try{select.replaceChildren();const paths=name==='bookingId'?['bookings?q='+encodeURIComponent(q.value)]:['cleaners','drivers','movers'].map(team=>'teams?team='+team+'&q='+encodeURIComponent(q.value));for(const path of paths){const data=await api(path);for(const row of data.rows){if(row.status==='deactivated')continue;const o=el('option',name==='bookingId'?row.title+' · '+row.service:row.name+' · '+teamNames[row.team]);o.value=row.id;select.append(o);}}if(!select.options.length){const o=el('option','No matches — refine your search');o.value='';select.append(o);}}catch(e){message(e.message);}});q.placeholder='Search by name or title';q.setAttribute('aria-label','Search '+(name==='bookingId'?'bookings':'staff'));select.name=name;select.required=true;l.append(q,find,select);form.append(l);find.click();return select;
+  }
+  const l=el('label',label),i=el(type==='textarea'?'textarea':'input');i.name=name;i.required=true;if(type!=='textarea')i.type=type;l.append(i);form.append(l);return i;
+}
+async function init() {
+  session=await api('session');app.replaceChildren();
+  if(!session.admin){auth();return;}
+  const shell=el('div',undefined,'shell'+(menuExpanded?' menu-expanded':'')),side=el('aside'),brand=el('div');brand.append(el('small','ADMINISTRATION'));
+  const nav=el('nav');nav.setAttribute('aria-label','Administration');
+  const available=Object.keys(names).filter(k=>k!=='admins'&&(fullAccess()||['overview','events','approvals','posts','reports','comment_reports','settings'].includes(k)));
+  if(available.includes('students')){available.splice(available.indexOf('students'),1);available.splice(available.indexOf('users'),0,'students');}
+  if(!available.includes(section)&&!(section==='admins'&&fullAccess()))section='overview';
+  for(const key of available){
+    if(key==='bookings'){
+      const group=el('div',undefined,'nav-bookings');group.append(el('h2','Bookings','nav-section-title'));
+      for(const [division,label] of [['all','All bookings'],['cleaning','Cleaning'],['moving','Moving'],['airport_transfer','Airport transfer'],['other','Other bookings']]){const b=button(label,()=>{section='bookings';bookingDivision=division;page=1;search='';statusFilter='';render().catch(error=>message(error.message));});b.dataset.section='bookings';b.dataset.division=division;group.append(b);}nav.append(group);continue;
+    }
+    const b=button(names[key],()=>{section=key;page=1;search='';statusFilter='';render().catch(e=>message(e.message));});b.dataset.section=key;nav.append(b);
+  }
+  const footer=el('footer');footer.append(el('span',session.admin.name+' · '+roleLabel(session.admin.role)));
+  side.append(brand,nav,footer);
+  const rail=el('div',undefined,'nav-rail');rail.setAttribute('aria-label','Workspace groups');rail.append(brandLogo());
+  const groups=[['⌂','Home',['overview']],['♙','People',['students','users','teams']],['✓','Reviews',['events','approvals','posts','account_reports','reports','comment_reports']],['▣','Bookings',['bookings','schedule']],['☷','Activity',['audit','invoices','documents']],['☏','Message centre',['messages']],['⚙','Settings',['settings']]];
+  const selectGroup=(keys)=>{nav.querySelectorAll(':scope > *').forEach(n=>{const key=n.dataset.section||n.querySelector('button')?.dataset.section;n.hidden=!keys.includes(key);});};
+  const railBottom=el('div',undefined,'rail-bottom');
+  for(const [symbol,label,keys] of groups){const permitted=keys.filter(k=>available.includes(k));if(!permitted.length)continue;const b=button('',()=>{selectGroup(permitted);section=permitted[0];page=1;search='';statusFilter='';render().catch(e=>message(e.message));},'rail-button');b.dataset.sections=JSON.stringify(permitted);b.append(icon(label==='Calendar'?'Bookings':label),el('span',label==='Settings'?'Account settings':label,'rail-label'));b.title=label;b.setAttribute('aria-label',label);(label==='Message centre'||label==='Settings'?railBottom:rail).append(b);}
+  const controls=headerControls(),bell=controls.querySelector('[data-notifications]');if(bell)controls.prepend(bell);railBottom.insertBefore(controls,railBottom.lastChild);railBottom.lastChild.setAttribute('aria-label','Account settings');
+  const collapse=button('',()=>{menuExpanded=!menuExpanded;shell.classList.toggle('menu-expanded',menuExpanded);updateMenu();},'rail-button');const updateMenu=()=>{collapse.replaceChildren(el('span',menuExpanded?'‹':'›'),el('span',menuExpanded?'Close menu':'Open menu','rail-label'));collapse.setAttribute('aria-label',menuExpanded?'Close menu':'Open menu');collapse.setAttribute('aria-expanded',String(menuExpanded));};updateMenu();rail.insertBefore(collapse,rail.children[2]||null);rail.append(railBottom);
+  shell.append(rail,side,el('main'));app.append(shell);selectGroup(groups.find(g=>g[2].includes(section))?.[2]||['overview']);applyLanguage();await render();
+}
+function auth(){
+  const box=el('main',undefined,'auth'),form=el('form');box.append(brandLogo(),el('h1',session.needsSetup?'Create your admin account':'Welcome back'),el('p',session.needsSetup?'Set up the first superadmin for this local installation. Choose a unique password.':'Sign in to your local administration workspace.','muted'));
+  if(session.needsSetup)field(form,'Your name','name').autocomplete='name';
+  field(form,'Email address','email','email').autocomplete='username';const password=field(form,'Password','password','password');password.autocomplete=session.needsSetup?'new-password':'current-password';password.minLength=session.needsSetup?8:1;password.maxLength=128;
+  if(session.needsSetup){
+    const hint=el('p','Use 8–128 characters, including at least one capital letter (A–Z) and one special character, such as !, @ or #.','muted');hint.id='password-help';password.setAttribute('aria-describedby',hint.id);form.append(hint);
+    const confirm=field(form,'Confirm password','confirmPassword','password');confirm.autocomplete='new-password';confirm.maxLength=128;
+    const validate=()=>{
+      password.setCustomValidity(password.value && (!/[A-Z]/.test(password.value)||!/[^\p{L}\p{N}\s]/u.test(password.value))?'Include a capital letter (A–Z) and a special character, such as !, @ or #.':'');
+      confirm.setCustomValidity(confirm.value && confirm.value!==password.value?'Passwords do not match.':'');
+    };
+    password.addEventListener('input',validate);confirm.addEventListener('input',validate);
+  }
+  const submit=el('button',session.needsSetup?'Create account':'Sign in','primary');submit.type='submit';form.append(submit);
+  form.onsubmit=async e=>{e.preventDefault();submit.disabled=true;message('');try{const data=Object.fromEntries(new FormData(form));await api(session.needsSetup?'setup':'login',data);if(session.needsSetup){await init();message('Account created. Sign in with your new password.');}else await init();}catch(error){message(error.message);}finally{submit.disabled=false;}};
+  const top=el('div',undefined,'auth-controls');top.append(headerControls());box.prepend(top);box.append(form,el('p','Local only · Separate from the live UniMate app.','muted'));app.append(box);applyLanguage();
+}
+async function render(){
+  refreshNotifications();
+  const version=++requestVersion, current=section,main=app.querySelector('main');message('');
+  app.querySelectorAll('.rail-button[data-sections]').forEach(b=>b.setAttribute('aria-current',JSON.parse(b.dataset.sections).includes(current==='admins'?'settings':current)?'page':'false'));
+  app.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-current',b.dataset.section===(current==='admins'?'settings':current)&&(!b.dataset.division||b.dataset.division===bookingDivision)?'page':'false'));
+  main.replaceChildren(el('div','PUBLIC DEMO — Fictional sample records only. Read-only: no real accounts, documents or live services.','banner'),el('h1',names[current]),el('p',current==='overview'?'A clear view of your community and what needs attention.':'Review records and keep every decision accountable.','muted'));
+  if(current==='settings'){accountSettings(main);return;}
+  if(current==='messages'){await messageCentre(main,version);return;}
+  if(current==='invoices'){await invoicesView(main,version);return;}
+  if(current==='documents'){await documentsView(main,version,false);return;}
+  if(current==='teams'){
+    const tabs=el('div',undefined,'actions');for(const [value,label] of [['pending','Staff accounts to approve'],['approved','Already approved']]){const b=button(label,()=>{staffView=value;page=1;search='';statusFilter='';render().catch(e=>message(e.message));},staffView===value?'primary':'');b.setAttribute('aria-pressed',String(staffView===value));tabs.append(b);}main.append(tabs);
+    if(staffView==='approved'){await teamsView(main,version);return;}
+  }
+  if(current==='schedule'){await scheduleView(main,version);return;}
+  const loading=el('p','Loading…','muted');main.append(loading);
+  const data=await api(current==='overview'?'overview':(['events','students','teams'].includes(current)?'approvals':current==='comment_reports'?'reports':current)+'?'+new URLSearchParams({page:String(page),q:search,status:['students','teams'].includes(current)?'pending':statusFilter,...(current==='events'?{kind:'event'}:current==='students'?{accounts:'1'}:current==='teams'?{kind:'staff'}:{}),...(['reports','comment_reports'].includes(current)?{type:current==='reports'?'post':'comment'}:{}),...(current==='bookings'?{division:bookingDivision}:{})}));if(version!==requestVersion)return;loading.remove();
+  if(current==='overview'){
+    main.append(button('Your to-do list',()=>notifications().catch(error=>message(error.message)),'primary'));
+    const stats=el('div',undefined,'stats');for(const [k,label] of [['users','Community members'],['approvals','Awaiting approval'],['reports','Open reports'],['bookings','Booking records']]){if(!(k in data))continue;const card=button('',()=>{if(k==='reports'){notifications().catch(e=>message(e.message));return;}section=k==='approvals'?'approvals':k;page=1;search='';statusFilter=k==='approvals'?'pending':'';init().catch(e=>message(e.message));},'stat');card.setAttribute('aria-label',label);card.append(el('span',label),el('strong',String(data[k])));stats.append(card);}main.append(stats);
+    return;
+  }
+  const panel=el('section',undefined,'panel'),toolbar=el('div',undefined,'toolbar');toolbar.append(el('span',data.total+' records'),button('Refresh',()=>render().catch(e=>message(e.message))));panel.append(toolbar);
+  if(current==='admins')panel.prepend(button('Back to Account settings',()=>{section='settings';render().catch(error=>message(error.message));}));
+  if(current==='events')panel.append(el('p','Review each event before publication. Approve or reject with a reason. These local decisions are not yet connected to the public event feed.','banner'));
+  if(current==='teams')panel.append(el('p','Review Cleaning, Moving and Airport transfer staff applications. Owner or SuperAdmin approval adds staff to their matching team. Live signup and app access are not connected yet.','banner'));
+  if(current==='students')panel.append(el('p','Pending account applications only. Staff approval automatically adds the applicant to their requested service team and creates their local user record. The live signup service is not connected.','banner'));
+  if(current==='users'){
+    const form=el('form',undefined,'search-form'),query=el('input');query.type='search';query.placeholder='Search name or email';query.setAttribute('aria-label','Search user records');query.value=search;form.append(query,el('button','Search'));form.onsubmit=e=>{e.preventDefault();search=query.value.trim();page=1;render().catch(error=>message(error.message));};panel.append(form,el('p','Last online is recorded user activity, not admin viewing. Missing profile details are shown explicitly.','muted'));
+    const wrap=el('div',undefined,'table-wrap'),table=el('table'),head=el('tr');for(const label of ['Name','Age','University','Email','Account type','Status','Member since','Last online','Details'])head.append(el('th',label));table.append(head);
+    for(const row of data.rows){const tr=el('tr');for(const value of [row.name,row.age??'Not provided',row.university||'Not provided',row.email,row.kind,row.status,new Date(row.created_at).toLocaleDateString('en-GB'),row.last_online?new Date(row.last_online).toLocaleString('en-GB'):'Not recorded'])tr.append(el('td',String(value)));const td=el('td');td.append(button('View',()=>details(row,data.canManage,'users')));tr.append(td);table.append(tr);}wrap.append(table);panel.append(wrap);if(!data.rows.length)panel.append(el('p','No user records have been imported or approved locally yet.','empty'));const pager=el('div',undefined,'pager');if(page>1)pager.append(button('Previous',()=>{page--;render();}));if(page*25<data.total)pager.append(button('Next',()=>{page++;render();}));panel.append(pager);main.append(panel);return;
+  }
+  if(current==='bookings'){
+    main.querySelector('h1').textContent=t(({all:'All bookings',cleaning:'Cleaning',moving:'Moving',airport_transfer:'Airport transfer',other:'Other bookings'})[bookingDivision]);
+  }
+  if(['reports','comment_reports'].includes(current))panel.append(el('p',(current==='reports'?'Moments and forum posts':'Comments')+' appear here after 3 different users report them. Repeat reports count once. Content stays published until a moderator decides otherwise.','banner'));
+  if(current==='account_reports')panel.append(el('p','Reports about user accounts. Reviewing a report does not automatically suspend the account. Owner and SuperAdmin access only.','banner'));
+  if(current==='approvals')panel.append(el('p','Applications awaiting permission, including student, staff and society applications. Event approvals and student approvals also have dedicated views. These are not abuse reports.','banner'));
+  const searchForm=el('form',undefined,'search-form'),query=el('input');query.type='search';query.placeholder='Search names, emails or titles';query.setAttribute('aria-label','Search records');query.maxLength=100;query.value=search;searchForm.append(query);
+  const statuses={users:['active','suspended'],admins:['active','deactivated'],approvals:['pending','approved','rejected'],events:['pending','approved','rejected'],posts:['published','hidden'],reports:['open','resolved','dismissed']};
+  let filter;
+  statuses.comment_reports=statuses.reports;statuses.account_reports=statuses.reports;
+  if(statuses[current]){filter=el('select');filter.setAttribute('aria-label','Filter by status');for(const value of ['',...statuses[current]]){const o=el('option',value||'All statuses');o.value=value;filter.append(o);}filter.value=statusFilter;searchForm.append(filter);}
+  const find=el('button','Search');find.type='submit';searchForm.append(find);searchForm.onsubmit=e=>{e.preventDefault();search=query.value.trim();statusFilter=filter?.value||'';page=1;render().catch(e=>message(e.message));};panel.append(searchForm);
+  if(current==='admins'){
+    panel.append(el('p','UniMate Owner manages SuperAdmins. SuperAdmins manage Admins. Admins cannot access money, invoices, bookings or accounts.','muted'),button('Add admin account',()=>adminEditor(),'primary'));
+  }
+  const wrap=el('div',undefined,'table-wrap'),table=el('table'),head=el('thead'),hr=el('tr');for(const label of ['Record',current==='audit'?'Action':'Status',current==='admins'?'Access level':'Date','Details'])hr.append(el('th',label));head.append(hr);table.append(head);const tbody=el('tbody');
+  for(const row of data.rows){const tr=el('tr'),title=el('td');title.append(el('strong',row.title||row.name||row.actor_name),el('p',row.email||row.author||row.applicant||row.customer||row.reporter||row.resource));const status=el('td'),statusText=current==='admins'?(row.active?'active':'deactivated'):row.status||row.action;status.append(el('span',current==='admins'?(row.active?'Active':'Deactivated'):statusText,'badge '+statusText));const action=el('td');action.append(button(current==='admins'?'Manage':'View',()=>current==='admins'?adminEditor(row):details(row,data.canManage,current)));tr.append(title,status,el('td',current==='admins'?roleLabel(row.role):new Date(row.created_at).toLocaleDateString()),action);tbody.append(tr);}table.append(tbody);wrap.append(table);panel.append(wrap);
+  if(!data.rows.length)panel.append(el('p','No records yet. Your local workspace is ready.','empty'));
+  const pager=el('div',undefined,'pager'),previous=button('Previous',()=>{page--;render().catch(e=>message(e.message));}),next=button('Next',()=>{page++;render().catch(e=>message(e.message));});previous.disabled=page===1;next.disabled=page*25>=data.total;pager.append(previous,el('span','Page '+page+' of '+Math.max(1,Math.ceil(data.total/25))),next);panel.append(pager);main.append(panel);
+}
+async function teamsView(main,version){
+  const tabs=el('div',undefined,'actions');for(const [key,label] of Object.entries({all:'All',...teamNames}))tabs.append(button(label,()=>{selectedTeam=key;teamPage=1;render();},key===selectedTeam?'primary':''));main.append(tabs);
+  const data=await api('teams?'+new URLSearchParams({team:selectedTeam,q:teamQuery,page:teamPage}));if(version!==requestVersion)return;
+  const panel=el('section',undefined,'panel');panel.append(el('h2',selectedTeam==='all'?'All staff':teamNames[selectedTeam]),el('p','Staff sign up for Cleaning, Moving or Airport transfer. Owner or SuperAdmin approval automatically adds them to the matching team. No manual staff creation. Live signup and app access are not connected yet.','muted'));
+  const searchForm=el('form',undefined,'search-form'),query=el('input');query.placeholder='Search team members';query.setAttribute('aria-label','Search team members');query.value=teamQuery;const submit=el('button','Search');searchForm.append(query,submit);searchForm.onsubmit=e=>{e.preventDefault();teamQuery=query.value;teamPage=1;render();};panel.append(searchForm);
+  for(const row of data.rows){const item=el('div',undefined,'toolbar');item.append(el('strong',row.name),el('span',row.email),el('span',teamNames[row.team]),el('span',row.status,'badge'),button('HR details',()=>hrEditor(row).catch(e=>message(e.message))),button('Work areas',()=>areasEditor(row)),button(row.status==='active'?'Deactivate':'Activate',()=>teamEditor(row)));panel.append(item);}
+  if(!data.rows.length)panel.append(el('p','No team members yet.','empty'));
+  const pager=el('div',undefined,'pager');if(teamPage>1)pager.append(button('Previous',()=>{teamPage--;render();}));if(teamPage*25<data.total)pager.append(button('Next',()=>{teamPage++;render();}));panel.append(pager);main.append(panel);
+}
+async function documentsView(main,version,invoices){
+  const data=await api('documents?'+new URLSearchParams({page,category:invoices?'invoice':''}));if(version!==requestVersion)return;
+  main.append(el('p','Restricted local PDF records · Owner and SuperAdmin only. Not a production vault: no malware scanning, encryption-at-rest management or backup service. Keep authoritative originals elsewhere. Invoice files are not payment or accounting records.','banner'));
+  const panel=el('section',undefined,'panel');panel.append(button(invoices?'Upload invoice PDF':'Upload document PDF',()=>documentUpload(invoices),'primary'));
+  for(const row of data.rows){const item=el('div',undefined,'toolbar'),link=el('a','Download PDF');link.href='/api/documents/'+encodeURIComponent(row.id);link.download='document.pdf';item.append(el('strong',row.title),el('span',row.category),el('span',row.expires_on?'Expiry: '+row.expires_on:'No expiry recorded'),link);panel.append(item);}if(!data.rows.length)panel.append(el('p',invoices?'No invoice files yet.':'No company documents yet.','empty'));const pager=el('div',undefined,'pager');if(page>1)pager.append(button('Previous',()=>{page--;render();}));if(page*25<data.total)pager.append(button('Next',()=>{page++;render();}));panel.append(pager);main.append(panel);
+}
+let invoiceFilter='open';
+const money=value=>new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(value/100);
+async function invoicesView(main,version){
+  const data=await api('invoices?'+new URLSearchParams({status:invoiceFilter,q:search,page}));if(version!==requestVersion)return;
+  main.append(el('p','Automatically created when a service is marked Completed. Local records only—not sent to customers or connected to app payments. References: UM-INV-YYYY-000001. Current terms: due on completion.','banner'));
+  const stats=el('div',undefined,'stats');for(const [label,value] of [['Overdue',data.counts.overdue],['Due',data.counts.due],['Outstanding',money(data.outstanding_pence)]]){const card=el('div',undefined,'stat');card.append(el('span',label),el('strong',String(value)));stats.append(card);}main.append(stats);
+  const filters=el('div',undefined,'actions');for(const [key,label] of [['open','All open'],['due','Due'],['overdue','Overdue'],['closed','All closed'],['paid','Paid'],['paid_off_platform','Paid off platform'],['void','Void'],['all','All invoices']])filters.append(button(label+' · '+data.counts[key],()=>{invoiceFilter=key;page=1;render().catch(e=>message(e.message));},invoiceFilter===key?'primary':''));main.append(filters);
+  const form=el('form',undefined,'search-form'),q=el('input');q.type='search';q.placeholder='Search invoice reference or customer';q.setAttribute('aria-label','Search invoices');q.value=search;form.append(q,el('button','Search'));form.onsubmit=e=>{e.preventDefault();search=q.value.trim();page=1;render().catch(e=>message(e.message));};main.append(form);
+  const panel=el('section',undefined,'panel'),wrap=el('div',undefined,'table-wrap'),table=el('table'),head=el('tr');for(const name of ['Invoice','Customer','Amount','Issued','Due','Booking','Status','Details'])head.append(el('th',name));table.append(head);
+  for(const row of data.rows){const tr=el('tr');for(const value of [row.reference,row.customer,money(row.amount_pence),row.issued_on,row.due_on])tr.append(el('td',value));const booking=el('td');booking.append(button(row.description,()=>details({id:row.booking_id},false,'bookings')));tr.append(booking,el('td',row.status==='open'?(row.due_on<data.today?'Overdue':'Due'):row.status.replaceAll('_',' ')));const action=el('td');action.append(button('View',()=>invoiceDetails(row)));tr.append(action);table.append(tr);}wrap.append(table);panel.append(wrap);if(!data.rows.length)panel.append(el('p','No invoices match this view. Completing a confirmed service creates its invoice automatically.','empty'));const pager=el('div',undefined,'pager');if(page>1)pager.append(button('Previous',()=>{page--;render();}));if(page*25<data.total)pager.append(button('Next',()=>{page++;render();}));panel.append(pager);main.append(panel);
+}
+function invoiceDetails(row){dialog.replaceChildren(el('h2',row.reference),el('p',row.customer+' · '+row.description),el('h3',money(row.amount_pence)),el('p','Issued '+row.issued_on+' · Due '+row.due_on),el('p','Local invoice record. No PDF, tax invoice or customer delivery has been generated.','muted'));if(row.status==='open'){const form=el('form');field(form,'Payment / void evidence and reason','reason');for(const [status,label] of [['paid','Record paid'],['paid_off_platform','Record paid off platform'],['void','Void invoice']]){const b=el('button',label);b.value=status;form.append(b);}form.onsubmit=async e=>{e.preventDefault();const status=e.submitter.value;try{await api('invoices/'+row.id,{status,reason:form.elements.reason.value});dialog.close();await render();}catch(error){message(error.message);}};dialog.append(form);}dialog.append(button('Close',()=>dialog.close()));dialog.showModal();}
+function documentUpload(invoices){dialog.replaceChildren(el('h2',invoices?'Upload invoice PDF':'Upload company document'));const form=el('form');field(form,'Title','title').maxLength=120;const label=el('label','Category'),category=el('select');category.name='category';for(const key of invoices?['invoice']:['insurance','company','policy','contract','other','invoice']){const o=el('option',key);o.value=key;category.append(o);}label.append(category);form.append(label);field(form,'Expiry / renewal date (optional)','expires_on','date').required=false;const file=field(form,'PDF file (up to 5 MB)','file','file');file.accept='application/pdf';form.append(el('p','Upload trusted files only. Files are downloaded, not previewed; this local store does not scan them.','muted'));const save=el('button','Upload','primary');form.append(save);form.onsubmit=async e=>{e.preventDefault();save.disabled=true;try{const chosen=file.files[0];if(!chosen||chosen.size>5*1024*1024)throw Error('Choose a PDF up to 5 MB.');const base64=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=reject;reader.readAsDataURL(chosen);});await api('documents',{title:form.elements.title.value,category:category.value,expires_on:form.elements.expires_on.value,filename:chosen.name,base64});dialog.close();await render();}catch(error){message(error.message);}finally{save.disabled=false;}};dialog.append(form,button('Close',()=>dialog.close()));dialog.showModal();}
+function teamEditor(row){if(!row)return;dialog.replaceChildren(el('h2','Change member status'));const form=el('form');field(form,'Reason','reason');const save=el('button','Save','primary');form.append(save);form.onsubmit=async e=>{e.preventDefault();save.disabled=true;try{await api('teams',{...Object.fromEntries(new FormData(form)),id:row.id,status:row.status==='active'?'deactivated':'active'});dialog.close();await render();}catch(error){message(error.message);}finally{save.disabled=false;}};dialog.append(form,button('Close',()=>dialog.close()));dialog.showModal();}
+async function areasEditor(row){let data;try{data=await api('teams/areas?id='+encodeURIComponent(row.id));}catch(e){message(e.message);return;}dialog.replaceChildren(el('h2',row.name+' · Work areas'));const form=el('form');field(form,'Areas or postcodes covered','areas','textarea').value=data.areas;form.append(el('p','Enter the complete current list. This replaces the previous work areas.','muted'));const save=el('button','Save work areas','primary');form.append(save);form.onsubmit=async e=>{e.preventDefault();try{await api('teams/areas',{id:row.id,...Object.fromEntries(new FormData(form))});dialog.close();message('Work areas saved.');}catch(error){message(error.message);}};dialog.append(form,button('Close',()=>dialog.close()));dialog.showModal();}
+async function hrEditor(member){
+  const {row}=await api('staff-hr?id='+encodeURIComponent(member.id));dialog.replaceChildren(el('h2',member.name+' · Restricted HR'),el('p','Owner / SuperAdmin only. Local record tracking—not a secure production document vault. Store check references, status and expiry; do not paste full ID numbers or criminal-history details.','banner'));const form=el('form');
+  for(const [key,label,type,max] of [['job_title','Job title','text',120],['start_date','Employment start date','date',10],['emergency_contact','Emergency contact','text',300],['notes','HR notes','textarea',2000]]){const input=field(form,label,key,type);input.required=false;input.maxLength=max;input.value=row[key]||'';}
+  const fields={phone:'Phone number',address:'Home address',identification:'Identification — type, verification date and secure reference',right_to_work:'Right to work — check status, date and follow-up',dbs:'DBS — role eligibility, check level, date and reference (if applicable)',driving_licence:'Driving licence — categories, check date and expiry',vehicle_registration:'Vehicle registration — vehicle and registration details',vehicle_insurance:'Vehicle insurance — cover/use, policy reference and expiry',mot:'MOT / roadworthiness — check date and expiry',operator_licensing:'Passenger transport / operator licences — applicability, reference and expiry',training:'Role training — manual handling, equipment, COSHH/PPE, safety induction as applicable',certificates:'Other certificates — title, issuer, checked date and expiry'};
+  for(const [key,label] of Object.entries(fields)){const input=field(form,label,'extra_'+key,'textarea');input.required=false;input.maxLength=700;input.value=row.extra?.[key]||'';}
+  const save=el('button','Save HR details','primary');form.append(save);form.onsubmit=async e=>{e.preventDefault();save.disabled=true;try{const values=Object.fromEntries(new FormData(form)),extra={};for(const key of Object.keys(fields)){extra[key]=values['extra_'+key];delete values['extra_'+key];}await api('staff-hr',{id:member.id,version:row.version,...values,extra});dialog.close();message('Restricted HR details saved.');}catch(error){message(error.message);}finally{save.disabled=false;}};dialog.append(form,button('Close',()=>dialog.close()));dialog.showModal();
+}
+let calendarMonth=new Date(),calendarStaff='',calendarTeam='';
+const londonDay=value=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(value));
+const londonTime=value=>new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/London',hour:'2-digit',minute:'2-digit'}).format(new Date(value));
+async function scheduleView(main,version){
+  const year=calendarMonth.getFullYear(),month=calendarMonth.getMonth(),first=new Date(year,month,1,12),start=new Date(year,month,1-(first.getDay()+6)%7,12),end=new Date(start);end.setDate(start.getDate()+42);
+  const data=await api('staff-schedule?'+new URLSearchParams({from:new Date(start.getTime()-86400000).toISOString(),to:new Date(end.getTime()+86400000).toISOString()}));if(version!==requestVersion)return;
+  const holidays=await api('staff-holidays');if(version!==requestVersion)return;data.rows.push(...holidays.rows.map(h=>({...h,holiday:true,title:'Holiday',starts_at:h.start_date+'T12:00:00Z',ends_at:h.end_date+'T23:59:59Z'})));
+  main.append(el('p','All assigned staff bookings · Europe/London time. Unassigned bookings are listed under Bookings. Assignments are local and are not sent to staff.','banner'));
+  const panel=el('section',undefined,'panel calendar-panel'),toolbar=el('div',undefined,'toolbar'),heading=el('h2',first.toLocaleDateString('en-GB',{month:'long',year:'numeric'}));
+  const move=delta=>{calendarMonth=new Date(year,month+delta,1,12);render().catch(e=>message(e.message));};
+  toolbar.append(button('Previous month',()=>move(-1)),heading,button('Next month',()=>move(1)),button('Today',()=>{calendarMonth=new Date();render().catch(e=>message(e.message));}),button('Assign booking',()=>assignBooking(),'primary'));panel.append(toolbar);
+  toolbar.append(button('Add staff holiday',()=>holidayEditor()));const legend=el('div',undefined,'calendar-legend');for(const [cls,label] of [['cleaners','Cleaning'],['movers','Moving'],['drivers','Airport transfer'],['holiday','Staff holiday']])legend.append(el('span',label,'calendar-event '+cls));panel.append(legend);
+  const filters=el('div',undefined,'actions'),staff=el('select'),team=el('select');staff.setAttribute('aria-label','Filter calendar by staff');team.setAttribute('aria-label','Filter calendar by service');
+  for(const [value,label] of [['','All staff'],...[...new Map(data.rows.map(r=>[r.member_id,r.name])).entries()]]){const o=el('option',label);o.value=value;staff.append(o);}if(![...staff.options].some(o=>o.value===calendarStaff))calendarStaff='';staff.value=calendarStaff;
+  for(const [value,label] of [['','All services'],['cleaners','Cleaning'],['drivers','Airport transfer'],['movers','Moving']]){const o=el('option',label);o.value=value;team.append(o);}team.value=calendarTeam;
+  staff.onchange=()=>{calendarStaff=staff.value;render().catch(e=>message(e.message));};team.onchange=()=>{calendarTeam=team.value;render().catch(e=>message(e.message));};filters.append(staff,team);panel.append(filters);
+  const rows=data.rows.filter(r=>(!calendarStaff||r.member_id===calendarStaff)&&(!calendarTeam||r.team===calendarTeam)),wrap=el('div',undefined,'calendar-scroll'),grid=el('div',undefined,'staff-calendar');
+  for(const day of ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'])grid.append(el('div',day,'calendar-weekday'));
+  const today=londonDay(new Date());let visibleCount=0;
+  for(let i=0;i<42;i++){const date=new Date(start);date.setDate(start.getDate()+i);const key=londonDay(date),cell=el('section',undefined,'calendar-day'+(date.getMonth()!==month?' outside-month':'')+(key===today?' today':''));cell.setAttribute('aria-label',date.toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}));cell.append(el('strong',String(date.getDate())));
+    for(const row of rows.filter(r=>r.holiday?r.start_date<=key&&r.end_date>=key:londonDay(r.starts_at)<=key&&londonDay(new Date(Date.parse(r.ends_at)-1))>=key)){visibleCount++;const event=button('',()=>row.holiday?holidayDetails(row):details({id:row.booking_id},false,'bookings'),'calendar-event '+(row.holiday?'holiday':row.team));event.append(el('strong',row.holiday?'All day · Holiday':londonTime(row.starts_at)+'–'+londonTime(row.ends_at)),el('span',row.name),el('span',row.title));event.title=row.name+' · '+row.title+' · '+teamNames[row.team];cell.append(event);}grid.append(cell);}
+  wrap.append(grid);panel.append(wrap);if(!visibleCount)panel.append(el('p','No assigned bookings match this calendar view.','empty'));main.append(panel);
+}
+function assignBooking(){
+  dialog.replaceChildren(el('h2','Assign booking'));const form=el('form'),booking=field(form,'Booking','bookingId'),start=field(form,'Start (device local time)','start','datetime-local'),end=field(form,'End (device local time)','end','datetime-local'),results=el('div'),label=el('label','Available staff'),member=el('select');member.name='memberId';member.required=true;label.append(member);
+  const save=el('button','Assign locally','primary');save.disabled=true;let checked='';const signature=()=>[booking.value,start.value,end.value].join('|');const reset=()=>{checked='';save.disabled=true;member.replaceChildren();results.replaceChildren();};[booking,start,end].forEach(n=>n.addEventListener('change',reset));
+  form.append(button('Check available staff',async()=>{reset();try{const sig=signature(),data=await api('staff-availability?'+new URLSearchParams({bookingId:booking.value,start:new Date(start.value).toISOString(),end:new Date(end.value).toISOString()}));if(sig!==signature())return;for(const row of data.rows){results.append(el('p',row.name+' · '+row.reason+' · Work areas: '+row.areas));if(row.available){const o=el('option',row.name);o.value=row.id;member.append(o);}}checked=sig;save.disabled=!member.options.length;if(!member.options.length)results.append(el('p','No available staff for this service and time.'));}catch(e){message(e.message);}}),results,label);field(form,'Reason / work area match','reason');form.append(el('p','Availability checks recorded bookings and holidays only. Confirm working hours, travel time and work area before assigning.','muted'),save);
+  form.onsubmit=async e=>{e.preventDefault();if(checked!==signature()){reset();message('Check staff availability again.');return;}save.disabled=true;try{const data=Object.fromEntries(new FormData(form));data.start=new Date(data.start).toISOString();data.end=new Date(data.end).toISOString();await api('staff-schedule',data);dialog.close();await render();}catch(error){message(error.message);reset();}};dialog.append(form,button('Close',()=>dialog.close()));dialog.showModal();
+}
+function holidayEditor(){dialog.replaceChildren(el('h2','Add staff holiday'));const form=el('form');field(form,'Staff','memberId');field(form,'First day (London)','startDate','date');field(form,'Last day (inclusive, London)','endDate','date');const save=el('button','Save holiday','primary');form.append(save);form.onsubmit=async e=>{e.preventDefault();save.disabled=true;try{await api('staff-holidays',Object.fromEntries(new FormData(form)));dialog.close();await render();}catch(error){message(error.message);}finally{save.disabled=false;}};dialog.append(form,button('Close',()=>dialog.close()));dialog.showModal();}
+function holidayDetails(row){dialog.replaceChildren(el('h2',row.name+' · Holiday'),el('p',row.start_date+' — '+row.end_date+' (inclusive, London)'),button('Cancel holiday',async()=>{try{await api('staff-holidays',{id:row.id});dialog.close();await render();}catch(error){message(error.message);}}),button('Close',()=>dialog.close()));dialog.showModal();}
+let conversationId=null,conversationPage=1;
+async function messageCentre(main,version){
+  const data=await api('conversations?page='+conversationPage);if(version!==requestVersion)return;
+  const layout=el('section',undefined,'message-centre'),list=el('div',undefined,'conversation-list'),chat=el('div',undefined,'support-chat');
+  const messageSearch=el('input');messageSearch.type='search';messageSearch.placeholder='Search messages…';messageSearch.setAttribute('aria-label','Search conversations on this page');
+  const safety=el('div',undefined,'message-safety');safety.append(el('strong','✓ Safe, supported conversations'),el('p','Service and support conversations appear here. This workspace does not deliver messages or connect to live support.'));
+  list.append(el('h2','Messages'),messageSearch,safety,button('New conversation',()=>newConversation(),'new-conversation'));
+  for(const row of data.rows){const b=button('',()=>{conversationId=row.id;render().catch(error=>message(error.message));},'conversation-card');b.dataset.search=(row.recipient_name+' '+row.subject).toLowerCase();b.setAttribute('aria-pressed',String(row.id===conversationId));const summary=el('div',undefined,'conversation-summary');summary.append(el('strong',row.recipient_name),el('span',row.recipient_kind+' · '+row.subject),el('small',row.message_count+' messages saved locally'));b.append(el('span',row.recipient_name.split(' ').map(w=>w[0]).slice(0,2).join(''),'chat-avatar'),summary);list.append(b);}
+  const noMatches=el('p','No conversations match this search.','muted');noMatches.hidden=true;list.append(noMatches);messageSearch.oninput=()=>{const cards=[...list.querySelectorAll('.conversation-card')];for(const card of cards)card.hidden=!card.dataset.search.includes(messageSearch.value.toLowerCase());noMatches.hidden=!cards.length||cards.some(card=>!card.hidden);};
+  if(!data.rows.length)list.append(el('p','No conversations yet. Start one with a user or staff member from your local records.','muted'));
+  const pager=el('div',undefined,'pager');if(conversationPage>1)pager.append(button('Previous',()=>{conversationPage--;render().catch(error=>message(error.message));}));if(conversationPage*25<data.total)pager.append(button('Next',()=>{conversationPage++;render().catch(error=>message(error.message));}));list.append(pager);layout.append(list,chat);main.append(layout);
+  if(!conversationId){const head=el('div',undefined,'chat-heading');head.append(el('span','U','chat-avatar'),el('strong','UNIMATE Support'));chat.append(head,el('div','Local preview · Messages are saved here, not delivered to users or staff.','chat-safety'),el('p','Choose a conversation or start a new one. Manage support for users and staff in one place.','chat-bubble'),button('New conversation',()=>newConversation(),'primary'));return;}
+  await showConversation(chat,conversationId,version);
+}
+async function showConversation(chat,id,version,messagePage=1){
+  const data=await api('conversations/'+encodeURIComponent(id)+'?page='+messagePage);if(version!==requestVersion)return;
+  chat.replaceChildren();const head=el('div',undefined,'chat-heading'),person=el('div');person.append(el('strong',data.conversation.recipient_name),el('small',data.conversation.recipient_kind+' · '+data.conversation.subject));head.append(el('span',data.conversation.recipient_name.slice(0,2).toUpperCase(),'chat-avatar'),person);chat.append(head,el('div','Local preview · Messages are saved here, not delivered to users or staff.','chat-safety'));
+  const history=el('div',undefined,'chat-history');history.setAttribute('role','log');history.setAttribute('aria-label','Saved conversation messages');
+  const pages=el('div',undefined,'pager');if(messagePage*25<data.total)pages.append(button('Older messages',()=>showConversation(chat,id,version,messagePage+1).catch(error=>message(error.message))));if(messagePage>1)pages.append(button('Newer messages',()=>showConversation(chat,id,version,messagePage-1).catch(error=>message(error.message))));history.append(pages);
+  for(const row of [...data.rows].reverse()){const bubble=el('div',undefined,'chat-bubble'+(row.direction==='incoming'?'':' outgoing'));bubble.append(el('small',row.sender_name),el('p',row.body),el('small',new Date(row.created_at).toLocaleString()+' · '+(row.demo?'Fictional demo message':'Saved locally — not sent')));history.append(bubble);}chat.append(history);
+  const composer=el('form',undefined,'chat-composer'),input=el('textarea');input.name='message';input.placeholder='Write a message…';input.setAttribute('aria-label','Write a message');input.required=true;input.maxLength=4000;input.rows=2;
+  const quick=el('div',undefined,'quick-replies');for(const [label,copy] of [['Booking update','Hello, I’m contacting you about your booking. '],['More information','Hello, could you provide more information about your request? '],['Staff check-in','Hello, please confirm your availability for the assigned service. ']])quick.append(button(label,()=>{input.value+=copy;input.focus();}));chat.append(quick);
+  const emoji=button('☺',()=>{input.value+=' 🙂';input.focus();},'composer-emoji');emoji.setAttribute('aria-label','Insert smile emoji');const save=el('button','↑','primary composer-send');save.type='submit';save.setAttribute('aria-label','Save message locally');save.title='Save locally — not delivered';composer.append(input,emoji,save);chat.append(composer,el('small','Local only · Delivery and incoming replies need the live app connection.','chat-disclaimer'));
+  let messageId=crypto.randomUUID();composer.onsubmit=async event=>{event.preventDefault();save.disabled=true;const content=input.value;try{await api('conversations/'+encodeURIComponent(id),{message:content,messageId});messageId=crypto.randomUUID();input.value='';await showConversation(chat,id,version);message('Message saved locally. It has not been delivered.');}catch(error){message(error.message);}finally{save.disabled=false;}};
+}
+function newConversation(){
+  dialog.replaceChildren(el('h2','New conversation'),el('p','Select a local user or staff member. Messages will not be delivered until the live app is connected.','muted'));
+  const lookup=el('form',undefined,'search-form'),query=el('input');query.type='search';query.placeholder='Search name or email';query.setAttribute('aria-label','Find user or staff');query.maxLength=100;const find=el('button','Search');find.type='submit';lookup.append(query,find);dialog.append(lookup);
+  const results=el('div'),form=el('form');let recipientId=null,lookupVersion=0;const selected=el('p','No recipient selected.','muted');dialog.append(results,selected);
+  lookup.onsubmit=async event=>{event.preventDefault();const current=++lookupVersion;find.disabled=true;try{const data=await api('users?q='+encodeURIComponent(query.value));if(current!==lookupVersion||!dialog.open)return;results.replaceChildren();for(const user of data.rows.filter(r=>r.status==='active'))results.append(button(user.name+' · '+user.kind,()=>{recipientId=user.id;selected.textContent='To: '+user.name+' · '+user.kind;results.replaceChildren();}));if(!results.childNodes.length)results.append(el('p','No active recipients found. Users and staff must first exist in this local database.','muted'));if(data.total>25)results.append(el('p','Showing the first 25 matches. Narrow your search.','muted'));}catch(error){message(error.message);}finally{find.disabled=false;}};
+  field(form,'Subject','subject').maxLength=120;field(form,'Message','message','textarea').maxLength=4000;const save=el('button','Save locally','primary');save.type='submit';form.append(save);let messageId=crypto.randomUUID();
+  form.onsubmit=async event=>{event.preventDefault();if(!recipientId){message('Choose a recipient first.');return;}save.disabled=true;try{const result=await api('conversations',{...Object.fromEntries(new FormData(form)),recipientId,messageId});messageId=crypto.randomUUID();conversationId=result.id;section='messages';dialog.close();await render();message('Conversation saved locally. No message has been delivered.');}catch(error){message(error.message);}finally{save.disabled=false;}};
+  dialog.append(form,button('Close',()=>dialog.close()));dialog.showModal();
+}
+function accountSettings(main){
+  const profile=el('section',undefined,'panel');profile.append(el('h2','Your account'),el('p',session.admin.name),el('p',session.admin.email,'muted'),el('span',roleLabel(session.admin.role),'badge'),button('Sign out',async()=>{try{await api('logout',{});message('');await init();}catch(e){message(e.message);}}));main.append(profile);
+  const security=el('section',undefined,'panel'),form=el('form',undefined,'password-settings');security.append(el('h2','Change password'),el('p','Enter your current password to confirm it’s you. Changing it signs you out on all devices.','muted'));
+  const current=field(form,'Current password','currentPassword','password');current.autocomplete='current-password';current.maxLength=128;
+  const password=field(form,'New password','password','password');password.autocomplete='new-password';password.minLength=8;password.maxLength=128;
+  const hint=el('p','8–128 characters, with at least one capital letter and one special character.','muted');hint.id='new-password-help';password.setAttribute('aria-describedby',hint.id);form.append(hint);
+  const confirm=field(form,'Confirm new password','confirmPassword','password');confirm.autocomplete='new-password';confirm.maxLength=128;
+  const validate=()=>{password.setCustomValidity(password.value&&(!/[A-Z]/.test(password.value)||!/[^\p{L}\p{N}\s]/u.test(password.value))?'Include a capital letter and a special character.':password.value&&password.value===current.value?'Choose a different password.':'');confirm.setCustomValidity(confirm.value&&confirm.value!==password.value?'Passwords do not match.':'');};current.oninput=validate;password.oninput=validate;confirm.oninput=validate;
+  const save=el('button','Update password & sign out','primary');save.type='submit';form.append(save);
+  form.onsubmit=async e=>{e.preventDefault();save.disabled=true;message('');try{await api('settings/password',Object.fromEntries(new FormData(form)));form.reset();await init();message('Password updated. Sign in with your new password.');}catch(error){message(error.message);}finally{save.disabled=false;}};
+  security.append(form);main.append(security);
+  if(fullAccess()){
+    const access=el('section',undefined,'panel');access.append(el('h2','Manage admin access'),el('p','Create admin accounts, change other admins’ roles, or disable their access. Changes are recorded and affected sessions are signed out.','muted'),button('Manage admin accounts',()=>{section='admins';page=1;search='';statusFilter='';render().catch(error=>message(error.message));},'primary'));main.append(access);
+  }
+}
+function adminEditor(row){
+  if(row?.role==='owner'||(row?.role==='superadmin'&&session.admin.role!=='owner')){
+    dialog.replaceChildren(el('h2',roleLabel(row.role)),el('p',row.name+' · '+row.email),el('p',row.role==='owner'?'UniMate Owner is protected. Use Account settings to change your own password.':'Only UniMate Owner can change SuperAdmin access.'),button('Close',()=>dialog.close()));dialog.showModal();return;
+  }
+  dialog.replaceChildren(el('h2',row?'Manage admin access':'Add admin account'));
+  const form=el('form');
+  if(row)form.append(el('p',row.name+' · '+row.email,'muted'));
+  else{field(form,'Name','name').maxLength=80;field(form,'Email address','email','email').autocomplete='off';
+    const password=field(form,'Password','password','password');password.minLength=8;password.maxLength=128;password.autocomplete='new-password';
+    form.append(el('p','8–128 characters, with a capital letter and a special character.','muted'));
+    const confirm=field(form,'Confirm password','confirmPassword','password');confirm.autocomplete='new-password';confirm.maxLength=128;
+    const validate=()=>{password.setCustomValidity(password.value&&(!/[A-Z]/.test(password.value)||!/[^\p{L}\p{N}\s]/u.test(password.value))?'Include a capital letter and a special character.':'');confirm.setCustomValidity(confirm.value&&confirm.value!==password.value?'Passwords do not match.':'');};password.oninput=validate;confirm.oninput=validate;
+  }
+  const label=el('label','Access level'),role=el('select');role.name='role';for(const value of (session.admin.role==='owner'?['admin','superadmin']:['admin'])){const option=el('option',roleLabel(value));option.value=value;role.append(option);}role.value=row?.role==='superadmin'?'superadmin':'admin';label.append(role);form.append(label,el('p','Admin: approvals, posts and reports. SuperAdmin: full data access; only UniMate Owner can appoint or manage SuperAdmins.','muted'));
+  if(row){const l=el('label','Account status'),active=el('select');active.name='active';for(const [value,title] of [['true','Active'],['false','Deactivated']]){const o=el('option',title);o.value=value;active.append(o);}active.value=String(Boolean(row.active));l.append(active);form.append(l);}
+  const reason=field(form,'Reason for access change','reason','textarea');reason.minLength=5;reason.maxLength=500;
+  const save=el('button',row?'Save access':'Create admin account','primary');save.type='submit';form.append(save);
+  form.onsubmit=async e=>{e.preventDefault();save.disabled=true;try{const data=Object.fromEntries(new FormData(form));if(row){data.active=data.active==='true';data.expectedRole=row.role;data.expectedActive=Boolean(row.active);}await api('admins'+(row?'/'+encodeURIComponent(row.id):''),data);dialog.close();await render();message(row?'Admin access updated. Existing sessions have been revoked.':'Admin account created.');}catch(error){message(error.message);}finally{save.disabled=false;}};
+  dialog.append(form,button('Close',()=>dialog.close()));dialog.showModal();
+}
+async function details(row,canManage,kind){
+  if(kind==='comment_reports')kind='reports';
+  if(['events','students','teams'].includes(kind))kind='approvals';
+  try{const result=await api(kind+'/'+encodeURIComponent(row.id));row=result.row;}catch(error){message(error.message);return;}
+  const submission=row.submission;delete row.submission;
+  dialog.replaceChildren(el('h2',row.title||row.name||'Activity details'));const list=el('dl');for(const [key,value] of Object.entries(row)){if(value===null)continue;list.append(el('dt',key.replaceAll('_',' ')),el('dd',key==='amount_pence'?new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(value/100):String(value)));}dialog.append(list);
+  if(submission){dialog.append(el('h3','Submission details'));const extra=el('dl');for(const [key,value] of Object.entries(submission)){if(key==='images'){for(const src of Array.isArray(value)?value:[]){if(typeof src==='string'&&/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(src)){const img=el('img',undefined,'submission-image');img.src=src;img.alt='Submitted image';extra.append(img);}}continue;}extra.append(el('dt',key.replaceAll('_',' ')),el('dd',Array.isArray(value)?value.join('\n'):String(value)));}dialog.append(extra);}else if(['posts','bookings'].includes(kind))dialog.append(el('p','Only the saved fields above are available. No images or additional student submission details have been imported.','muted'));
+  const options={users:row.status==='active'?['suspended']:['active'],posts:row.status==='published'?['hidden']:['published'],approvals:row.status==='pending'?['approved','rejected']:[],reports:row.status==='open'?['resolved','dismissed']:[]};
+  if(kind==='bookings'&&fullAccess()&&['confirmed','in_progress','assigned'].includes(row.status)){const form=el('form');field(form,'Completion note','reason');const complete=el('button','Complete service & create invoice','primary');form.append(complete);form.onsubmit=async e=>{e.preventDefault();complete.disabled=true;try{const result=await api('bookings/'+encodeURIComponent(row.id)+'/complete',{reason:form.elements.reason.value,expectedStatus:row.status});dialog.close();await render();message('Service completed. Invoice '+result.invoice.reference+' created locally.');}catch(error){message(error.message);}finally{complete.disabled=false;}};dialog.append(form);}
+  options.account_reports=options.reports;
+  if(canManage&&options[kind]?.length){const form=el('form'),reason=field(form,'Reason for this decision','reason','textarea');reason.minLength=5;reason.maxLength=500;const actions=el('div',undefined,'actions');for(const status of options[kind]){const b=el('button',({suspended:'Suspend member',active:'Restore member',hidden:'Hide post',published:'Restore post',approved:'Approve',rejected:'Reject',resolved:'Resolve report',dismissed:'Dismiss report'})[status],'primary');b.type='submit';b.value=status;actions.append(b);}form.append(actions);form.onsubmit=async e=>{e.preventDefault();const status=e.submitter.value;form.querySelectorAll('button').forEach(b=>b.disabled=true);try{await api(kind+'/'+encodeURIComponent(row.id),{status,expectedStatus:row.status,reason:reason.value});dialog.close();await render();message('Decision saved and recorded in the activity log.');}catch(error){message(error.message);form.querySelectorAll('button').forEach(b=>b.disabled=false);}};dialog.append(form);}
+  dialog.append(button('Close',()=>dialog.close()));dialog.showModal();
+}
+// Deliberately fictional fixtures. This adapter has no network or persistence.
+const sampleDay=n=>new Date(Date.UTC(new Date().getFullYear(),new Date().getMonth(),n,12)).toISOString().slice(0,10);
+const sampleCreated=sampleDay(1)+'T10:00:00Z';
+const demoStaff=[['cleaners','Alex Sample'],['drivers','Jamie Example'],['movers','Taylor Demo'],['office','Sam Sample']].map(([team,name],i)=>({id:'demo-staff-'+i,name,team,email:'staff'+i+'@example.invalid',status:'active',created_at:sampleCreated}));
+const demoBookings=['Cleaning','Airport transfer','Moving'].map((service,i)=>({id:'demo-booking-'+i,title:service+' · sample booking',customer:['Casey Sample','Riley Example','Morgan Demo'][i],service:['cleaning','airport_transfer','moving'][i],status:'assigned',amount_pence:[6500,9500,18000][i],created_at:sampleCreated,submission:{service,date:sampleDay(8+i),time:'10:00–12:00',description:'Fictional booking for reviewing the Administration interface. No customer or address is real.',location:'Example university campus'}}));
+const demoUsers=demoBookings.map((b,i)=>({id:'demo-user-'+i,name:b.customer,age:21+i,university:'Example University',email:'student'+i+'@example.invalid',kind:'student',status:'active',created_at:sampleCreated,last_online:sampleCreated}));
+const demoApprovals=[{id:'demo-approval-1',title:'Cleaning staff application',applicant:'Jordan Sample',kind:'staff',status:'pending',created_at:sampleCreated,submission:{service:'Cleaning',position:'Cleaner',note:'Fictional application; no identity documents included.'}},{id:'demo-approval-2',title:'Student account application',applicant:'Robin Demo',kind:'student',status:'pending',created_at:sampleCreated},{id:'demo-approval-3',title:'Campus welcome event',applicant:'Example Student Society',kind:'event',status:'pending',created_at:sampleCreated}];
+const demoRows={users:demoUsers,teams:demoStaff,bookings:demoBookings,approvals:demoApprovals,posts:[{id:'demo-post-1',title:'Welcome to campus',author:'Casey Sample',status:'published',created_at:sampleCreated,submission:{body:'A fictional welcome post for the public Administration preview.',date:sampleDay(3)}}],reports:[],account_reports:[],audit:[{id:'demo-audit-1',actor_name:'Demo SuperAdmin',action:'demo.started',resource:'Fictional preview',created_at:sampleCreated}],documents:[],conversations:[],admins:[]};
+async function previewApi(path,data){
+ if(data)throw Error('Read-only public demo. No changes are saved or sent.');
+ const [route,query='']=path.split('?'),params=new URLSearchParams(query),[resource,id]=route.split('/');
+ if(resource==='session')return {admin:{name:'Demo SuperAdmin',email:'demo@example.invalid',role:'superadmin'},csrf:'demo-no-auth'};
+ if(resource==='overview')return {users:demoUsers.length,approvals:demoApprovals.length,reports:0,bookings:demoBookings.length};
+ if(resource==='tasks')return {rows:[],total:0,unseen:0};
+ if(resource==='conversations'){
+  const conversations=demoStaff.slice(0,3).map((staff,i)=>({id:'demo-chat-'+i,recipient_name:staff.name,recipient_kind:'Sample staff',subject:['Cleaning enquiry','Airport transfer','Moving booking'][i],message_count:2}));
+  if(!id)return {rows:conversations,total:conversations.length};
+  const conversation=conversations.find(c=>c.id===id);return {conversation,total:2,rows:[{sender_name:'Demo SuperAdmin',body:'Thank you, understood.',created_at:sampleCreated,demo:true},{sender_name:conversation.recipient_name,body:'Hello! This is a fictional service conversation showing the UniMate message layout.',created_at:sampleCreated,direction:'incoming',demo:true}]};
+ }
+ if(resource==='staff-schedule')return {rows:demoBookings.map((b,i)=>({id:'demo-slot-'+i,booking_id:b.id,member_id:demoStaff[i].id,name:demoStaff[i].name,team:demoStaff[i].team,title:b.title,starts_at:sampleDay(8+i)+'T09:00:00Z',ends_at:sampleDay(8+i)+'T11:00:00Z'}))};
+ if(resource==='staff-holidays')return {rows:[{id:'demo-holiday',member_id:demoStaff[0].id,name:demoStaff[0].name,team:'cleaners',start_date:sampleDay(15),end_date:sampleDay(17)}]};
+ if(resource==='invoices'){
+  const invoice={id:'demo-invoice',reference:'UM-INV-'+new Date().getFullYear()+'-000001',customer:'Casey Sample',description:'Completed sample cleaning',booking_id:demoBookings[0].id,amount_pence:6500,issued_on:sampleDay(1),due_on:sampleDay(1),status:'paid'};
+  const filter=params.get('status');return {rows:['all','closed','paid'].includes(filter)?[invoice]:[],total:['all','closed','paid'].includes(filter)?1:0,counts:{open:0,due:0,overdue:0,closed:1,paid:1,paid_off_platform:0,void:0,all:1},outstanding_pence:0,today:sampleDay(new Date().getDate())};
+ }
+ let rows=structuredClone(demoRows[resource]||[]);
+ if(id){const row=rows.find(r=>r.id===decodeURIComponent(id));if(!row)throw Error('No sample record found');return {row,canManage:false};}
+ if(params.get('kind'))rows=rows.filter(r=>r.kind===params.get('kind'));
+ if(params.get('accounts'))rows=rows.filter(r=>r.kind!=='event');
+ if(params.get('team')&&params.get('team')!=='all')rows=rows.filter(r=>r.team===params.get('team'));
+ if(params.get('division')&&params.get('division')!=='all')rows=rows.filter(r=>r.service===params.get('division'));
+ if(params.get('status'))rows=rows.filter(r=>r.status===params.get('status'));
+ if(params.get('q'))rows=rows.filter(r=>JSON.stringify(r).toLowerCase().includes(params.get('q').toLowerCase()));
+ return {rows,total:rows.length,canManage:false};
+}
+function previewOnly(){dialog.replaceChildren(el('h2','Read-only demonstration'),el('p','This public preview uses fictional records. Real account changes, HR records, document uploads and booking assignments are available only in the private Administration service.'),button('Close',()=>dialog.close()));if(!dialog.open)dialog.showModal();}
+assignBooking=holidayEditor=holidayDetails=hrEditor=areasEditor=teamEditor=documentUpload=adminEditor=newConversation=previewOnly;
+accountSettings=main=>main.append(el('section','Public demonstration account · No login, password or personal information is required.','panel'));
+const originalShowConversation=showConversation;
+showConversation=async(...args)=>{await originalShowConversation(...args);const chat=args[0];chat.querySelectorAll('.quick-replies').forEach(n=>n.remove());chat.querySelectorAll('textarea, .chat-composer button').forEach(n=>{n.disabled=true;});const input=chat.querySelector('textarea');if(input)input.placeholder='Read-only public demo';};
+// Remove forms and mutation controls before a visitor can enter sensitive information.
+const originalDetails=details;
+details=async(...args)=>{await originalDetails(...args);dialog.querySelectorAll('form').forEach(f=>f.remove());};
+
+init().catch(error=>message(error.message));
+setInterval(()=>{if(session?.admin&&!document.hidden)refreshNotifications();},30000);
