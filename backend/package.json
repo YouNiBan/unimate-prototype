@@ -1,0 +1,8 @@
+{
+  "name": "unimate-administration",
+  "description": "UNIMATE 优你伴 Administration",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24.0.0" },
+  "scripts": { "start": "node server.mjs", "test": "node --test test/*.test.mjs", "seed": "node seed.mjs" }
+}
