@@ -27,7 +27,7 @@ const words={
   'A clear view of your community and what needs attention.':['了解社区动态和待处理事项。','了解社群動態和待處理事項。'],'Review records and keep every decision accountable.':['查看记录，追踪每项决定。','查看記錄，追蹤每項決定。'],'No records yet. Your local workspace is ready.':['暂无记录。本地工作区已准备就绪。','暫無記錄。本地工作區已準備就緒。'],
   'Local only · Separate from the live UniMate app.':['仅限本地 · 独立于线上 UniMate 应用。','僅限本地 · 獨立於線上 UniMate 應用。'],
   'Sign in to your local administration workspace.':['登录您的本地管理工作区。','登入您的本地管理工作區。'],
-  'PUBLIC DEMO — Fictional sample records only. Read-only: no real accounts, documents or live services.':['本地工作区 — 这些记录尚未连接线上 UniMate 应用。示例数据均为虚构。','本地工作區 — 這些記錄尚未連接線上 UniMate 應用。範例資料均為虛構。']
+  'PUBLIC DEMO — Fictional records only. Approval decisions are browser-only simulations; no real accounts, documents or live services.':['本地工作区 — 这些记录尚未连接线上 UniMate 应用。示例数据均为虚构。','本地工作區 — 這些記錄尚未連接線上 UniMate 應用。範例資料均為虛構。']
 };
 const localizedNodes=new Map();
 const t=text=>words[text]?.[language==='简体'?0:1]&&language!=='EN'?words[text][language==='简体'?0:1]:text;
@@ -81,7 +81,7 @@ async function init() {
   if(!session.admin){auth();return;}
   const shell=el('div',undefined,'shell'+(menuExpanded?' menu-expanded':'')),side=el('aside'),brand=el('div');brand.append(el('small','ADMINISTRATION'));
   const nav=el('nav');nav.setAttribute('aria-label','Administration');
-  const available=Object.keys(names).filter(k=>k!=='admins'&&(fullAccess()||['overview','events','approvals','posts','reports','comment_reports','settings'].includes(k)));
+  const available=Object.keys(names).filter(k=>!['admins','approvals'].includes(k)&&(fullAccess()||['overview','events','posts','reports','comment_reports','settings'].includes(k)));
   if(available.includes('students')){available.splice(available.indexOf('students'),1);available.splice(available.indexOf('users'),0,'students');}
   if(!available.includes(section)&&!(section==='admins'&&fullAccess()))section='overview';
   for(const key of available){
@@ -94,11 +94,11 @@ async function init() {
   const footer=el('footer');footer.append(el('span',session.admin.name+' · '+roleLabel(session.admin.role)));
   side.append(brand,nav,footer);
   const rail=el('div',undefined,'nav-rail');rail.setAttribute('aria-label','Workspace groups');rail.append(brandLogo());
-  const groups=[['⌂','Home',['overview']],['♙','People',['students','users','teams']],['✓','Reviews',['events','approvals','posts','account_reports','reports','comment_reports']],['▣','Bookings',['bookings','schedule']],['☷','Activity',['audit','invoices','documents']],['☏','Message centre',['messages']],['⚙','Settings',['settings']]];
+  const groups=[['⌂','Home',['overview']],['♙','Users',['students','users','teams']],['▣','Bookings',['bookings','schedule']],['✓','Reviews',['events','posts','account_reports','reports','comment_reports']],['☷','Activity',['audit','invoices','documents']],['☏','Message centre',['messages']],['⚙','Settings',['settings']]];
   const selectGroup=(keys)=>{nav.querySelectorAll(':scope > *').forEach(n=>{const key=n.dataset.section||n.querySelector('button')?.dataset.section;n.hidden=!keys.includes(key);});};
   const railBottom=el('div',undefined,'rail-bottom');
-  for(const [symbol,label,keys] of groups){const permitted=keys.filter(k=>available.includes(k));if(!permitted.length)continue;const b=button('',()=>{selectGroup(permitted);section=permitted[0];page=1;search='';statusFilter='';render().catch(e=>message(e.message));},'rail-button');b.dataset.sections=JSON.stringify(permitted);b.append(icon(label==='Calendar'?'Bookings':label),el('span',label==='Settings'?'Account settings':label,'rail-label'));b.title=label;b.setAttribute('aria-label',label);(label==='Message centre'||label==='Settings'?railBottom:rail).append(b);}
-  const controls=headerControls(),bell=controls.querySelector('[data-notifications]');if(bell){bell.append(el('span','Notifications','rail-label'));controls.prepend(bell);}controls.querySelector('.language-pill').append(el('span','Language','rail-label'));railBottom.insertBefore(controls,railBottom.lastChild);railBottom.lastChild.setAttribute('aria-label','Account settings');
+  for(const [symbol,label,keys] of groups){const permitted=keys.filter(k=>available.includes(k));if(!permitted.length)continue;const b=button('',()=>{selectGroup(permitted);section=permitted[0];page=1;search='';statusFilter='';render().catch(e=>message(e.message));},'rail-button');b.dataset.sections=JSON.stringify(permitted);b.append(icon(label==='Users'?'People':label==='Moderation'?'Reviews':label),el('span',label==='Settings'?'Account settings':label,'rail-label'));b.title=label;b.setAttribute('aria-label',label);(label==='Message centre'||label==='Settings'?railBottom:rail).append(b);}
+  const controls=headerControls(),bell=controls.querySelector('[data-notifications]');if(bell){bell.append(el('span','Notifications','rail-label'));controls.prepend(bell);}const tools=el('div',undefined,'header-controls workspace-tools');tools.setAttribute('aria-label','Display and language');tools.append(controls.querySelector('[data-theme-toggle]'),controls.querySelector('.language-pill'));shell.append(tools);railBottom.insertBefore(controls,railBottom.lastChild);railBottom.lastChild.setAttribute('aria-label','Account settings');
   const collapse=button('',()=>{menuExpanded=!menuExpanded;shell.classList.toggle('menu-expanded',menuExpanded);updateMenu();},'rail-button');const updateMenu=()=>{collapse.replaceChildren(el('span',menuExpanded?'‹':'›'),el('span',menuExpanded?'Close menu':'Open menu','rail-label'));collapse.setAttribute('aria-label',menuExpanded?'Close menu':'Open menu');collapse.setAttribute('aria-expanded',String(menuExpanded));};updateMenu();rail.insertBefore(collapse,rail.children[1]||null);rail.append(railBottom);
   shell.append(rail,side,el('main'));app.append(shell);selectGroup(groups.find(g=>g[2].includes(section))?.[2]||['overview']);applyLanguage();await render();
 }
@@ -124,7 +124,7 @@ async function render(){
   const version=++requestVersion, current=section,main=app.querySelector('main');message('');
   app.querySelectorAll('.rail-button[data-sections]').forEach(b=>b.setAttribute('aria-current',JSON.parse(b.dataset.sections).includes(current==='admins'?'settings':current)?'page':'false'));
   app.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-current',b.dataset.section===(current==='admins'?'settings':current)&&(!b.dataset.division||b.dataset.division===bookingDivision)?'page':'false'));
-  main.replaceChildren(el('div','PUBLIC DEMO — Fictional sample records only. Read-only: no real accounts, documents or live services.','banner'),el('h1',names[current]),el('p',current==='overview'?'A clear view of your community and what needs attention.':'Review records and keep every decision accountable.','muted'));
+  main.replaceChildren(el('div','PUBLIC DEMO — Fictional records only. Approval decisions are browser-only simulations; no real accounts, documents or live services.','banner'),el('h1',names[current]),el('p',current==='overview'?'A clear view of your community and what needs attention.':'Review records and keep every decision accountable.','muted'));
   if(current==='settings'){accountSettings(main);return;}
   if(current==='messages'){await messageCentre(main,version);return;}
   if(current==='invoices'){await invoicesView(main,version);return;}
@@ -138,7 +138,7 @@ async function render(){
   const data=await api(current==='overview'?'overview':(['events','students','teams'].includes(current)?'approvals':current==='comment_reports'?'reports':current)+'?'+new URLSearchParams({page:String(page),q:search,status:['students','teams'].includes(current)?'pending':statusFilter,...(current==='events'?{kind:'event'}:current==='students'?{accounts:'1'}:current==='teams'?{kind:'staff'}:{}),...(['reports','comment_reports'].includes(current)?{type:current==='reports'?'post':'comment'}:{}),...(current==='bookings'?{division:bookingDivision}:{})}));if(version!==requestVersion)return;loading.remove();
   if(current==='overview'){
     main.append(button('Your to-do list',()=>notifications().catch(error=>message(error.message)),'primary'));
-    const stats=el('div',undefined,'stats');for(const [k,label] of [['users','Community members'],['approvals','Awaiting approval'],['reports','Open reports'],['bookings','Booking records']]){if(!(k in data))continue;const card=button('',()=>{if(k==='reports'){notifications().catch(e=>message(e.message));return;}section=k==='approvals'?'approvals':k;page=1;search='';statusFilter=k==='approvals'?'pending':'';init().catch(e=>message(e.message));},'stat');card.setAttribute('aria-label',label);card.append(el('span',label),el('strong',String(data[k])));stats.append(card);}main.append(stats);
+    const stats=el('div',undefined,'stats');for(const [k,label] of [['users','Community members'],['approvals','Awaiting approval'],['reports','Open reports'],['bookings','Booking records']]){if(!(k in data))continue;const card=button('',()=>{if(k==='reports'){notifications().catch(e=>message(e.message));return;}section=k==='approvals'?(fullAccess()?'students':'events'):k;page=1;search='';statusFilter=k==='approvals'?'pending':'';init().catch(e=>message(e.message));},'stat');card.setAttribute('aria-label',label);card.append(el('span',label),el('strong',String(data[k])));stats.append(card);}main.append(stats);
     return;
   }
   const panel=el('section',undefined,'panel'),toolbar=el('div',undefined,'toolbar');toolbar.append(el('span',data.total+' records'),button('Refresh',()=>render().catch(e=>message(e.message))));panel.append(toolbar);
@@ -363,7 +363,22 @@ const originalShowConversation=showConversation;
 showConversation=async(...args)=>{await originalShowConversation(...args);const chat=args[0];chat.querySelectorAll('.quick-replies').forEach(n=>n.remove());chat.querySelectorAll('textarea, .chat-composer button').forEach(n=>{n.disabled=true;});const input=chat.querySelector('textarea');if(input)input.placeholder='Read-only public demo';};
 // Remove forms and mutation controls before a visitor can enter sensitive information.
 const originalDetails=details;
-details=async(...args)=>{await originalDetails(...args);dialog.querySelectorAll('form').forEach(f=>f.remove());};
+details=async(...args)=>{
+ await originalDetails(...args);dialog.querySelectorAll('form').forEach(f=>f.remove());
+ const application=demoApprovals.find(r=>r.id===args[0].id);
+ if(application?.status==='pending'){
+  const actions=el('div',undefined,'actions');
+  for(const [status,label] of [['approved','Approve'],['rejected','Reject']])actions.append(button(label,async()=>{
+   application.status=status;
+   if(status==='approved'&&application.kind==='staff'&&!demoStaff.some(r=>r.id===application.id)){
+    demoStaff.push({id:application.id,name:application.applicant,team:'cleaners',email:'jordan@example.invalid',status:'active',created_at:sampleCreated});
+    demoUsers.push({id:application.id,name:application.applicant,email:'jordan@example.invalid',kind:'staff',status:'active',created_at:sampleCreated});
+   }
+   dialog.close();await render();message('Demo application '+status+'. This is a simulation only; reload to reset.');
+  },status==='approved'?'primary':''));
+  dialog.append(el('p','Demo decision only. No real account is changed; reloading resets this sample.','banner'),actions);
+ }
+};
 
 init().catch(error=>message(error.message));
 setInterval(()=>{if(session?.admin&&!document.hidden)refreshNotifications();},30000);
