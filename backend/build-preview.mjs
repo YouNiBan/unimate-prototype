@@ -1,5 +1,6 @@
 // Build an explicitly public, read-only snapshot. Never read the database or uploads.
 import {readFile,writeFile,mkdir,copyFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
 const source=new URL('./public/',import.meta.url),out=new URL('../public/administration/',import.meta.url);
 await mkdir(out,{recursive:true});
 let code=await readFile(new URL('app.js',source),'utf8');
@@ -14,5 +15,6 @@ if(code.includes("fetch("))throw Error('Public preview must not contain network 
 await writeFile(new URL('app.js',out),code);
 await copyFile(new URL('styles.css',source),new URL('styles.css',out));
 await copyFile(new URL('../assets/unimate-logo.png',import.meta.url),new URL('unimate-logo.png',out));
-await writeFile(new URL('index.html',out),`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'none'; img-src 'self' data:; style-src 'self'; script-src 'self'; form-action 'none'; base-uri 'none'; object-src 'none'"><title>UNIMATE 优你伴 Administration · Demo</title><link rel="stylesheet" href="./styles.css"><script src="./app.js" defer></script></head><body><div id="app"></div><p id="notice" role="status" aria-live="polite"></p><dialog id="detail"></dialog></body></html>`);
+const version=createHash('sha256').update(code).update(await readFile(new URL('styles.css',out))).digest('hex').slice(0,12);
+await writeFile(new URL('index.html',out),`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'none'; img-src 'self' data:; style-src 'self'; script-src 'self'; form-action 'none'; base-uri 'none'; object-src 'none'"><title>UNIMATE 优你伴 Administration · Demo</title><link rel="stylesheet" href="./styles.css?v=${version}"><script src="./app.js?v=${version}" defer></script></head><body><div id="app"></div><p id="notice" role="status" aria-live="polite"></p><dialog id="detail"></dialog></body></html>`);
 console.log('Public fictional-data preview built. No backend data read.');
