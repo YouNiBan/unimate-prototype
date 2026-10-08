@@ -6,7 +6,7 @@ A working, separate administration service and dashboard using Node 24+ and buil
 
 ## Public demonstration
 
-The shareable read-only preview is published at `https://youniban.github.io/unimate-prototype/administration/`. It contains only fixtures defined in `preview-data.js`, never database exports. Generate `public/administration/` from the repository root with `node backend/build-preview.mjs` after changing the dashboard, and commit the generated files together with their source. Expo copies this public directory into the existing GitHub Pages deployment. The preview blocks network connections and form submission; account changes, uploads and real messaging are unavailable. It is not a hosted production backend.
+The shareable preview is published at `https://youniban.github.io/unimate-prototype/administration/`. It contains only fixtures defined in `preview-data.js`, never database exports. Generate `public/administration/` from the repository root with `node backend/build-preview.mjs` after changing the dashboard, and commit the generated files together with their source. Expo copies this public directory into the existing GitHub Pages deployment. The preview blocks network connections and form submission. Approve/Reject simulates decisions in browser memory and resets on reload; real account changes, uploads and messaging are unavailable. It is not a hosted production backend.
 
 ## Run the private local service
 

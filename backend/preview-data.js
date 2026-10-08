@@ -40,4 +40,19 @@ const originalShowConversation=showConversation;
 showConversation=async(...args)=>{await originalShowConversation(...args);const chat=args[0];chat.querySelectorAll('.quick-replies').forEach(n=>n.remove());chat.querySelectorAll('textarea, .chat-composer button').forEach(n=>{n.disabled=true;});const input=chat.querySelector('textarea');if(input)input.placeholder='Read-only public demo';};
 // Remove forms and mutation controls before a visitor can enter sensitive information.
 const originalDetails=details;
-details=async(...args)=>{await originalDetails(...args);dialog.querySelectorAll('form').forEach(f=>f.remove());};
+details=async(...args)=>{
+ await originalDetails(...args);dialog.querySelectorAll('form').forEach(f=>f.remove());
+ const application=demoApprovals.find(r=>r.id===args[0].id);
+ if(application?.status==='pending'){
+  const actions=el('div',undefined,'actions');
+  for(const [status,label] of [['approved','Approve'],['rejected','Reject']])actions.append(button(label,async()=>{
+   application.status=status;
+   if(status==='approved'&&application.kind==='staff'&&!demoStaff.some(r=>r.id===application.id)){
+    demoStaff.push({id:application.id,name:application.applicant,team:'cleaners',email:'jordan@example.invalid',status:'active',created_at:sampleCreated});
+    demoUsers.push({id:application.id,name:application.applicant,email:'jordan@example.invalid',kind:'staff',status:'active',created_at:sampleCreated});
+   }
+   dialog.close();await render();message('Demo application '+status+'. This is a simulation only; reload to reset.');
+  },status==='approved'?'primary':''));
+  dialog.append(el('p','Demo decision only. No real account is changed; reloading resets this sample.','banner'),actions);
+ }
+};

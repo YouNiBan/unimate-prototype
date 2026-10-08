@@ -8,7 +8,7 @@ const start=code.indexOf('async function api(path, data) {'),end=code.indexOf('\
 if(start<0||end<0)throw Error('Preview API boundary not found');
 code=code.slice(0,start)+'async function api(path,data){return previewApi(path,data);}\n'+code.slice(end);
 code=code.replace("img.src='/unimate-logo.png'","img.src='./unimate-logo.png'")
- .replaceAll('LOCAL WORKSPACE — These records are not connected to the live UniMate app. Sample records, if loaded, are fictional.','PUBLIC DEMO — Fictional sample records only. Read-only: no real accounts, documents or live services.');
+ .replaceAll('LOCAL WORKSPACE — These records are not connected to the live UniMate app. Sample records, if loaded, are fictional.','PUBLIC DEMO — Fictional records only. Approval decisions are browser-only simulations; no real accounts, documents or live services.');
 const adapter=await readFile(new URL('./preview-data.js',import.meta.url),'utf8');
 code=code.replace('init().catch(error=>message(error.message));',adapter+'\ninit().catch(error=>message(error.message));');
 if(code.includes("fetch("))throw Error('Public preview must not contain network calls');
