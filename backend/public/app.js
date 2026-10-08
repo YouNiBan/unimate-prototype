@@ -1,5 +1,5 @@
 const app = document.querySelector('#app'), notice = document.querySelector('#notice'), dialog = document.querySelector('#detail');
-let session, section = 'overview', page = 1, requestVersion = 0, search = '', statusFilter = '', bookingDivision='all';
+let session, section = 'overview', page = 1, requestVersion = 0, search = '', statusFilter = '', bookingDivision='all', menuExpanded=false;
 const names = {overview:'Overview',users:'Users',events:'Event approvals',approvals:'Approvals',posts:'Posts',reports:'Reports',bookings:'Bookings',teams:'Teams',schedule:'Staff calendar',messages:'Message centre',admins:'Admin accounts',audit:'Activity log',settings:'Account settings'};
 let selectedTeam='all',teamQuery='',teamPage=1,staffView='pending';
 names.teams='Staff Approval';
@@ -82,7 +82,7 @@ function field(form,label,name,type='text') {
 async function init() {
   session=await api('session');app.replaceChildren();
   if(!session.admin){auth();return;}
-  const shell=el('div',undefined,'shell'),side=el('aside'),brand=el('div');brand.append(brandLogo(),el('small','ADMINISTRATION'));
+  const shell=el('div',undefined,'shell'+(menuExpanded?' menu-expanded':'')),side=el('aside'),brand=el('div');brand.append(el('small','ADMINISTRATION'));
   const nav=el('nav');nav.setAttribute('aria-label','Administration');
   const available=Object.keys(names).filter(k=>k!=='admins'&&(fullAccess()||['overview','events','approvals','posts','reports','comment_reports','settings'].includes(k)));
   if(available.includes('students')){available.splice(available.indexOf('students'),1);available.splice(available.indexOf('users'),0,'students');}
@@ -94,15 +94,15 @@ async function init() {
     }
     const b=button(names[key],()=>{section=key;page=1;search='';statusFilter='';render().catch(e=>message(e.message));});b.dataset.section=key;nav.append(b);
   }
-  const footer=el('footer');footer.append(el('span',session.admin.name+' · '+roleLabel(session.admin.role)),button('Sign out',async()=>{try{await api('logout',{});message('');await init();}catch(e){message(e.message);}}));
+  const footer=el('footer');footer.append(el('span',session.admin.name+' · '+roleLabel(session.admin.role)));
   side.append(brand,nav,footer);
-  const rail=el('div',undefined,'nav-rail');rail.setAttribute('aria-label','Workspace groups');
+  const rail=el('div',undefined,'nav-rail');rail.setAttribute('aria-label','Workspace groups');rail.append(brandLogo());
   const groups=[['⌂','Home',['overview']],['♙','People',['students','users','teams']],['✓','Reviews',['events','approvals','posts','account_reports','reports','comment_reports']],['▣','Bookings',['bookings','schedule']],['☷','Activity',['audit','invoices','documents']],['☏','Message centre',['messages']],['⚙','Settings',['settings']]];
   const selectGroup=(keys)=>{nav.querySelectorAll(':scope > *').forEach(n=>{const key=n.dataset.section||n.querySelector('button')?.dataset.section;n.hidden=!keys.includes(key);});};
   const railBottom=el('div',undefined,'rail-bottom');
-  for(const [symbol,label,keys] of groups){const permitted=keys.filter(k=>available.includes(k));if(!permitted.length)continue;const b=button('',()=>{selectGroup(permitted);section=permitted[0];page=1;search='';statusFilter='';render().catch(e=>message(e.message));},'rail-button');b.dataset.sections=JSON.stringify(permitted);b.append(icon(label==='Calendar'?'Bookings':label));b.title=label;b.setAttribute('aria-label',label);(label==='Message centre'||label==='Settings'?railBottom:rail).append(b);}
+  for(const [symbol,label,keys] of groups){const permitted=keys.filter(k=>available.includes(k));if(!permitted.length)continue;const b=button('',()=>{selectGroup(permitted);section=permitted[0];page=1;search='';statusFilter='';render().catch(e=>message(e.message));},'rail-button');b.dataset.sections=JSON.stringify(permitted);b.append(icon(label==='Calendar'?'Bookings':label),el('span',label==='Settings'?'Account settings':label,'rail-label'));b.title=label;b.setAttribute('aria-label',label);(label==='Message centre'||label==='Settings'?railBottom:rail).append(b);}
   const controls=headerControls(),bell=controls.querySelector('[data-notifications]');if(bell)controls.prepend(bell);railBottom.insertBefore(controls,railBottom.lastChild);railBottom.lastChild.setAttribute('aria-label','Account settings');
-  const collapse=button('‹',()=>shell.classList.toggle('menu-collapsed'),'rail-button');collapse.setAttribute('aria-label','Toggle navigation menu');rail.append(collapse,railBottom);
+  const collapse=button('',()=>{menuExpanded=!menuExpanded;shell.classList.toggle('menu-expanded',menuExpanded);updateMenu();},'rail-button');const updateMenu=()=>{collapse.replaceChildren(el('span',menuExpanded?'‹':'›'),el('span',menuExpanded?'Close menu':'Open menu','rail-label'));collapse.setAttribute('aria-label',menuExpanded?'Close menu':'Open menu');collapse.setAttribute('aria-expanded',String(menuExpanded));};updateMenu();rail.insertBefore(collapse,rail.children[2]||null);rail.append(railBottom);
   shell.append(rail,side,el('main'));app.append(shell);selectGroup(groups.find(g=>g[2].includes(section))?.[2]||['overview']);applyLanguage();await render();
 }
 function auth(){
@@ -246,8 +246,11 @@ let conversationId=null,conversationPage=1;
 async function messageCentre(main,version){
   const data=await api('conversations?page='+conversationPage);if(version!==requestVersion)return;
   const layout=el('section',undefined,'message-centre'),list=el('div',undefined,'conversation-list'),chat=el('div',undefined,'support-chat');
-  list.append(el('h2','Conversations'),button('New conversation',()=>newConversation(),'primary'));
-  for(const row of data.rows){const b=button('',()=>{conversationId=row.id;render().catch(error=>message(error.message));},'conversation-card');b.setAttribute('aria-pressed',String(row.id===conversationId));b.append(el('strong',row.recipient_name),el('span',row.subject),el('small',row.recipient_kind+' · '+row.message_count+' saved locally'));list.append(b);}
+  const messageSearch=el('input');messageSearch.type='search';messageSearch.placeholder='Search messages…';messageSearch.setAttribute('aria-label','Search conversations on this page');
+  const safety=el('div',undefined,'message-safety');safety.append(el('strong','✓ Safe, supported conversations'),el('p','Service and support conversations appear here. This workspace does not deliver messages or connect to live support.'));
+  list.append(el('h2','Messages'),messageSearch,safety,button('New conversation',()=>newConversation(),'new-conversation'));
+  for(const row of data.rows){const b=button('',()=>{conversationId=row.id;render().catch(error=>message(error.message));},'conversation-card');b.dataset.search=(row.recipient_name+' '+row.subject).toLowerCase();b.setAttribute('aria-pressed',String(row.id===conversationId));const summary=el('div',undefined,'conversation-summary');summary.append(el('strong',row.recipient_name),el('span',row.recipient_kind+' · '+row.subject),el('small',row.message_count+' messages saved locally'));b.append(el('span',row.recipient_name.split(' ').map(w=>w[0]).slice(0,2).join(''),'chat-avatar'),summary);list.append(b);}
+  const noMatches=el('p','No conversations match this search.','muted');noMatches.hidden=true;list.append(noMatches);messageSearch.oninput=()=>{const cards=[...list.querySelectorAll('.conversation-card')];for(const card of cards)card.hidden=!card.dataset.search.includes(messageSearch.value.toLowerCase());noMatches.hidden=!cards.length||cards.some(card=>!card.hidden);};
   if(!data.rows.length)list.append(el('p','No conversations yet. Start one with a user or staff member from your local records.','muted'));
   const pager=el('div',undefined,'pager');if(conversationPage>1)pager.append(button('Previous',()=>{conversationPage--;render().catch(error=>message(error.message));}));if(conversationPage*25<data.total)pager.append(button('Next',()=>{conversationPage++;render().catch(error=>message(error.message));}));list.append(pager);layout.append(list,chat);main.append(layout);
   if(!conversationId){const head=el('div',undefined,'chat-heading');head.append(el('span','U','chat-avatar'),el('strong','UNIMATE Support'));chat.append(head,el('div','Local preview · Messages are saved here, not delivered to users or staff.','chat-safety'),el('p','Choose a conversation or start a new one. Manage support for users and staff in one place.','chat-bubble'),button('New conversation',()=>newConversation(),'primary'));return;}
@@ -258,7 +261,7 @@ async function showConversation(chat,id,version,messagePage=1){
   chat.replaceChildren();const head=el('div',undefined,'chat-heading'),person=el('div');person.append(el('strong',data.conversation.recipient_name),el('small',data.conversation.recipient_kind+' · '+data.conversation.subject));head.append(el('span',data.conversation.recipient_name.slice(0,2).toUpperCase(),'chat-avatar'),person);chat.append(head,el('div','Local preview · Messages are saved here, not delivered to users or staff.','chat-safety'));
   const history=el('div',undefined,'chat-history');history.setAttribute('role','log');history.setAttribute('aria-label','Saved conversation messages');
   const pages=el('div',undefined,'pager');if(messagePage*25<data.total)pages.append(button('Older messages',()=>showConversation(chat,id,version,messagePage+1).catch(error=>message(error.message))));if(messagePage>1)pages.append(button('Newer messages',()=>showConversation(chat,id,version,messagePage-1).catch(error=>message(error.message))));history.append(pages);
-  for(const row of [...data.rows].reverse()){const bubble=el('div',undefined,'chat-bubble outgoing');bubble.append(el('small',row.sender_name),el('p',row.body),el('small',new Date(row.created_at).toLocaleString()+' · Saved locally — not sent'));history.append(bubble);}chat.append(history);
+  for(const row of [...data.rows].reverse()){const bubble=el('div',undefined,'chat-bubble'+(row.direction==='incoming'?'':' outgoing'));bubble.append(el('small',row.sender_name),el('p',row.body),el('small',new Date(row.created_at).toLocaleString()+' · '+(row.demo?'Fictional demo message':'Saved locally — not sent')));history.append(bubble);}chat.append(history);
   const composer=el('form',undefined,'chat-composer'),input=el('textarea');input.name='message';input.placeholder='Write a message…';input.setAttribute('aria-label','Write a message');input.required=true;input.maxLength=4000;input.rows=2;
   const quick=el('div',undefined,'quick-replies');for(const [label,copy] of [['Booking update','Hello, I’m contacting you about your booking. '],['More information','Hello, could you provide more information about your request? '],['Staff check-in','Hello, please confirm your availability for the assigned service. ']])quick.append(button(label,()=>{input.value+=copy;input.focus();}));chat.append(quick);
   const emoji=button('☺',()=>{input.value+=' 🙂';input.focus();},'composer-emoji');emoji.setAttribute('aria-label','Insert smile emoji');const save=el('button','↑','primary composer-send');save.type='submit';save.setAttribute('aria-label','Save message locally');save.title='Save locally — not delivered';composer.append(input,emoji,save);chat.append(composer,el('small','Local only · Delivery and incoming replies need the live app connection.','chat-disclaimer'));
@@ -274,7 +277,7 @@ function newConversation(){
   dialog.append(form,button('Close',()=>dialog.close()));dialog.showModal();
 }
 function accountSettings(main){
-  const profile=el('section',undefined,'panel');profile.append(el('h2','Your account'),el('p',session.admin.name),el('p',session.admin.email,'muted'),el('span',roleLabel(session.admin.role),'badge'));main.append(profile);
+  const profile=el('section',undefined,'panel');profile.append(el('h2','Your account'),el('p',session.admin.name),el('p',session.admin.email,'muted'),el('span',roleLabel(session.admin.role),'badge'),button('Sign out',async()=>{try{await api('logout',{});message('');await init();}catch(e){message(e.message);}}));main.append(profile);
   const security=el('section',undefined,'panel'),form=el('form',undefined,'password-settings');security.append(el('h2','Change password'),el('p','Enter your current password to confirm it’s you. Changing it signs you out on all devices.','muted'));
   const current=field(form,'Current password','currentPassword','password');current.autocomplete='current-password';current.maxLength=128;
   const password=field(form,'New password','password','password');password.autocomplete='new-password';password.minLength=8;password.maxLength=128;
