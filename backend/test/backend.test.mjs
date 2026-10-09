@@ -98,10 +98,26 @@ test('authentication, permissions, moderation, persistence and audit integrity',
     const result=await request('/api/conversations',input);assert.equal(result.res.status,201);assert.equal(result.data.delivery_status,'local_only');
     const id=result.data.id;assert.equal((await request('/api/conversations',input)).data.id,id);assert.equal((await request('/api/conversations')).data.total,1);
     assert.equal((await request('/api/conversations',{...input,message:'Changed retry text'})).res.status,409);
+    assert.equal((await request('/api/conversations',{...input,category:'support'})).res.status,409);
+    assert.equal((await request('/api/conversations?category=support')).data.total,0);
+    assert.equal((await request('/api/conversations?category=general')).data.total,1);
+    assert.equal((await request('/api/conversations?category=invalid')).res.status,400);
+    const summary=(await request('/api/conversations')).data.rows[0];assert.equal(summary.last_message,input.message);assert.ok(summary.last_message_at);
     const reply={message:'Local follow-up only',messageId:randomUUID()};assert.equal((await request('/api/conversations/'+id,reply)).res.status,201);assert.equal((await request('/api/conversations/'+id,reply)).res.status,201);
     const thread=(await request('/api/conversations/'+id)).data;assert.equal(thread.total,2);assert.ok(thread.rows.every(r=>r.delivery_status==='local_only'));assert.equal(thread.conversation.recipient_name,'Alex Sample');
     assert.equal((await request('/api/conversations/'+id,{...reply,messageId:randomUUID(),message:'x'.repeat(4001)})).res.status,400);
     assert.equal(JSON.stringify(db.prepare("SELECT * FROM audit WHERE action='message.saved'").all()).includes(input.message),false);
+    assert.equal((await request('/api/conversations/'+id,{status:'closed'},{'X-CSRF-Token':'bad'})).res.status,403);
+    assert.equal((await request('/api/conversations/'+id,{status:'invalid'})).res.status,400);
+    assert.equal((await request('/api/conversations/'+id,{status:'closed'})).res.status,200);
+    assert.equal((await request('/api/conversations?status=closed')).data.total,1);
+    assert.equal((await request('/api/conversations?status=open')).data.total,0);
+    assert.equal((await request('/api/conversations/'+id,{message:'Blocked closed reply',messageId:randomUUID()})).res.status,409);
+    db.prepare("UPDATE conversations SET status='request' WHERE id=?").run(id);
+    assert.equal((await request('/api/conversations?status=request')).data.counts.request,1);
+    assert.equal((await request('/api/conversations/'+id,{status:'open'})).res.status,200);
+    assert.equal((await request('/api/conversations?status=open')).data.total,1);
+    db.exec("UPDATE admins SET role='admin'");assert.equal((await request('/api/conversations/'+id,{status:'closed'})).res.status,403);db.exec("UPDATE admins SET role='superadmin'");
     db.exec("UPDATE admins SET role='admin'");for(const path of ['/api/conversations','/api/conversations/'+id]){assert.equal((await request(path)).res.status,403);assert.equal((await request(path,input)).res.status,403);}db.exec("UPDATE admins SET role='superadmin'");
     db.prepare("UPDATE users SET status='suspended' WHERE id='sample-user'").run();assert.equal((await request('/api/conversations/'+id,{message:'Blocked delivery',messageId:randomUUID()})).res.status,409);db.prepare("UPDATE users SET status='active' WHERE id='sample-user'").run();
   });
@@ -149,7 +165,8 @@ test('authentication, permissions, moderation, persistence and audit integrity',
     const other=openDatabase(filename);assert.equal(other.prepare('SELECT status FROM posts').get().status,'hidden');other.close();
   });
   await t.test('Superadmin provisions roles; Normal admin cannot read or change accounts or finance',async()=>{
-    const newAdmin={name:'Normal Admin',email:'normal@example.invalid',password:'Testing!2026',confirmPassword:'Testing!2026',role:'admin',reason:'Test normal admin access'};
+    const newAdmin={name:'Normal Admin',email:'unimate.support',password:'Testing!2026',confirmPassword:'Testing!2026',role:'admin',reason:'Test username-only normal admin access'};
+    assert.equal((await request('/api/admins',{...newAdmin,email:'invalid username'})).res.status,400);
     assert.equal((await request('/api/admins',{...newAdmin,role:'owner'})).res.status,400);
     assert.equal((await request('/api/admins',{...newAdmin,confirmPassword:'wrong'})).res.status,400);
     assert.equal((await request('/api/admins',newAdmin,{'X-CSRF-Token':'wrong'})).res.status,403);
