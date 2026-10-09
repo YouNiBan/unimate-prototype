@@ -72,6 +72,10 @@ export function openDatabase(filename) {
     } finally { db.exec('PRAGMA foreign_keys=ON'); }
   }
   db.exec("CREATE INDEX IF NOT EXISTS admins_name_idx ON admins(name,id); CREATE UNIQUE INDEX IF NOT EXISTS single_owner_idx ON admins(role) WHERE role='owner'; PRAGMA user_version=3");
+  if (!db.prepare('PRAGMA table_info(conversations)').all().some(column=>column.name==='status')) {
+    db.exec("ALTER TABLE conversations ADD COLUMN status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('request','open','closed'))");
+  }
+  if (!db.prepare('PRAGMA table_info(conversations)').all().some(column=>column.name==='category')) db.exec("ALTER TABLE conversations ADD COLUMN category TEXT NOT NULL DEFAULT 'general' CHECK(category IN ('general','events','support','lost_found','technical'))");
   return db;
 }
 export function transaction(db, action) {

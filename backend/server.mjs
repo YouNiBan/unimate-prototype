@@ -277,31 +277,44 @@ export async function createApplication({ filename = resolve(root, 'data/unimate
       if(messageRoute){
         if(!fullAccess(actor.role))fail(403,'Owner or SuperAdmin access required.');
         const id=messageRoute[1];
+        const addStaffApproval=row=>{row.staff_approved=Boolean(db.prepare("SELECT 1 FROM users u JOIN staff_applications s ON s.email=u.email JOIN approvals a ON a.id=s.approval_id JOIN team_members m ON m.id=s.member_id WHERE u.id=? AND u.status='active' AND a.status='approved' AND m.status='active'").get(row.recipient_id));return row;};
         const page=Number(url.searchParams.get('page')||1);if(!Number.isSafeInteger(page)||page<1||page>100000)fail(400,'Invalid page.');
         if(req.method==='GET'&&!id){
-          const rows=db.prepare(`SELECT c.*,u.name AS recipient_name,u.kind AS recipient_kind,(SELECT count(*) FROM messages WHERE conversation_id=c.id) AS message_count FROM conversations c JOIN users u ON u.id=c.recipient_id ORDER BY c.created_at DESC,c.id LIMIT 25 OFFSET ?`).all((page-1)*25);
-          return reply(200,{rows,page,total:db.prepare('SELECT count(*) AS n FROM conversations').get().n});
+          const status=url.searchParams.get('status')||'open';if(!['request','open','closed'].includes(status))fail(400,'Invalid conversation status.');
+          const category=url.searchParams.get('category')||'all';if(!['all','general','events','support','lost_found','technical'].includes(category))fail(400,'Invalid chat category.');
+          const rows=db.prepare(`SELECT c.*,u.name AS recipient_name,u.kind AS recipient_kind,(SELECT team FROM team_members WHERE email=u.email AND status='active' ORDER BY created_at DESC LIMIT 1) AS recipient_team,(SELECT count(*) FROM messages WHERE conversation_id=c.id) AS message_count,(SELECT body FROM messages WHERE conversation_id=c.id ORDER BY created_at DESC,id DESC LIMIT 1) AS last_message,COALESCE((SELECT max(created_at) FROM messages WHERE conversation_id=c.id),c.created_at) AS last_message_at FROM conversations c JOIN users u ON u.id=c.recipient_id WHERE c.status=? AND (?='all' OR c.category=?) ORDER BY last_message_at DESC,c.id LIMIT 25 OFFSET ?`).all(status,category,category,(page-1)*25);
+          const counts={request:0,open:0,closed:0};for(const row of db.prepare('SELECT status,count(*) AS n FROM conversations GROUP BY status').all())counts[row.status]=row.n;
+          rows.forEach(addStaffApproval);
+          return reply(200,{rows,page,total:db.prepare("SELECT count(*) AS n FROM conversations WHERE status=? AND (?='all' OR category=?)").get(status,category,category).n,counts});
         }
         if(req.method==='GET'){
-          const conversation=db.prepare('SELECT c.*,u.name AS recipient_name,u.kind AS recipient_kind FROM conversations c JOIN users u ON u.id=c.recipient_id WHERE c.id=?').get(id);if(!conversation)fail(404,'Conversation not found.');
+          const conversation=db.prepare("SELECT c.*,u.name AS recipient_name,u.kind AS recipient_kind,(SELECT team FROM team_members WHERE email=u.email AND status='active' ORDER BY created_at DESC LIMIT 1) AS recipient_team FROM conversations c JOIN users u ON u.id=c.recipient_id WHERE c.id=?").get(id);if(!conversation)fail(404,'Conversation not found.');
           const rows=db.prepare('SELECT m.id,m.body,m.delivery_status,m.created_at,a.name AS sender_name FROM messages m JOIN admins a ON a.id=m.sender_id WHERE m.conversation_id=? ORDER BY m.created_at DESC,m.id DESC LIMIT 25 OFFSET ?').all(id,(page-1)*25);
-          return reply(200,{conversation,rows,page,total:db.prepare('SELECT count(*) AS n FROM messages WHERE conversation_id=?').get(id).n});
+          return reply(200,{conversation:addStaffApproval(conversation),rows,page,total:db.prepare('SELECT count(*) AS n FROM messages WHERE conversation_id=?').get(id).n});
         }
-        const data=await body(req),content=text(data.message,1,4000,'message (1–4000 characters)');
+        const data=await body(req);
+        if(id&&data.status!==undefined){
+          if(!['open','closed'].includes(data.status))fail(400,'Choose open or closed.');
+          transaction(db,()=>{const before=db.prepare('SELECT status FROM conversations WHERE id=?').get(id);if(!before)fail(404,'Conversation not found.');db.prepare('UPDATE conversations SET status=? WHERE id=?').run(data.status,id);if(before.status!==data.status)audit(db,actor,'conversation.status_changed','conversations',id,before,{status:data.status},'Local conversation status');});
+          return reply(200,{id,status:data.status});
+        }
+        const content=text(data.message,1,4000,'message (1–4000 characters)');
         const messageId=text(data.messageId,36,36,'message reference');if(!/^[0-9a-f-]{36}$/.test(messageId))fail(400,'Invalid message reference.');
         if(!id){
           const subject=text(data.subject,2,120,'subject'),recipientId=text(data.recipientId,1,100,'recipient');
+          const category=data.category||'general';if(!['general','events','support','lost_found','technical'].includes(category))fail(400,'Invalid chat category.');
           if(!db.prepare("SELECT id FROM users WHERE id=? AND status='active'").get(recipientId))fail(400,'Choose an active user or staff recipient.');
           let conversationId;
           transaction(db,()=>{
-            const existing=db.prepare('SELECT m.*,c.recipient_id,c.subject FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE m.id=?').get(messageId);
-            if(existing){if(existing.sender_id!==actor.id||existing.body!==content||existing.recipient_id!==recipientId||existing.subject!==subject)fail(409,'Message reference already used.');conversationId=existing.conversation_id;return;}
-            conversationId=randomUUID();const now=new Date().toISOString();db.prepare('INSERT INTO conversations VALUES(?,?,?,?,?)').run(conversationId,recipientId,subject,actor.id,now);
+            const existing=db.prepare('SELECT m.*,c.recipient_id,c.subject,c.category FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE m.id=?').get(messageId);
+            if(existing){if(existing.sender_id!==actor.id||existing.body!==content||existing.recipient_id!==recipientId||existing.subject!==subject||existing.category!==category)fail(409,'Message reference already used.');conversationId=existing.conversation_id;return;}
+            conversationId=randomUUID();const now=new Date().toISOString();db.prepare('INSERT INTO conversations(id,recipient_id,subject,created_by,created_at) VALUES(?,?,?,?,?)').run(conversationId,recipientId,subject,actor.id,now);
+            db.prepare('UPDATE conversations SET category=? WHERE id=?').run(category,conversationId);
             db.prepare('INSERT INTO messages VALUES(?,?,?,?,?,?)').run(messageId,conversationId,actor.id,content,'local_only',now);
             audit(db,actor,'message.saved','conversations',conversationId,null,{message_id:messageId},'Saved locally; no delivery service connected');
           });return reply(201,{id:conversationId,delivery_status:'local_only'});
         }
-        const conversation=db.prepare('SELECT c.id,u.status FROM conversations c JOIN users u ON u.id=c.recipient_id WHERE c.id=?').get(id);if(!conversation)fail(404,'Conversation not found.');if(conversation.status!=='active')fail(409,'Recipient account is inactive.');
+        const conversation=db.prepare('SELECT c.id,c.status AS chat_status,u.status FROM conversations c JOIN users u ON u.id=c.recipient_id WHERE c.id=?').get(id);if(!conversation)fail(404,'Conversation not found.');if(conversation.status!=='active')fail(409,'Recipient account is inactive.');if(conversation.chat_status!=='open')fail(409,'Open this conversation before replying.');
         transaction(db,()=>{
           const existing=db.prepare('SELECT * FROM messages WHERE id=?').get(messageId);if(existing){if(existing.sender_id!==actor.id||existing.conversation_id!==id||existing.body!==content)fail(409,'Message reference already used.');return;}
           db.prepare('INSERT INTO messages VALUES(?,?,?,?,?,?)').run(messageId,id,actor.id,content,'local_only',new Date().toISOString());audit(db,actor,'message.saved','conversations',id,null,{message_id:messageId},'Saved locally; no delivery service connected');
@@ -333,7 +346,7 @@ export async function createApplication({ filename = resolve(root, 'data/unimate
         if(actor.role!=='owner'&&data.role==='superadmin')fail(403,'Only UniMate Owner can appoint Superadmins.');
         if(!id){
           const email=text(data.email,3,254,'email').toLowerCase(),name=text(data.name,2,80,'name');
-          if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))fail(400,'Enter a valid email.');
+          if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)&&! /^[a-z][a-z0-9._-]{2,39}$/.test(email))fail(400,'Enter an email or a username of 3–40 letters, numbers, dots, underscores or hyphens, starting with a letter.');
           if(!passwordValid(data.password))fail(400,'Use 8–128 characters with a capital letter and a special character.');
           if(data.password!==data.confirmPassword)fail(400,'Passwords do not match.');
           if(passwordChecks>=2)fail(429,'Please try again shortly.');
