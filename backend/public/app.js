@@ -2,15 +2,16 @@ const app = document.querySelector('#app'), notice = document.querySelector('#no
 let session, section = 'overview', page = 1, requestVersion = 0, search = '', statusFilter = '', bookingDivision='all', menuExpanded=false;
 const names = {overview:'Overview',users:'Users',events:'Event approvals',approvals:'Approvals',posts:'Posts',reports:'Reports',bookings:'Bookings',teams:'Teams',schedule:'Staff calendar',messages:'Message centre',admins:'Admin accounts',audit:'Activity log',settings:'Account settings'};
 let selectedTeam='all',teamQuery='',teamPage=1,staffView='pending';
-names.teams='Staff Approval';
+names.teams='Staff to approve';
 names.documents='Company documents';names.invoices='Invoices';
-names.students='Accounts to approve';names.users='Approved user records';
+names.students='Users to approve';names.users='Approved user records';
 names.approvals='Application approvals';names.reports='Post reports';names.comment_reports='Comment reports';names.account_reports='Account reports';
 const teamNames={office:'Admin Office workers',cleaners:'Cleaners',drivers:'Drivers',movers:'Movers'};
 const roleLabel=role=>({owner:'UniMate Owner',superadmin:'SuperAdmin',admin:'Admin',viewer:'Read-only (legacy)'})[role]||role;
 const fullAccess=()=>['owner','superadmin'].includes(session.admin.role);
 let language='EN';try{const saved=localStorage.getItem('unimate-admin-language');if(['EN','简体','繁體'].includes(saved))language=saved;}catch{}
 const words={
+  'Users to approve':['待审批用户','待審批用戶'],'Staff to approve':['待审批员工','待審批員工'],'Approved user records':['已批准用户记录','已批准用戶記錄'],
   'Message centre':['消息中心','訊息中心'],'New conversation':['新对话','新對話'],'Your to-do list':['待办事项','待辦事項'],'New':['新','新'],'Seen':['已查看','已查看'],'Open task':['处理任务','處理任務'],'Save locally':['保存到本地','儲存至本地'],
   'UniMate Owner workspace':['UniMate 所有者工作区','UniMate 擁有者工作區'],'Full access':['完整权限','完整權限'],'All available administration tools':['所有可用管理工具','所有可用管理工具'],'Not connected yet':['尚未连接','尚未連接'],
   'Manage user records and account status.':['管理用户记录及账户状态。','管理用戶記錄及帳戶狀態。'],'Review events before publication.':['发布前审核活动。','發佈前審核活動。'],'Review pending application records.':['审核待处理的申请记录。','審核待處理的申請記錄。'],'Browse and moderate local content.':['查看及管理本地内容。','查看及管理本地內容。'],'Review content reported by 3 distinct users.':['审核被3名不同用户举报的内容。','審核被3名不同用戶舉報的內容。'],'Review decisions and access changes.':['查看审核决定及权限变更。','查看審核決定及權限變更。'],'Manage your password, SuperAdmins and Admins.':['管理您的密码、超级管理员及管理员。','管理您的密碼、超級管理員及管理員。'],'All financial booking records are visible to you.':['您可查看所有预订金额记录。','您可查看所有預訂金額記錄。'],
@@ -57,13 +58,18 @@ function headerControls(){
   for(const value of ['EN','简体','繁體']){const option=el('option',value);option.value=value;select.append(option);}select.value=language;
   select.onchange=()=>{language=select.value;try{localStorage.setItem('unimate-admin-language',language);}catch{}applyLanguage();};languageBox.append(icon('globe'),select);controls.append(languageBox);return controls;
 }
-async function refreshNotifications(){if(!session?.admin)return;try{const data=await api('tasks');const count=data.unseen;document.querySelectorAll('[data-notifications]').forEach(b=>{b.querySelector('.notification-count')?.remove();if(count){b.append(el('span',count>99?'99+':String(count),'notification-count'));}b.title=t('Your to-do list')+' · '+count+' new / '+data.total+' pending';b.setAttribute('aria-label',t('Notifications')+' · '+count);});}catch{/* Leave the control available to retry. */}}
+async function refreshNotifications(){if(!session?.admin)return;try{const data=await api('tasks');const count=data.unseen;document.querySelectorAll('[data-notifications]').forEach(b=>{b.querySelector('.notification-count')?.remove();b.append(el('span',count>99?'99+':String(count),'notification-count'));b.title=t('Your to-do list')+' · '+count+' new / '+data.total+' pending';b.setAttribute('aria-label',t('Notifications')+' · '+count);});}catch{/* Leave the control available to retry. */}}
 async function notifications(taskPage=1){
   dialog.replaceChildren(el('h2','Your to-do list'),el('p','Loading…'));dialog.append(button('Close',()=>dialog.close()));if(!dialog.open)dialog.showModal();
-  try{const data=await api('tasks?page='+taskPage);if(!dialog.open)return;dialog.replaceChildren(el('h2','Your to-do list'),el('p',data.unseen+' new · '+data.total+' pending. Opening a task marks it seen, not completed.','muted'));
-    for(const task of data.rows){const row=el('section',undefined,'notification-item');row.append(el('span',task.is_new?'New':'Seen','badge'),el('h3',task.title),el('p',task.category+' · '+new Date(task.created_at).toLocaleString(),'muted'),button('Open task',async()=>{try{const result=await api(task.resource+'/'+encodeURIComponent(task.record_id));await api('tasks/seen',{resource:task.resource,record_id:task.record_id});dialog.close();details(result.row,result.canManage,task.resource);await refreshNotifications();}catch(error){message(error.message);}}));dialog.append(row);}
-    if(!data.total)dialog.append(el('p','No pending reviews','empty'));
-    const pager=el('div',undefined,'pager');if(taskPage>1)pager.append(button('Previous',()=>notifications(taskPage-1)));if(taskPage*25<data.total)pager.append(button('Next',()=>notifications(taskPage+1)));dialog.append(pager,button('Close',()=>dialog.close()));await refreshNotifications();
+  try{const data=await api('tasks?page='+taskPage);if(!dialog.open)return;
+    const centre=el('div',undefined,'notification-centre'),header=el('header',undefined,'notification-header'),close=button('×',()=>dialog.close());close.setAttribute('aria-label','Close notifications');header.append(close,el('h2','Notifications'),brandLogo());
+    const intro=el('div',undefined,'notification-intro'),introCopy=el('div');introCopy.append(el('h3','Keep up with UNIMATE'),el('p',data.unseen+' new · '+data.total+' pending reviews. Check applications and reports that need your attention.'));intro.append(icon('bell'),introCopy);
+    const tabs=el('div',undefined,'notification-tabs'),items=el('div'),empty=el('p','No pending reviews','empty');tabs.setAttribute('aria-label','Filter notifications on this page');
+    for(const [key,label] of [['all','All'],['new','New'],['seen','Seen']]){const tab=button(label,()=>{tabs.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b===tab)));items.querySelectorAll('.notification-item').forEach(row=>row.hidden=key!=='all'&&row.dataset.state!==key);empty.hidden=[...items.children].some(row=>!row.hidden);empty.textContent='No '+(key==='all'?'pending':key)+' notifications on this page.';});tab.setAttribute('aria-pressed',String(key==='all'));tabs.append(tab);}
+    for(const task of data.rows){const row=el('section',undefined,'notification-item'),badge=el('div',undefined,'notification-symbol'+(task.is_new?' is-new':'')),content=el('div'),top=el('div',undefined,'notification-title'),time=el('time',new Date(task.created_at).toLocaleDateString('en-GB',{day:'numeric',month:'short'}));row.dataset.state=task.is_new?'new':'seen';time.title=new Date(task.created_at).toLocaleString();badge.append(icon(task.resource==='approvals'?'Reviews':'bell'));top.append(el('h3',task.title),time);content.append(top,el('p',task.resource==='approvals'?'An application is waiting for your review.':'A report is waiting for a moderation decision.'),button('Review '+(task.resource==='approvals'?'application':'report')+' ›',async()=>{try{const result=await api(task.resource+'/'+encodeURIComponent(task.record_id));await api('tasks/seen',{resource:task.resource,record_id:task.record_id});dialog.close();details(result.row,result.canManage,task.resource);await refreshNotifications();}catch(error){message(error.message);}},'primary'));row.append(badge,content);items.append(row);}
+    empty.hidden=Boolean(data.rows.length);
+    const pager=el('div',undefined,'pager');if(taskPage>1)pager.append(button('Previous',()=>notifications(taskPage-1)));if(taskPage*25<data.total)pager.append(button('Next',()=>notifications(taskPage+1)));
+    centre.append(header,intro,tabs,el('p','PENDING ACTIVITY · PAGE '+taskPage,'notification-section'),items,empty,pager,el('small','Opening a notification marks it seen, not completed.','muted'));dialog.replaceChildren(centre);await refreshNotifications();
   }catch(error){if(dialog.open){dialog.replaceChildren(el('h2','Notifications'),el('p',error.message),button('Close',()=>dialog.close()));}}
 }
 function button(text, action, cls) { const b=el('button',text,cls); b.type='button'; b.onclick=action; return b; }
@@ -85,7 +91,7 @@ async function init() {
   const shell=el('div',undefined,'shell'+(menuExpanded?' menu-expanded':'')),side=el('aside'),brand=el('div');brand.append(el('small','ADMINISTRATION'));
   const nav=el('nav');nav.setAttribute('aria-label','Administration');
   const available=Object.keys(names).filter(k=>!['admins','approvals'].includes(k)&&(fullAccess()||['overview','events','posts','reports','comment_reports','settings'].includes(k)));
-  if(available.includes('students')){available.splice(available.indexOf('students'),1);available.splice(available.indexOf('users'),0,'students');}
+  if(available.includes('students')){for(const key of ['students','teams'])available.splice(available.indexOf(key),1);available.splice(available.indexOf('users'),0,'students','teams');}
   if(!available.includes(section)&&!(section==='admins'&&fullAccess()))section='overview';
   for(const key of available){
     if(key==='bookings'){
@@ -122,7 +128,17 @@ function auth(){
   form.onsubmit=async e=>{e.preventDefault();submit.disabled=true;message('');try{const data=Object.fromEntries(new FormData(form));await api(session.needsSetup?'setup':'login',data);if(session.needsSetup){await init();message('Account created. Sign in with your new password.');}else await init();}catch(error){message(error.message);}finally{submit.disabled=false;}};
   const top=el('div',undefined,'auth-controls');top.append(headerControls());box.prepend(top);box.append(form,el('p','Local only · Separate from the live UniMate app.','muted'));app.append(box);applyLanguage();
 }
+let navigationCountVersion=0;
+async function refreshNavigationCounts(){
+  const version=++navigationCountVersion;
+  try{const {counts}=await api('navigation-counts');if(version!==navigationCountVersion)return;
+    app.querySelectorAll('nav button[data-section]').forEach(b=>{const key=b.dataset.section,value=key==='bookings'?counts.bookings?.[b.dataset.division]:counts[key];let badge=b.querySelector('.nav-count');if(!Number.isSafeInteger(value)){badge?.remove();return;}if(!badge){badge=el('span',undefined,'nav-count');b.append(badge);}const label=key==='bookings'?'booking records':key==='messages'?'saved messages':key.includes('reports')?'open reports':'pending applications';badge.textContent=value.toLocaleString('en-GB');badge.title=label;badge.setAttribute('aria-label',value+' '+label);});
+    app.querySelectorAll('.rail-button[data-sections]').forEach(b=>{if(!JSON.parse(b.dataset.sections).includes('messages'))return;b.querySelector('.notification-count')?.remove();if(Number.isSafeInteger(counts.messages)){b.append(el('span',counts.messages>99?'99+':String(counts.messages),'notification-count'));b.title='Message centre · '+counts.messages+' saved messages';b.setAttribute('aria-label',b.title);}});
+  }catch{if(version===navigationCountVersion)app.querySelectorAll('.nav-count').forEach(b=>b.remove());}
+}
 async function render(){
+  app.querySelector('.shell')?.classList.toggle('message-workspace',section==='messages');
+  refreshNavigationCounts();
   refreshNotifications();
   const version=++requestVersion, current=section,main=app.querySelector('main');message('');
   app.querySelectorAll('.rail-button[data-sections]').forEach(b=>b.setAttribute('aria-current',JSON.parse(b.dataset.sections).includes(current==='admins'?'settings':current)?'page':'false'));
@@ -251,10 +267,9 @@ async function messageCentre(main,version){
   const data=await api('conversations?page='+conversationPage+'&status='+conversationStatus+'&category='+conversationCategory);if(version!==requestVersion)return;
   const layout=el('section',undefined,'message-centre app-inbox'+(conversationId?' chat-selected':'')),list=el('div',undefined,'conversation-list'),chat=el('div',undefined,'support-chat');
   const messageSearch=el('input');messageSearch.type='search';messageSearch.placeholder='Search messages…';messageSearch.setAttribute('aria-label','Search conversations on this page');
-  const safety=el('div',undefined,'message-safety');safety.append(el('strong','✓ Safe, supported conversations'),el('p','Service and support conversations appear here. This workspace does not deliver messages or connect to live support.'));
   const filters=el('div',undefined,'chat-filters');filters.setAttribute('aria-label','Conversation categories');
-  for(const [status,label] of [['request','Message requests'],['open','Open chats'],['closed','Closed chats']]){const filter=button('',()=>{conversationStatus=status;conversationPage=1;conversationId=null;render().catch(error=>message(error.message));},'chat-filter'+(status==='request'?' request-card':''));const labelBlock=el('div');labelBlock.append(el('strong',label));if(status==='request')labelBlock.append(el('small','Open and decline in the chat'));filter.append(labelBlock,el('span',String(data.counts?.[status]||0),'chat-count'));filter.setAttribute('aria-pressed',String(conversationStatus===status));filters.append(filter);}
-  list.append(el('h2','Messages'),messageSearch,safety,filters,button('New conversation',()=>newConversation(),'new-conversation'));
+  for(const [status,label] of [['request','Message requests'],['all','All'],['open','Open'],['closed','Closed']]){const filter=button('',()=>{conversationStatus=status;conversationPage=1;conversationId=null;render().catch(error=>message(error.message));},'chat-filter'+(status==='request'?' request-card':''));const labelBlock=el('div');labelBlock.append(el('strong',label));if(status==='request')labelBlock.append(el('small','Open and decline in the chat'));filter.append(labelBlock,el('span',String(status==='all'?Object.values(data.counts||{}).reduce((sum,n)=>sum+n,0):data.counts?.[status]||0),'chat-count'));filter.setAttribute('aria-pressed',String(conversationStatus===status));filters.append(filter);}
+  list.append(el('h2','Messages'),messageSearch,filters,button('New conversation',()=>newConversation(),'new-conversation'));
   if(conversationCategory!=='all'){const team=supportTeams.find(t=>t[0]===conversationCategory);list.append(button('‹ All messages',()=>{conversationCategory='all';conversationId=null;conversationPage=1;render().catch(error=>message(error.message));}),el('h3',team?.[1]||'Messages'));}
   for(const row of data.rows){const b=button('',()=>{conversationId=row.id;render().catch(error=>message(error.message));},'conversation-card');b.dataset.search=(row.recipient_name+' '+row.subject+' '+conversationRole(row)+' '+(row.last_message||'')).toLowerCase();b.setAttribute('aria-pressed',String(row.id===conversationId));const summary=el('div',undefined,'conversation-summary'),top=el('div',undefined,'conversation-title');top.append(el('strong',row.recipient_name),el('time',conversationTime(row.last_message_at||row.created_at)));summary.append(top,el('span',conversationRole(row)),el('small',row.last_message||row.subject));b.append(el('span',row.recipient_name.split(' ').map(w=>w[0]).slice(0,2).join(''),'chat-avatar'),summary);list.append(b);}
   if(conversationCategory==='all'&&conversationStatus==='open'){for(const [category,name,description,icon] of supportTeams){const b=button('',()=>{conversationCategory=category;conversationId=null;conversationPage=1;render().catch(error=>message(error.message));},'conversation-card support-team-card');b.dataset.search=(name+' '+description).toLowerCase();const summary=el('div',undefined,'conversation-summary');summary.append(el('strong',name),el('span','UNIMATE support · Team inbox'),el('small',description));b.append(el('span',icon,'chat-avatar'),summary,el('span','›'));list.append(b);}list.append(el('small','Local team inboxes. Team account permissions are managed separately.','muted'));}
@@ -275,10 +290,9 @@ async function showConversation(chat,id,version,messagePage=1){
   for(const [next,label] of status==='request'?[['open','Accept request'],['closed','Decline request']]:status==='closed'?[['open','Reopen chat']]:[['closed','Close chat']])actions.append(button(label,()=>changeStatus(next)));
   head.append(actions);
   const pages=el('div',undefined,'pager');if(messagePage*25<data.total)pages.append(button('Older messages',()=>showConversation(chat,id,version,messagePage+1).catch(error=>message(error.message))));if(messagePage>1)pages.append(button('Newer messages',()=>showConversation(chat,id,version,messagePage-1).catch(error=>message(error.message))));history.append(pages);
-  for(const row of [...data.rows].reverse()){const bubble=el('div',undefined,'chat-bubble'+(row.direction==='incoming'?'':' outgoing'));bubble.append(el('small',row.sender_name),el('p',row.body),el('small',new Date(row.created_at).toLocaleString()+' · '+(row.demo?'Fictional demo message':'Saved locally — not sent')));history.append(bubble);}chat.append(history);
+  for(const row of [...data.rows].reverse()){const incoming=row.direction==='incoming',line=el('div',undefined,'chat-message-row'+(incoming?'':' outgoing')),bubble=el('div',undefined,'chat-bubble'+(incoming?'':' outgoing')),avatar=el('span',(row.sender_name||'Admin').split(' ').map(w=>w[0]).slice(0,2).join(''),'chat-avatar');avatar.title=row.sender_name;bubble.title=row.sender_name+' · '+new Date(row.created_at).toLocaleString()+' · '+(row.demo?'Fictional demo message':'Saved locally — not sent');bubble.append(el('p',row.body));line.append(avatar,bubble);history.append(line);}chat.append(history);
   if(status!=='open'){chat.append(el('p',status==='request'?'Accept this request to reply.':'This chat is closed. Reopen it to reply.','chat-disclaimer'));return;}
   const composer=el('form',undefined,'chat-composer'),input=el('textarea');input.name='message';input.placeholder='Write a message…';input.setAttribute('aria-label','Write a message');input.required=true;input.maxLength=4000;input.rows=2;
-  const quick=el('div',undefined,'quick-replies');for(const [label,copy] of [['Booking update','Hello, I’m contacting you about your booking. '],['More information','Hello, could you provide more information about your request? '],['Staff check-in','Hello, please confirm your availability for the assigned service. ']])quick.append(button(label,()=>{input.value+=copy;input.focus();}));chat.append(quick);
   const emoji=button('☺',()=>{input.value+=' 🙂';input.focus();},'composer-emoji');emoji.setAttribute('aria-label','Insert smile emoji');const save=el('button','↑','primary composer-send');save.type='submit';save.setAttribute('aria-label','Save message locally');save.title='Save locally — not delivered';composer.append(input,emoji,save);chat.append(composer,el('small','Local only · Delivery and incoming replies need the live app connection.','chat-disclaimer'));
   let messageId=crypto.randomUUID();composer.onsubmit=async event=>{event.preventDefault();save.disabled=true;const content=input.value;try{await api('conversations/'+encodeURIComponent(id),{message:content,messageId});messageId=crypto.randomUUID();input.value='';await showConversation(chat,id,version);message('Message saved locally. It has not been delivered.');}catch(error){message(error.message);}finally{save.disabled=false;}};
 }
@@ -342,4 +356,4 @@ async function details(row,canManage,kind){
   dialog.append(button('Close',()=>dialog.close()));dialog.showModal();
 }
 init().catch(error=>message(error.message));
-setInterval(()=>{if(session?.admin&&!document.hidden)refreshNotifications();},30000);
+setInterval(()=>{if(session?.admin&&!document.hidden){refreshNotifications();refreshNavigationCounts();}},30000);
