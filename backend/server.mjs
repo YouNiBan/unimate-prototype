@@ -280,12 +280,12 @@ export async function createApplication({ filename = resolve(root, 'data/unimate
         const addStaffApproval=row=>{row.staff_approved=Boolean(db.prepare("SELECT 1 FROM users u JOIN staff_applications s ON s.email=u.email JOIN approvals a ON a.id=s.approval_id JOIN team_members m ON m.id=s.member_id WHERE u.id=? AND u.status='active' AND a.status='approved' AND m.status='active'").get(row.recipient_id));return row;};
         const page=Number(url.searchParams.get('page')||1);if(!Number.isSafeInteger(page)||page<1||page>100000)fail(400,'Invalid page.');
         if(req.method==='GET'&&!id){
-          const status=url.searchParams.get('status')||'open';if(!['request','open','closed'].includes(status))fail(400,'Invalid conversation status.');
+          const status=url.searchParams.get('status')||'open';if(!['all','request','open','closed'].includes(status))fail(400,'Invalid conversation status.');
           const category=url.searchParams.get('category')||'all';if(!['all','general','events','support','lost_found','technical'].includes(category))fail(400,'Invalid chat category.');
-          const rows=db.prepare(`SELECT c.*,u.name AS recipient_name,u.kind AS recipient_kind,(SELECT team FROM team_members WHERE email=u.email AND status='active' ORDER BY created_at DESC LIMIT 1) AS recipient_team,(SELECT count(*) FROM messages WHERE conversation_id=c.id) AS message_count,(SELECT body FROM messages WHERE conversation_id=c.id ORDER BY created_at DESC,id DESC LIMIT 1) AS last_message,COALESCE((SELECT max(created_at) FROM messages WHERE conversation_id=c.id),c.created_at) AS last_message_at FROM conversations c JOIN users u ON u.id=c.recipient_id WHERE c.status=? AND (?='all' OR c.category=?) ORDER BY last_message_at DESC,c.id LIMIT 25 OFFSET ?`).all(status,category,category,(page-1)*25);
+          const rows=db.prepare(`SELECT c.*,u.name AS recipient_name,u.kind AS recipient_kind,(SELECT team FROM team_members WHERE email=u.email AND status='active' ORDER BY created_at DESC LIMIT 1) AS recipient_team,(SELECT count(*) FROM messages WHERE conversation_id=c.id) AS message_count,(SELECT body FROM messages WHERE conversation_id=c.id ORDER BY created_at DESC,id DESC LIMIT 1) AS last_message,COALESCE((SELECT max(created_at) FROM messages WHERE conversation_id=c.id),c.created_at) AS last_message_at FROM conversations c JOIN users u ON u.id=c.recipient_id WHERE (?='all' OR c.status=?) AND (?='all' OR c.category=?) ORDER BY last_message_at DESC,c.id LIMIT 25 OFFSET ?`).all(status,status,category,category,(page-1)*25);
           const counts={request:0,open:0,closed:0};for(const row of db.prepare('SELECT status,count(*) AS n FROM conversations GROUP BY status').all())counts[row.status]=row.n;
           rows.forEach(addStaffApproval);
-          return reply(200,{rows,page,total:db.prepare("SELECT count(*) AS n FROM conversations WHERE status=? AND (?='all' OR category=?)").get(status,category,category).n,counts});
+          return reply(200,{rows,page,total:db.prepare("SELECT count(*) AS n FROM conversations WHERE (?='all' OR status=?) AND (?='all' OR category=?)").get(status,status,category,category).n,counts});
         }
         if(req.method==='GET'){
           const conversation=db.prepare("SELECT c.*,u.name AS recipient_name,u.kind AS recipient_kind,(SELECT team FROM team_members WHERE email=u.email AND status='active' ORDER BY created_at DESC LIMIT 1) AS recipient_team FROM conversations c JOIN users u ON u.id=c.recipient_id WHERE c.id=?").get(id);if(!conversation)fail(404,'Conversation not found.');
@@ -319,6 +319,19 @@ export async function createApplication({ filename = resolve(root, 'data/unimate
           const existing=db.prepare('SELECT * FROM messages WHERE id=?').get(messageId);if(existing){if(existing.sender_id!==actor.id||existing.conversation_id!==id||existing.body!==content)fail(409,'Message reference already used.');return;}
           db.prepare('INSERT INTO messages VALUES(?,?,?,?,?,?)').run(messageId,id,actor.id,content,'local_only',new Date().toISOString());audit(db,actor,'message.saved','conversations',id,null,{message_id:messageId},'Saved locally; no delivery service connected');
         });return reply(201,{id,delivery_status:'local_only'});
+      }
+      if(path==='/api/navigation-counts'&&req.method==='GET'){
+        const counts={events:db.prepare("SELECT count(*) n FROM approvals WHERE kind='event' AND status='pending'").get().n};
+        for(const [key,condition] of [['reports',"IN ('moment','forum')"],['comment_reports',"='comment'"]])counts[key]=db.prepare(`SELECT count(*) n FROM reports WHERE status='open' AND ${reviewEligibleSql} AND COALESCE((SELECT kind FROM moderation_targets WHERE post_id=reports.post_id),'moment') ${condition}`).get().n;
+        if(fullAccess(actor.role)){
+          counts.account_reports=db.prepare("SELECT count(*) n FROM account_reports WHERE status='open'").get().n;
+          counts.messages=db.prepare('SELECT count(*) n FROM messages').get().n;
+          counts.students=db.prepare("SELECT count(*) n FROM approvals WHERE kind IN ('student','staff','society','organisation','seller') AND status='pending'").get().n;
+          counts.teams=db.prepare("SELECT count(*) n FROM approvals WHERE kind='staff' AND status='pending'").get().n;
+          counts.bookings={all:db.prepare('SELECT count(*) n FROM bookings').get().n,cleaning:0,moving:0,airport_transfer:0,other:0};
+          for(const row of db.prepare(`SELECT ${bookingDivisionSql} division,count(*) n FROM bookings GROUP BY division`).all())counts.bookings[row.division]=row.n;
+        }
+        return reply(200,{counts});
       }
       if (path === '/api/overview' && req.method === 'GET') {
         return reply(200,{
