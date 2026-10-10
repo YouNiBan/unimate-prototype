@@ -91,6 +91,17 @@ test('authentication, permissions, moderation, persistence and audit integrity',
     assert.equal((await request('/api/tasks/seen',task)).res.status,200);assert.equal((await request('/api/tasks/seen',{resource:'users',record_id:'sample-user'})).res.status,400);
     db.exec("UPDATE admins SET role='admin'");assert.equal((await request('/api/tasks')).data.total,1);assert.equal((await request('/api/approvals/sample-approval')).res.status,403);assert.equal((await request('/api/tasks/seen',{resource:'approvals',record_id:'sample-approval'})).res.status,404);db.exec("UPDATE admins SET role='superadmin'");
   });
+  await t.test('navigation badges count complete queues and booking divisions',async()=>{
+    const {counts}=(await request('/api/navigation-counts')).data;
+    assert.equal(counts.bookings.all,db.prepare('SELECT count(*) n FROM bookings').get().n);
+    assert.equal(counts.bookings.all,['cleaning','moving','airport_transfer','other'].reduce((n,k)=>n+counts.bookings[k],0));
+    assert.equal(counts.students,db.prepare("SELECT count(*) n FROM approvals WHERE status='pending' AND kind IN ('student','staff','society','organisation','seller')").get().n);
+    assert.equal(counts.teams,db.prepare("SELECT count(*) n FROM approvals WHERE status='pending' AND kind='staff'").get().n);
+    assert.equal(counts.reports,(await request('/api/reports?type=post&status=open')).data.total);
+    assert.equal(counts.comment_reports,(await request('/api/reports?type=comment&status=open')).data.total);
+    assert.equal(counts.account_reports,(await request('/api/account_reports?status=open')).data.total);
+    assert.equal(counts.messages,db.prepare('SELECT count(*) n FROM messages').get().n);
+  });
   await t.test('messages are saved locally, idempotent and restricted to privileged admins',async()=>{
     const input={recipientId:'sample-user',subject:'Booking support',message:'Private sample conversation text',messageId:randomUUID()};
     assert.equal((await request('/api/conversations',input,{'X-CSRF-Token':'bad'})).res.status,403);
@@ -138,6 +149,7 @@ test('authentication, permissions, moderation, persistence and audit integrity',
     db.exec("UPDATE admins SET role='viewer'");assert.equal((await request('/api/posts/sample-post',{status:'hidden',expectedStatus:'published',reason:'Test reason'})).res.status,403);assert.equal((await request('/api/audit')).res.status,403);
     db.exec("UPDATE admins SET role='admin'");assert.equal((await request('/api/users')).res.status,403);assert.equal((await request('/api/bookings')).res.status,403);assert.equal((await request('/api/approvals')).res.status,200);
     assert.deepEqual(Object.keys((await request('/api/overview')).data).sort(),['approvals','reports']);
+    assert.deepEqual(Object.keys((await request('/api/navigation-counts')).data.counts),['events','reports','comment_reports']);
     assert.equal((await request('/api/posts/sample-post',{status:'hidden',expectedStatus:'published',reason:'Sample moderation'})).res.status,200);
     db.exec("UPDATE admins SET role='superadmin'");
   });
