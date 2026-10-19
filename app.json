@@ -2,15 +2,45 @@
   "expo": {
     "name": "UNIMATE 优你伴",
     "slug": "unimate",
+    "owner": "unimate-ltd",
+    "extra": {
+      "eas": {
+        "projectId": "0f2bb182-43b1-460e-a872-2ad47e2b84c8"
+      }
+    },
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
-    "splash": { "backgroundColor": "#F5FAFF" },
-    "ios": { "supportsTablet": true, "bundleIdentifier": "com.unimate.studentlife", "infoPlist": { "NSLocationWhenInUseUsageDescription": "UNIMATE uses your location to show nearby events, restaurants and services when you choose to enable it." } },
-    "android": { "package": "com.unimate.studentlife", "permissions": ["ACCESS_COARSE_LOCATION", "ACCESS_FINE_LOCATION"] },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.unimate.studentlife",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "UNIMATE uses your location to show nearby events, restaurants and services when you choose to enable it."
+      }
+    },
+    "android": {
+      "package": "com.unimate.studentlife",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION"
+      ]
+    },
     "plugins": [
-      ["expo-location", { "locationWhenInUsePermission": "Allow UNIMATE to use your location to find nearby events, restaurants and services." }],
-      ["expo-image-picker", { "photosPermission": "Allow UNIMATE to access a photo you choose for an event or marketplace listing." }]
+      "expo-font",
+      "expo-status-bar",
+      ["expo-splash-screen", { "backgroundColor": "#F5FAFF" }],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "Allow UNIMATE to use your location to find nearby events, restaurants and services."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow UNIMATE to access a photo you choose for an event or marketplace listing."
+        }
+      ]
     ]
   }
 }

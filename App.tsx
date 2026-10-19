@@ -3,6 +3,7 @@ import {
   Alert,
   Image,
   KeyboardAvoidingView,
+  Keyboard,
   Linking,
   Modal,
   Platform,
@@ -28,6 +29,7 @@ import * as DocumentPicker from "expo-document-picker";
 import QRCode from "react-native-qrcode-svg";
 import Svg, { Path } from "react-native-svg";
 import ForumIcon from "./ForumIcon";
+import { findAddresses, resolveAddress, type AddressSuggestion } from "./address-lookup";
 import { activeMomentMention, insertMomentMention, hasMention } from "./moment-mentions";
 import { extractForumHashtags, forumMatchesSearch, formatForumDate } from "./forum-utils";
 import { defaultMomentsSettings, momentsVisibleTo, type MomentsSettings, type MomentsHistory } from "./moments-privacy";
@@ -278,6 +280,7 @@ const ScrollView = React.forwardRef<
   const darkMode = useContext(DarkModeContext);
   return (
     <NativeScrollView
+      keyboardShouldPersistTaps="handled"
       {...props}
       ref={ref}
       style={themedStyle(props.style, darkMode)}
@@ -4906,6 +4909,112 @@ function ServicePaymentPage({
   );
 }
 
+const addressLookupKey = process.env.EXPO_PUBLIC_IDEAL_POSTCODES_API_KEY || "";
+
+function AddressLookupField({ language, label, value, onChange }: {
+  language: Language; label: string; value: string; onChange: (value: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
+  const [busy, setBusy] = useState<"search" | "resolve" | null>(null);
+  const [error, setError] = useState(false);
+  const version = useRef(0);
+  const selection = useRef<AbortController | null>(null);
+  const t = (en: string, cn: string, tw: string) => tr(language, en, cn, tw);
+  const stop = () => {
+    version.current += 1;
+    selection.current?.abort();
+    selection.current = null;
+    setEditing(false);
+    setSuggestions([]);
+    setBusy(null);
+    setError(false);
+  };
+  useEffect(() => () => { version.current += 1; selection.current?.abort(); }, []);
+  useEffect(() => {
+    if (!editing || !addressLookupKey || value.trim().length < 3) return;
+    const requestVersion = ++version.current;
+    const controller = new AbortController();
+    setBusy("search");
+    const timer = setTimeout(async () => {
+      try {
+        const found = await findAddresses(value, addressLookupKey, controller.signal);
+        if (!controller.signal.aborted && version.current === requestVersion) setSuggestions(found);
+      } catch {
+        if (!controller.signal.aborted && version.current === requestVersion) setError(true);
+      } finally {
+        if (!controller.signal.aborted && version.current === requestVersion) setBusy(null);
+      }
+    }, 400);
+    return () => { clearTimeout(timer); controller.abort(); };
+  }, [value, editing]);
+  const choose = async (item: AddressSuggestion) => {
+    if (selection.current) return;
+    const requestVersion = ++version.current;
+    const controller = new AbortController();
+    selection.current = controller;
+    setEditing(false);
+    setBusy("resolve");
+    setError(false);
+    try {
+      const address = await resolveAddress(item.id, addressLookupKey, controller.signal);
+      if (!controller.signal.aborted && version.current === requestVersion) {
+        onChange(address);
+        setSuggestions([]);
+        Keyboard.dismiss();
+      }
+    } catch {
+      if (!controller.signal.aborted && version.current === requestVersion) {
+        setError(true);
+        setEditing(true);
+      }
+    } finally {
+      if (selection.current === controller) selection.current = null;
+      if (!controller.signal.aborted && version.current === requestVersion) setBusy(null);
+    }
+  };
+  return <View style={styles.addressSearchWrap}>
+    <Text style={styles.fieldLabel}>{label}</Text>
+    <View style={styles.addressSearchField}>
+      <Ionicons name="search-outline" size={18} color={palette.blue} />
+      <TextInput accessibilityLabel={label} style={[styles.addressSearchInput, { minHeight: 48 }]}
+        value={value} autoCorrect={false} autoComplete="street-address"
+        placeholder={t("Postcode, house number or address", "邮编、门牌号或地址", "郵編、門牌號或地址")}
+        placeholderTextColor="#A1ADBE"
+        onFocus={() => { if (busy !== "resolve") setEditing(true); }}
+        onChangeText={(text) => { stop(); onChange(text); setEditing(true); }} />
+      {!!value && <Pressable accessibilityRole="button" hitSlop={8}
+        accessibilityLabel={t(`Clear ${label}`, `清除${label}`, `清除${label}`)}
+        style={{ minWidth: 36, minHeight: 44, alignItems: "center", justifyContent: "center" }}
+        onPress={() => { stop(); onChange(""); setEditing(true); }}>
+        <Ionicons name="close-circle" size={20} color={palette.muted} />
+      </Pressable>}
+    </View>
+    <Text style={styles.fieldHint}>{addressLookupKey
+      ? t("Start with a postcode or part of your address, then choose your property. Add the flat number if needed.", "输入邮编或部分地址，然后选择房屋；如有需要，请补充房间或公寓号。", "輸入郵編或部分地址，然後選擇房屋；如有需要，請補充房間或公寓號。")
+      : t("Enter the full address, including flat or house number and postcode. Address suggestions are not available yet.", "请输入完整地址，包括房间或门牌号及邮编。地址建议暂未启用。", "請輸入完整地址，包括房間或門牌號及郵編。地址建議暫未啟用。")}</Text>
+    {busy === "resolve" && <Text accessibilityLiveRegion="polite" style={styles.addressSearchMeta}>{t("Loading full address…", "正在获取完整地址…", "正在取得完整地址…")}</Text>}
+    {editing && !!addressLookupKey && value.trim().length >= 3 && <View style={styles.addressSuggestions}>
+      {busy === "search" && <Text accessibilityLiveRegion="polite" style={styles.addressSearchMeta}>{t("Finding properties…", "正在查找房屋…", "正在搜尋房屋…")}</Text>}
+      {error && <Text accessibilityRole="alert" style={styles.addressSearchMeta}>{t("Address search is unavailable. Please enter your full address manually.", "暂时无法搜索地址，请手动输入完整地址。", "暫時無法搜尋地址，請手動輸入完整地址。")}</Text>}
+      {!busy && !error && !suggestions.length && <Text accessibilityLiveRegion="polite" style={styles.addressSearchMeta}>{t("No matching properties. Try a full postcode or add the house or flat number.", "没有匹配房屋，请尝试完整邮编或添加门牌及房间号。", "沒有相符房屋，請嘗試完整郵編或加入門牌及房間號。")}</Text>}
+      <ScrollView style={{ maxHeight: 220 }} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+        {suggestions.map((item) => <Pressable key={item.id} accessibilityRole="button"
+          accessibilityLabel={t(`Select ${item.label}`, `选择${item.label}`, `選擇${item.label}`)}
+          style={[styles.airportAddressSuggestion, { paddingVertical: 12 }]} onPress={() => choose(item)}>
+          <Ionicons name="home-outline" size={17} color={palette.blue} />
+          <Text style={styles.addressSuggestionText}>{item.label}</Text>
+        </Pressable>)}
+      </ScrollView>
+      <Pressable accessibilityRole="button" style={[styles.airportAddressSuggestion, { paddingVertical: 12 }]} onPress={stop}>
+        <Ionicons name="create-outline" size={17} color={palette.blue} />
+        <Text style={styles.addressSuggestionText}>{t("Use address as typed", "使用输入的地址", "使用輸入的地址")}</Text>
+      </Pressable>
+      <Text style={styles.addressSearchMeta}>{t("Address search by Ideal Postcodes · Your search text is sent to this service.", "地址搜索由 Ideal Postcodes 提供 · 搜索文字会发送给该服务。", "地址搜尋由 Ideal Postcodes 提供 · 搜尋文字會傳送給該服務。")}</Text>
+    </View>}
+  </View>;
+}
+
 function AirportTransferForm({ language, onCheckout, isUnavailable, isTimeUnavailable }: { language: Language; onCheckout: (order: ServiceCheckoutOrder) => void; isUnavailable?: (dayKey: string) => boolean; isTimeUnavailable?: (dayKey: string, time: string) => boolean }) {
   const isEnglish = language === "EN";
   const { width } = useWindowDimensions();
@@ -4926,10 +5035,6 @@ function AirportTransferForm({ language, onCheckout, isUnavailable, isTimeUnavai
   const [locationQuery, setLocationQuery] = useState(
     "University College London · WC1E 6BT",
   );
-  const [locationEditing, setLocationEditing] = useState(false);
-  const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
-  const [locationLoading, setLocationLoading] = useState(false);
-  const [locationError, setLocationError] = useState(false);
   const airports = [
     "Heathrow · Terminal 2",
     "Heathrow · Terminal 3",
@@ -4956,56 +5061,6 @@ function AirportTransferForm({ language, onCheckout, isUnavailable, isTimeUnavai
     `3 ${size} suitcases`,
     `4 ${size} suitcases`,
   ];
-  const londonLocations = [
-    "University College London · WC1E 6BT",
-    "Imperial College London · SW7 2AZ",
-    "King’s College London · WC2R 2LS",
-    "London School of Economics · WC2A 2AE",
-  ];
-  useEffect(() => {
-    if (!locationEditing) return;
-    const query = locationQuery.trim();
-    const matchingPresets = londonLocations.filter((place) =>
-      place.toLowerCase().includes(query.toLowerCase()),
-    );
-    setLocationSuggestions(query ? matchingPresets : londonLocations);
-    setLocationError(false);
-    if (query.length < 3) {
-      setLocationLoading(false);
-      return;
-    }
-    const controller = new AbortController();
-    const timer = setTimeout(async () => {
-      setLocationLoading(true);
-      try {
-        const response = await fetch(
-          `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lat=51.5074&lon=-0.1278&limit=5&lang=en`,
-          { signal: controller.signal },
-        );
-        if (!response.ok) throw new Error("Address search unavailable");
-        const data = await response.json();
-        const found = (data.features || [])
-          .filter((feature: any) => feature.properties?.countrycode === "GB")
-          .map((feature: any) => {
-            const place = feature.properties;
-            const street = [place.housenumber, place.street].filter(Boolean).join(" ");
-            return [place.name, street, place.city || place.locality, place.postcode]
-              .filter((part: string, index: number, parts: string[]) => part && parts.indexOf(part) === index)
-              .join(" · ");
-          })
-          .filter(Boolean);
-        setLocationSuggestions([...new Set([...matchingPresets, ...found])].slice(0, 7));
-      } catch (error) {
-        if (!controller.signal.aborted) setLocationError(true);
-      } finally {
-        if (!controller.signal.aborted) setLocationLoading(false);
-      }
-    }, 450);
-    return () => {
-      clearTimeout(timer);
-      controller.abort();
-    };
-  }, [locationQuery, locationEditing]);
   const airportOptionLabel = (value: string) =>
     isEnglish
       ? value
@@ -5044,17 +5099,6 @@ function AirportTransferForm({ language, onCheckout, isUnavailable, isTimeUnavai
     isEnglish
       ? value
       : `${value.match(/\d+/)?.[0]}${value.includes("small") ? (language === "简体" ? "个小型行李箱" : "個小型行李箱") : language === "简体" ? "个大型行李箱" : "個大型行李箱"}`;
-  const londonOptionLabel = (value: string) =>
-    isEnglish
-      ? value
-      : {
-          "University College London · WC1E 6BT": `${language === "简体" ? "伦敦大学学院" : "倫敦大學學院"} · WC1E 6BT`,
-          "Imperial College London · SW7 2AZ": `${language === "简体" ? "帝国理工学院" : "帝國理工學院"} · SW7 2AZ`,
-          "King’s College London · WC2R 2LS": `${language === "简体" ? "伦敦国王学院" : "倫敦國王學院"} · WC2R 2LS`,
-          "London School of Economics · WC2A 2AE": `${language === "简体" ? "伦敦政治经济学院" : "倫敦政治經濟學院"} · WC2A 2AE`,
-          "Enter address manually":
-            language === "简体" ? "手动输入地址" : "手動輸入地址",
-        }[value] || value;
   const labels = isEnglish
     ? {
         pickup: "Airport pickup",
@@ -5361,72 +5405,7 @@ function AirportTransferForm({ language, onCheckout, isUnavailable, isTimeUnavai
         <Pressable accessibilityRole="switch" accessibilityState={{ checked: customAirportTime }} style={[styles.toggle, customAirportTime && styles.toggleOn]} onPress={() => setCustomAirportTime(!customAirportTime)}><SwitchThumb on={customAirportTime} /></Pressable>
         <Text style={styles.workspaceHint}>{customAirportTime ? tr(language, "Custom time selected. UniMate will show any timing risk before payment.", "已选择自定义时间。优你伴会在付款前提示时间风险。", "已選擇自訂時間。優你伴會在付款前提示時間風險。") : tr(language, "Recommendation considers flight time, live route allowance, airport guidance and passport processing time.", "建议时间会综合航班时间、路线预留、机场指引和护照入境时间。", "建議時間會綜合航班時間、路線預留、機場指引及護照入境時間。")}</Text>
       </View>
-      <View style={styles.addressSearchWrap}>
-        <Text style={styles.fieldLabel}>{labels.london}</Text>
-        <View style={styles.addressSearchField}>
-          <Ionicons name="search-outline" size={18} color={palette.blue} />
-          <TextInput
-            accessibilityLabel={labels.london}
-            style={styles.addressSearchInput}
-            value={locationQuery}
-            onFocus={() => setLocationEditing(true)}
-            onChangeText={(value) => {
-              setLocationQuery(value);
-              setLocationEditing(true);
-            }}
-            placeholder={tr(language, "Search address or postcode", "搜索地址或邮编", "搜尋地址或郵編")}
-            placeholderTextColor="#A1ADBE"
-            autoCorrect={false}
-          />
-          {locationQuery.length > 0 && (
-            <Pressable
-              accessibilityLabel={tr(language, "Clear address", "清除地址", "清除地址")}
-              onPress={() => {
-                setLocationQuery("");
-                setLocationEditing(true);
-              }}
-            >
-              <Ionicons name="close-circle" size={19} color={palette.muted} />
-            </Pressable>
-          )}
-        </View>
-        <Text style={styles.fieldHint}>{labels.addressHint}</Text>
-        {locationEditing && (
-          <View style={styles.addressSuggestions}>
-            {locationSuggestions.map((suggestion) => (
-              <Pressable
-                key={suggestion}
-                style={styles.airportAddressSuggestion}
-                onPress={() => {
-                  setLocationQuery(suggestion);
-                  setLocationEditing(false);
-                }}
-              >
-                <Ionicons name="location-outline" size={16} color={palette.blue} />
-                <Text style={styles.addressSuggestionText} numberOfLines={2}>
-                  {londonOptionLabel(suggestion)}
-                </Text>
-              </Pressable>
-            ))}
-            {locationLoading && (
-              <Text style={styles.addressSearchMeta}>{tr(language, "Finding addresses…", "正在查找地址…", "正在搜尋地址…")}</Text>
-            )}
-            {locationError && (
-              <Text style={styles.addressSearchMeta}>{tr(language, "Suggestions unavailable. You can still enter the full address.", "暂时无法获取建议，仍可输入完整地址。", "暫時無法取得建議，仍可輸入完整地址。")}</Text>
-            )}
-            {locationQuery.trim().length >= 3 && (
-              <Pressable
-                style={styles.airportAddressSuggestion}
-                onPress={() => setLocationEditing(false)}
-              >
-                <Ionicons name="create-outline" size={16} color={palette.blue} />
-                <Text style={styles.addressSuggestionText}>{tr(language, "Use address as typed", "使用输入的地址", "使用輸入的地址")}</Text>
-              </Pressable>
-            )}
-            <Text style={styles.addressSearchMeta}>{tr(language, "Suggestions from OpenStreetMap · Search text is sent to Photon", "建议来自OpenStreetMap · 搜索文字会发送给Photon", "建議來自OpenStreetMap · 搜尋文字會傳送給Photon")}</Text>
-          </View>
-        )}
-      </View>
+      <AddressLookupField language={language} label={labels.london} value={locationQuery} onChange={setLocationQuery} />
       <View
         style={[styles.formTwoColumns, compact && styles.formColumnsCompact]}
       >
@@ -6366,15 +6345,7 @@ function CleaningServiceForm({ language, onCheckout, isUnavailable, isTimeUnavai
         formatOption={(value) => value || tr(language, "No available times", "暂无可预约时段", "暫無可預約時段")}
         hint={tr(language, "Only times outside staff bookings and blocked hours are shown.", "仅显示员工已有预订和封锁时间之外的时段。", "只顯示員工已有預訂及封鎖時間以外的時段。")}
       />
-      <View style={styles.field}>
-        <Text style={styles.fieldLabel}>{labels.address}</Text>
-        <TextInput
-          placeholder={labels.addressHint}
-          placeholderTextColor="#A1ADBE"
-          value={address}
-          onChangeText={setAddress}
-        />
-      </View>
+      <AddressLookupField language={language} label={labels.address} value={address} onChange={setAddress} />
       <SelectField
         label={labels.parking}
         value={parking}
@@ -6763,15 +6734,7 @@ function MovingServiceForm({ language, onCheckout, isUnavailable, isTimeUnavaila
         <Text style={styles.movingNoticeText}>{labels.noPacking}</Text>
       </View>
       <Text style={styles.formSectionTitle}>{labels.from}</Text>
-      <View style={styles.field}>
-        <Text style={styles.fieldLabel}>{labels.from}</Text>
-        <TextInput
-          placeholder={labels.addressHint}
-          placeholderTextColor="#A1ADBE"
-          value={fromAddress}
-          onChangeText={setFromAddress}
-        />
-      </View>
+      <AddressLookupField language={language} label={labels.from} value={fromAddress} onChange={setFromAddress} />
       <View style={styles.formTwoColumns}>
         <View style={styles.formHalf}>
           <SelectField
@@ -6800,15 +6763,7 @@ function MovingServiceForm({ language, onCheckout, isUnavailable, isTimeUnavaila
         formatOption={parkingLabel}
       />
       <Text style={styles.formSectionTitle}>{labels.to}</Text>
-      <View style={styles.field}>
-        <Text style={styles.fieldLabel}>{labels.to}</Text>
-        <TextInput
-          placeholder={labels.addressHint}
-          placeholderTextColor="#A1ADBE"
-          value={toAddress}
-          onChangeText={setToAddress}
-        />
-      </View>
+      <AddressLookupField language={language} label={labels.to} value={toAddress} onChange={setToAddress} />
       <View style={styles.formTwoColumns}>
         <View style={styles.formHalf}>
           <SelectField
@@ -9257,8 +9212,8 @@ function StudentMoments({ onOpenForum, initialDiscoveryTab = "foryou", onDiscove
         <Text style={styles.faqMeta}>{activityFilter && !savedOnly ? t("Your activity · this preview session", "你的互动 · 当前预览会话", "你的互動 · 目前預覽工作階段") : savedOnly ? t("Saved moments · bookmarks on this device", "收藏动态 · 书签保存在此设备", "收藏動態 · 書籤儲存在此裝置") : discoveryTab === "following" ? t("Friends and the places & events you follow", "好友，以及你关注的餐厅和活动", "好友，以及你關注的餐廳和活動") : discoveryTab === "foryou" ? t("Popular public posts · ranked by likes and comments", "热门公开动态 · 按点赞和评论排序", "熱門公開動態 · 按讚好和留言排序") : discoveryTopic === "campus" ? t(`Browsing ${campus} · public posts and your friends`, `浏览 ${campus} · 公开动态和好友`, `瀏覽 ${campus} · 公開動態和好友`) : t("Discover public posts by topic", "按主题发现公开动态", "按主題探索公開動態")}</Text>
       </View>}
       {!embedded && !!selectedAuthor && <View style={styles.momentProfileCover}>
-        <Image source={{ uri: isOwnTimeline && settings.coverUri ? settings.coverUri : "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=900" }} style={StyleSheet.absoluteFillObject} />
-        <LinearGradient colors={["transparent", "rgba(0,0,0,0.65)"]} style={StyleSheet.absoluteFillObject} />
+        <Image source={{ uri: isOwnTimeline && settings.coverUri ? settings.coverUri : "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=900" }} style={StyleSheet.absoluteFill} />
+        <LinearGradient colors={["transparent", "rgba(0,0,0,0.65)"]} style={StyleSheet.absoluteFill} />
         {isOwnTimeline && !previewing && <Pressable accessibilityRole="button" accessibilityLabel={t("Change cover photo", "更换封面照片", "更換封面相片")} disabled={coverBusy} hitSlop={6} style={styles.momentCoverButton} onPress={changeCover}><Ionicons name="camera" size={20} color="#FFFFFF" /></Pressable>}
         <View style={styles.momentCoverIdentity}><Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 21, flexShrink: 1 }}>{selectedAuthorName}</Text><ChatPersonAvatar name={selectedAuthorName} photo={isOwnTimeline ? profilePhoto : undefined} size={62} /></View>
       </View>}
@@ -10286,34 +10241,10 @@ function SellItemForm({
             </Text>
           </View>
         )}
-        <View style={styles.field}>
-          <Text style={styles.fieldLabel}>
-            {delivery === "collection"
-              ? tr(
-                  language,
-                  "Private collection address",
-                  "私人取货地址",
-                  "私人取貨地址",
-                )
-              : tr(
-                  language,
-                  "Seller pickup address",
-                  "卖家取货地址",
-                  "賣家取貨地址",
-                )}
-          </Text>
-          <TextInput
-            value={address}
-            onChangeText={setAddress}
-            placeholder={tr(
-              language,
-              "Full address and postcode",
-              "完整地址及邮编",
-              "完整地址及郵編",
-            )}
-            placeholderTextColor="#A1ADBE"
-          />
-        </View>
+        <AddressLookupField language={language} value={address} onChange={setAddress}
+          label={delivery === "collection"
+            ? tr(language, "Private collection address", "私人取货地址", "私人取貨地址")
+            : tr(language, "Seller pickup address", "卖家取货地址", "賣家取貨地址")} />
         <View style={styles.addressPrivacy}>
           <Ionicons name="lock-closed" size={17} color={palette.blue} />
           <Text style={styles.addressPrivacyText}>
@@ -11291,6 +11222,7 @@ function BookingsPage({
     "change" | "complaint" | "refund" | null
   >(null);
   const [reviewJob, setReviewJob] = useState<StaffCompletedJob | null>(null);
+  const [serviceDetail, setServiceDetail] = useState<{ booking: StaffBooking; service: StaffService; completed?: boolean; beforePhotos?: string[]; completionPhotos?: string[] } | null>(null);
   const [caseJob, setCaseJob] = useState<StaffCompletedJob | null>(null);
   const [caseReason, setCaseReason] = useState<ServiceCaseReason | null>(null);
   const [caseDetails, setCaseDetails] = useState("");
@@ -11545,15 +11477,22 @@ function BookingsPage({
             </Pressable>
           ))}
         </View>
-        {filter !== "completed" && activePreviewBookings.map((booking) => <View key={booking.id} style={styles.bookingCard}><View style={styles.bookingHead}><View style={[styles.bookingIcon, { backgroundColor: "#EAF4FF" }]}><Ionicons name={booking.service === "cleaning" ? "sparkles" : booking.service === "moving" ? "cube" : "car-sport"} size={21} color={palette.blue} /></View><Text style={styles.bookingType}>{tr(language, "Service booking preview", "服务预订预览", "服務預訂預覽")}</Text><Text style={[styles.bookingStatus, { color: palette.blue }]}>{tr(language, "Local only", "仅保存在本机", "只儲存在本機")}</Text></View><Text style={styles.bookingTitle}>{booking.title}</Text><Text style={styles.bookingDetail}>{booking.date} · {booking.time}</Text><Text style={styles.bookingDetail}>{booking.place}</Text><Text style={styles.bookingDetail}>{booking.id} · {tr(language, "No real payment or booking was made", "未实际付款或创建真实预订", "未實際付款或建立真實預訂")}</Text></View>)}
+        {filter !== "completed" && activePreviewBookings.map((booking) => <View key={booking.id} style={styles.bookingCard}>
+          <View style={styles.bookingHead}><View style={[styles.bookingIcon, { backgroundColor: "#EAF4FF" }]}><Ionicons name={booking.service === "cleaning" ? "sparkles" : booking.service === "moving" ? "cube" : "car-sport"} size={21} color={palette.blue} /></View><Text style={styles.bookingType}>{tr(language, "Service booking preview", "服务预订预览", "服務預訂預覽")}</Text><Text style={[styles.bookingStatus, { color: palette.blue }]}>{tr(language, "Local only", "仅保存在本机", "只儲存在本機")}</Text></View>
+          <Text style={styles.bookingTitle}>{booking.title}</Text><Text style={styles.bookingDetail}>{booking.date} · {booking.time}</Text><Text style={styles.bookingDetail}>{booking.place}</Text><Text style={styles.bookingDetail}>{booking.id} · {tr(language, "No real payment or booking was made", "未实际付款或创建真实预订", "未實際付款或建立真實預訂")}</Text>
+          {!!booking.intake?.photos.length && <BookingPhotoGallery title={tr(language, "Request photos", "预订照片", "預訂相片")} photos={booking.intake.photos} language={language} />}
+          <Pressable accessibilityRole="button" style={[styles.bookingPrimaryAction, { alignSelf: "flex-start", marginTop: 12 }]} onPress={() => setServiceDetail({ booking, service: booking.service })}><Text style={styles.bookingPrimaryActionLabel}>{labels.details}</Text></Pressable>
+        </View>)}
         {filter !== "upcoming" && reviewableJobs.map((job) => {
           const existingReview = serviceReviews.find((review) => review.bookingId === job.booking.id);
           const existingCase = serviceChatCases.find((item) => item.bookingId === job.booking.id);
           return <View key={job.booking.id} style={styles.bookingCard}>
             <View style={styles.bookingHead}><View style={[styles.bookingIcon, { backgroundColor: "#E9F8F0" }]}><Ionicons name="checkmark-circle" size={21} color={palette.green} /></View><Text style={styles.bookingType}>{tr(language, "Completed service", "已完成服务", "已完成服務")}</Text><Text style={[styles.bookingStatus, { color: palette.green }]}>{tr(language, "Completed", "已完成", "已完成")}</Text></View>
             <Text style={styles.bookingTitle}>{job.booking.title}</Text><Text style={styles.bookingDetail}>{job.booking.date} · {job.booking.time}</Text><Text style={styles.bookingDetail}>{staffWorkspaceData[job.service].name} · {job.booking.id}</Text>
-            {job.beforePhotos.length > 0 && <><Text style={[styles.bookingDetail, { marginTop: 8 }]}>{tr(language, "Before-service photos", "服务前照片", "服務前相片")}</Text><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 6 }}>{job.beforePhotos.map((uri, index) => <Image key={`${uri}-${index}`} source={{ uri }} style={{ width: 68, height: 68, borderRadius: 8 }} />)}</View></>}
-            {job.photos.length > 0 && <><Text style={[styles.bookingDetail, { marginTop: 8 }]}>{tr(language, "Completion photos", "完工照片", "完工相片")}</Text><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 6 }}>{job.photos.map((uri, index) => <Image key={`${uri}-${index}`} source={{ uri }} style={{ width: 68, height: 68, borderRadius: 8 }} />)}</View></>}
+            {!!job.booking.intake?.photos.length && <BookingPhotoGallery title={tr(language, "Request photos", "预订照片", "預訂相片")} photos={job.booking.intake.photos} language={language} />}
+            {job.beforePhotos.length > 0 && <BookingPhotoGallery title={tr(language, "Before-service photos", "服务前照片", "服務前相片")} photos={job.beforePhotos} language={language} />}
+            {job.photos.length > 0 && <BookingPhotoGallery title={tr(language, "Completion photos", "完工照片", "完工相片")} photos={job.photos} language={language} />}
+            <Pressable accessibilityRole="button" style={[styles.bookingPrimaryAction, { alignSelf: "flex-start", marginTop: 12 }]} onPress={() => setServiceDetail({ booking: job.booking, service: job.service, completed: true, beforePhotos: job.beforePhotos, completionPhotos: job.photos })}><Text style={styles.bookingPrimaryActionLabel}>{labels.details}</Text></Pressable>
             <View style={[styles.workspaceNotice, { marginTop: 11 }]}><Ionicons name="lock-closed-outline" size={16} color={palette.blue} /><Text style={styles.workspaceNoticeText}>{existingCase ? tr(language, "Support case open · UniMate is included in the conversation.", "支持个案已开启 · 优你伴参与对话。", "支援個案已開啟 · 優你伴參與對話。") : tr(language, "Customer–staff chat closed when the job was completed.", "服务完成后，客户与员工聊天已关闭。", "服務完成後，客戶與員工聊天已關閉。")}</Text></View>
             {existingReview ? <Text style={[styles.bookingDetail, { marginTop: 10 }]}>{tr(language, "Your overall rating", "您的综合评分", "您的綜合評分")} · ★ {existingReview.rating.toFixed(2)} / 5</Text> : <Pressable accessibilityRole="button" style={[styles.bookingPrimaryAction, { alignSelf: "flex-start", marginTop: 12 }]} onPress={() => { setReviewJob(job); setServiceRatings({ quality: 0, communication: 0, punctuality: 0, professionalism: 0 }); setServiceComment(""); }}><Text style={styles.bookingPrimaryActionLabel}>{tr(language, "Review this service", "评价此服务", "評價此服務")}</Text></Pressable>}
             {staffTips.some((tip) => tip.bookingId === job.booking.id) ? <Text style={[styles.bookingDetail, { marginTop: 9 }]}>{tr(language, "Tip preview recorded", "已记录小费预览", "已記錄貼士預覽")} · £{staffTips.find((tip) => tip.bookingId === job.booking.id)?.amount.toFixed(2)}</Text> : <Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 10 }]} onPress={() => { setTipJob(job); setTipAmount(0); setCustomTip(""); }}><Ionicons name="heart-outline" size={17} color={palette.blue} /><Text style={styles.secondaryButtonText}>{tr(language, `Add a tip for ${staffWorkspaceData[job.service].name}`, `给${staffWorkspaceData[job.service].name}小费`, `給${staffWorkspaceData[job.service].name}貼士`)}</Text></Pressable>}
@@ -11618,6 +11557,10 @@ function BookingsPage({
           <Text style={styles.workspaceHint}>{tr(language, "Sample purchase history for this demo; no live payments are connected.", "此处为演示购买记录，尚未接入真实付款。", "此處為示範購買紀錄，尚未接入真實付款。")}</Text>
         </>}
       </ScrollView>
+      <Sheet visible={serviceDetail !== null} title={tr(language, "Booking details", "预订详情", "預訂詳情")} onClose={() => setServiceDetail(null)}>{serviceDetail && <ScrollView contentContainerStyle={styles.modalBody} showsVerticalScrollIndicator={false}>
+        <ServiceBookingDetails {...serviceDetail} language={language} statusLabel={serviceDetail.completed ? tr(language, "Completed", "已完成", "已完成") : tr(language, "Local only", "仅保存在本机", "只儲存在本機")} />
+        <Text style={styles.workspaceHint}>{tr(language, "Updates and photos stay on this device in the preview. No real payment or booking was made.", "此预览中的更新与照片仅保存在本机，未实际付款或创建真实预订。", "此預覽中的更新與相片只儲存在本機，未實際付款或建立真實預訂。")}</Text>
+      </ScrollView>}</Sheet>
       <Sheet visible={reviewJob !== null} title={tr(language, "Review completed service", "评价已完成服务", "評價已完成服務")} onClose={() => setReviewJob(null)}><ScrollView contentContainerStyle={[styles.modalBody, { gap: 15 }]}><View><Text style={styles.workspaceSectionTitle}>{reviewJob?.booking.title}</Text><Text style={styles.workspaceHint}>{tr(language, "Rate the staff member who completed this booking. All four scores are required; your overall rating is their average. Reviews stay in this preview.", "请评价完成此订单的员工。四项评分均为必填；综合评分为平均值。评价仅保存在此预览。", "請評價完成此訂單的員工。四項評分均為必填；綜合評分為平均值。評價只儲存在此預覽。")}</Text></View>{serviceReviewCriteria.map((criterion) => <View key={criterion.id} style={styles.workspaceCard}><Text style={styles.workspaceCardTitle}>{tr(language, criterion.en, criterion.simplified, criterion.traditional)}</Text><View style={{ flexDirection: "row", gap: 9, paddingVertical: 6 }}>{[1, 2, 3, 4, 5].map((star) => <Pressable key={star} accessibilityRole="button" accessibilityLabel={`${criterion.en}: ${star} stars`} onPress={() => setServiceRatings((current) => ({ ...current, [criterion.id]: star }))}><Ionicons name={star <= serviceRatings[criterion.id] ? "star" : "star-outline"} size={30} color="#ECA31A" /></Pressable>)}</View></View>)}<View style={[styles.workspaceCard, { backgroundColor: "#F3F8FF" }]}><Text style={styles.workspaceCardTitle}>{tr(language, "Overall rating", "综合评分", "綜合評分")}</Text><Text style={[styles.workspaceSectionTitle, { color: palette.blue }]}>{reviewReady ? `${overallServiceRating.toFixed(2)} / 5` : tr(language, "Rate all four areas", "请完成四项评分", "請完成四項評分")}</Text></View><Text style={styles.authFieldLabel}>{tr(language, "Your review (optional)", "您的评价（选填）", "您的評價（選填）")}</Text><TextInput style={[styles.authInput, { minHeight: 96 }]} multiline value={serviceComment} onChangeText={setServiceComment} placeholder={tr(language, "What went well? What could improve?", "哪些方面做得好？哪里可改进？", "哪些方面做得好？哪裡可改善？")} /><Pressable accessibilityRole="button" disabled={!reviewReady || !reviewJob} style={[styles.primaryButton, !reviewReady && { opacity: 0.45 }]} onPress={() => { if (!reviewJob || !reviewReady) return; onSubmitServiceReview({ bookingId: reviewJob.booking.id, service: reviewJob.service, rating: Math.round(overallServiceRating * 100) / 100, categories: { ...serviceRatings }, comment: serviceComment.trim() }); setReviewJob(null); }}><Text style={styles.primaryButtonText}>{tr(language, "Submit review", "提交评价", "提交評價")}</Text></Pressable></ScrollView></Sheet>
       <Sheet visible={tipJob !== null} title={tr(language, "Add a tip", "添加小费", "加入貼士")} onClose={() => setTipJob(null)}><ScrollView contentContainerStyle={[styles.modalBody, { gap: 16 }]}><View><Text style={styles.workspaceSectionTitle}>{tipJob ? staffWorkspaceData[tipJob.service].name : ""}</Text><Text style={styles.workspaceHint}>{tipJob?.booking.title} · {tipJob?.booking.id}</Text></View><Text style={styles.workspaceCardText}>{tr(language, "Optional. UniMate takes no platform cut from tips; the full tip amount is intended for the staff member responsible for this job. No real payment is taken in this preview.", "小费自愿。优你伴不收取小费平台佣金；小费全额拟归完成此工作的员工。此预览不会实际付款。", "貼士自願。優你伴不收取貼士平台佣金；貼士全額擬歸完成此工作的員工。此預覽不會實際付款。")}</Text><View style={{ flexDirection: "row", gap: 9 }}>{[1, 2, 5].map((amount) => <Pressable key={amount} accessibilityRole="button" accessibilityState={{ selected: tipAmount === amount }} style={[styles.marketCategory, { flex: 1, alignItems: "center" }, tipAmount === amount && styles.marketCategoryActive]} onPress={() => { setTipAmount(amount); setCustomTip(""); }}><Text style={[styles.marketCategoryText, tipAmount === amount && styles.marketCategoryTextActive]}>£{amount}</Text></Pressable>)}</View><Text style={styles.authFieldLabel}>{tr(language, "Custom amount (optional)", "自定义金额（选填）", "自訂金額（選填）")}</Text><TextInput style={styles.authInput} value={customTip} onChangeText={(value) => { setCustomTip(value.replace(/[^\d.]/g, "")); setTipAmount(0); }} keyboardType="decimal-pad" placeholder="£" /><Pressable accessibilityRole="button" disabled={!tipJob || !Number.isFinite(customTip ? Number(customTip) : tipAmount) || (customTip ? Number(customTip) : tipAmount) <= 0 || (customTip ? Number(customTip) : tipAmount) > 100} style={[styles.primaryButton, (!tipJob || (customTip ? Number(customTip) : tipAmount) <= 0) && { opacity: 0.45 }]} onPress={() => { const amount = customTip ? Number(customTip) : tipAmount; if (!tipJob || !Number.isFinite(amount) || amount <= 0 || amount > 100) return; onAddStaffTip({ bookingId: tipJob.booking.id, service: tipJob.service, staffName: staffWorkspaceData[tipJob.service].name, amount: Math.round(amount * 100) / 100 }); setTipJob(null); }}><Text style={styles.primaryButtonText}>{tr(language, "Save tip preview", "保存小费预览", "儲存貼士預覽")}</Text></Pressable><Text style={styles.workspaceHint}>{tr(language, "Real tips require a verified payout account and payment provider before launch.", "真实小费功能上线前需接入已认证的收款账户及支付服务商。", "真實貼士功能推出前需連接已認證收款帳戶及支付服務商。")}</Text></ScrollView></Sheet>
       <Sheet visible={caseJob !== null} title={tr(language, "Reopen through UniMate support", "通过优你伴支持重新开启对话", "透過優你伴支援重新開啟對話")} onClose={() => setCaseJob(null)}><ScrollView contentContainerStyle={styles.modalBody}>
@@ -13597,7 +13540,7 @@ function Profile({
           showsVerticalScrollIndicator={false}
         >
           <View style={{ height: 180, borderRadius: 16, overflow: "hidden", marginBottom: -36 }}>
-            <Image source={{ uri: coverUri || "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=900" }} style={StyleSheet.absoluteFillObject} />
+            <Image source={{ uri: coverUri || "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=900" }} style={StyleSheet.absoluteFill} />
             {previewAudience === "owner" && <Pressable accessibilityRole="button" accessibilityLabel={tr(language, "Change profile cover", "更换主页封面", "更換主頁封面")} disabled={coverPicking} style={styles.momentCoverButton} onPress={async () => { setCoverPicking(true); setProfilePhotoError(""); try { const photos = await selectPhotoUris(language, "library", { allowsEditing: true, aspect: [16, 9], limit: 1 }); if (photos[0]) onCoverChange(photos[0]); } catch { setProfilePhotoError(tr(language, "Could not change the cover. Please try again.", "封面更新失败，请重试。", "封面更新失敗，請重試。")); } finally { setCoverPicking(false); } }}><Ionicons name="camera" size={20} color="#FFFFFF" /></Pressable>}
           </View>
           <View style={styles.publicProfileHero}>
@@ -15198,16 +15141,17 @@ function AppContent({
     [tab, momentsDiscoveryTab, unifiedProfileEntry, friendProfileEntry, language, eventDeepLink, favourites, acceptedFriends, followedOrganisations, reservedEvents, pendingCancellation, messageDeepLink, darkMode, eventView, eventAnnouncements, paymentMethods, defaultPaymentId, visitedPlaces, forumPosts, forumComments, forumLikedIds, followedForums, forumEntry, friendsArea, translationLanguage, studentMoments, momentAuthor, momentEntry, momentsSettings, studentProfilePhoto, submittedReviews, restaurantReviewReplies, restaurantProfile, marketplaceConversations, studentDemoRequestStatus, pendingMarketListings, accountRole, onLogout, localStudentStatus, studentFeaturesLocked, accountName, onLanguage],
   );
   const tabs = [
-    { id: "home" as const, icon: "home", label: words[language].home },
-    { id: "connections" as const, icon: "people", label: tr(language, "Friends", "好友", "好友") },
-    { id: "friends" as const, icon: "images", label: tr(language, "Moments", "朋友圈", "朋友圈") },
+    { id: "home" as const, icon: "home", color: "#1683DF", label: words[language].home },
+    { id: "connections" as const, icon: "people", color: "#8262DB", label: tr(language, "Friends", "好友", "好友") },
+    { id: "friends" as const, icon: "images", color: "#1683DF", label: tr(language, "Moments", "朋友圈", "朋友圈") },
     {
       id: "messages" as const,
       icon: "chatbubbles",
+      color: "#C98712",
       label: words[language].messages,
       badge: studentDemoRequestStatus === "pending" ? 1 : 0,
     },
-    { id: "profile" as const, icon: "person", label: words[language].profile },
+    { id: "profile" as const, icon: "person", color: "#2DBE78", label: words[language].profile },
   ];
   const themeProps =
     Platform.OS === "web"
@@ -15271,12 +15215,12 @@ function AppContent({
                   (tab === item.id || item.icon.endsWith("-outline") ? item.icon : `${item.icon}-outline`) as any
                 }
                 size={22}
-                color={tab === item.id ? palette.blue : palette.muted}
+                color={item.color}
               />}{!!("badge" in item && item.badge) && <View style={{ position: "absolute", top: -7, right: -12, minWidth: 17, height: 17, paddingHorizontal: 3, borderRadius: 9, backgroundColor: palette.coral, alignItems: "center", justifyContent: "center" }}><Text style={{ color: "#FFFFFF", fontSize: 10, fontWeight: "800" }}>{item.badge}</Text></View>}</View>
               <Text
                 style={[
                   styles.tabText,
-                  (tab === item.id || (item.id === "friends" && tab === "forum")) && styles.tabTextActive,
+                  (tab === item.id || (item.id === "friends" && tab === "forum")) && [styles.tabTextActive, { color: item.color }],
                 ]}
               >
                 {item.label}
@@ -15655,7 +15599,69 @@ function WorkspaceMessages({ language, threads, selected, onSelect, draft, onDra
   </View>;
 }
 
-type StaffBooking = { id: string; title: string; student: string; date: string; time: string; dropoffEta?: string; place: string; detail: string; intake?: { fields: { label: string; value: string }[]; photos: string[] } };
+type StaffBooking = { id: string; title: string; student: string; date: string; time: string; dropoffEta?: string; place: string; detail: string; total?: number; dueNow?: number; note?: string; intake?: { fields: { label: string; value: string }[]; photos: string[] } };
+
+function BookingPhotoGallery({ title, photos, language }: { title: string; photos: string[]; language: Language }) {
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [unavailable, setUnavailable] = useState<Record<string, boolean>>({});
+  const visiblePhotos = photos.filter((uri) => typeof uri === "string" && uri.trim());
+  const missingLabel = tr(language, "Photo unavailable", "照片无法显示", "相片無法顯示");
+  return <View style={{ gap: 8, marginTop: 14 }}>
+    <Text style={styles.workspaceCardTitle}>{title}{visiblePhotos.length ? ` · ${visiblePhotos.length}` : ""}</Text>
+    {visiblePhotos.length ? <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+      {visiblePhotos.map((uri, index) => <Pressable key={`${uri}-${index}`} accessibilityRole="button" accessibilityLabel={`${tr(language, "Open photo", "打开照片", "開啟相片")} · ${title} · ${index + 1}`} onPress={() => setSelectedPhoto(uri)} style={{ width: 82, height: 82, borderRadius: 9, overflow: "hidden", backgroundColor: "#F2F6FB", alignItems: "center", justifyContent: "center" }}>
+        {unavailable[uri] ? <><Ionicons name="image-outline" size={24} color={palette.muted} /><Text style={[styles.workspaceHint, { fontSize: 10, textAlign: "center", paddingHorizontal: 4 }]}>{missingLabel}</Text></> : <Image accessibilityLabel={`${title} ${index + 1}`} source={{ uri }} style={{ width: "100%", height: "100%" }} resizeMode="cover" onError={() => setUnavailable((current) => ({ ...current, [uri]: true }))} />}
+      </Pressable>)}
+    </View> : <Text style={styles.workspaceHint}>{tr(language, "No photos provided", "未提供照片", "未提供相片")}</Text>}
+    <Modal visible={selectedPhoto !== null} transparent animationType="fade" onRequestClose={() => setSelectedPhoto(null)}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: "#0B1423", padding: 20 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 16 }}><Text style={{ color: "#FFFFFF", fontSize: 16, fontWeight: "700", flex: 1 }}>{title}</Text><Pressable accessibilityRole="button" accessibilityLabel={tr(language, "Close photo", "关闭照片", "關閉相片")} onPress={() => setSelectedPhoto(null)} style={{ padding: 12 }}><Ionicons name="close" color="#FFFFFF" size={26} /></Pressable></View>
+        {selectedPhoto && (unavailable[selectedPhoto] ? <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}><Ionicons name="image-outline" size={40} color="#FFFFFF" /><Text style={{ color: "#FFFFFF", marginTop: 12 }}>{missingLabel}</Text></View> : <Image source={{ uri: selectedPhoto }} accessibilityLabel={title} resizeMode="contain" style={{ flex: 1, width: "100%" }} onError={() => setUnavailable((current) => ({ ...current, [selectedPhoto]: true }))} />)}
+      </SafeAreaView>
+    </Modal>
+  </View>;
+}
+
+function ServiceBookingDetails({ booking, service, language, statusLabel, completed = false, beforePhotos = [], completionPhotos = [] }: {
+  booking: StaffBooking;
+  service: StaffService;
+  language: Language;
+  statusLabel: string;
+  completed?: boolean;
+  beforePhotos?: string[];
+  completionPhotos?: string[];
+}) {
+  const t = (en: string, simplified: string, traditional = simplified) => tr(language, en, simplified, traditional);
+  const airportDropoff = booking.intake?.fields.some((field) => field.label === "Journey" && field.value === "Airport drop-off") || booking.title.toLowerCase().includes("drop-off");
+  const timeLabel = service === "airport" ? airportDropoff ? t("Airport arrival time (London time)", "到达机场时间（伦敦时间）", "到達機場時間（倫敦時間）") : t("Flight arrival time (London time)", "航班到达时间（伦敦时间）", "航班到達時間（倫敦時間）") : service === "moving" ? t("Pickup arrival window", "取件到达时间段", "取件到達時段") : t("Arrival window", "到达时间段", "到達時段");
+  const facts = [
+    { icon: "person-outline", label: t("Customer", "客户", "客戶"), value: booking.student },
+    { icon: "calendar-outline", label: t("Date", "日期", "日期"), value: booking.date },
+    { icon: "time-outline", label: timeLabel, value: booking.time },
+    ...(service === "moving" ? [{ icon: "navigate-outline", label: t("Estimated arrival at drop-off", "预计到达送货地点", "預計到達送貨地點"), value: booking.dropoffEta || t("Not set", "未设置", "未設定") }] : []),
+    { icon: "location-outline", label: t("Address / route", "地址 / 路线", "地址 / 路線"), value: booking.place },
+  ];
+  const amounts = [
+    { label: t("Quoted total", "报价总额", "報價總額"), value: booking.total },
+    { label: t("Due at checkout", "结账时应付", "結帳時應付"), value: booking.dueNow },
+  ].filter((amount) => typeof amount.value === "number" && Number.isFinite(amount.value) && amount.value >= 0);
+  return <>
+    <View style={[styles.workspaceCard, { backgroundColor: completed ? "#F0FAF4" : "#F5F9FF", borderColor: completed ? palette.green : palette.line, padding: 16, marginBottom: 15, gap: 11 }]}>
+      <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}><Text style={[styles.workspaceSectionTitle, { flex: 1, marginTop: 0 }]}>{booking.title}</Text><Text style={[styles.workspaceStatus, completed && { backgroundColor: "#D9F4E5", color: palette.green }]}>{statusLabel}</Text></View>
+      <Text style={[styles.workspaceHint, { marginTop: -5 }]}>{t("Booking reference", "预订编号", "預訂編號")} · {booking.id}</Text>
+      {facts.map((fact) => <View key={fact.label} style={{ flexDirection: "row", gap: 9 }}><Ionicons name={fact.icon as any} size={17} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.workspaceDetailLabel}>{fact.label}</Text><Text style={styles.workspaceCardText}>{fact.value}</Text></View></View>)}
+      {!!booking.detail && <View style={{ borderTopWidth: 1, borderTopColor: palette.line, paddingTop: 9 }}><Text style={styles.workspaceCardText}>{booking.detail}</Text></View>}
+    </View>
+    <Text style={[styles.workspaceSectionTitle, { marginBottom: 9 }]}>{t("Booking information", "预订信息", "預訂資料")}</Text>
+    <View style={[styles.workspaceCard, { marginBottom: 16, padding: 15 }]}>
+      {booking.intake?.fields.length ? <View style={{ flexDirection: "row", flexWrap: "wrap", columnGap: 12, rowGap: 14 }}>{booking.intake.fields.map((field, index) => <View key={`${field.label}-${index}`} style={{ flexGrow: 1, flexBasis: 140, minWidth: 0 }}><Text style={styles.workspaceDetailLabel}>{field.label}</Text><Text style={[styles.workspaceDetailValue, { marginTop: 3 }]}>{field.value}</Text></View>)}</View> : <Text style={styles.workspaceHint}>{t("No additional details were provided for this booking.", "此预订未提供更多资料。", "此預訂未提供更多資料。")}</Text>}
+      {!!booking.note && <View style={{ marginTop: 14 }}><Text style={styles.workspaceDetailLabel}>{t("Booking note", "预订备注", "預訂備註")}</Text><Text style={styles.workspaceCardText}>{booking.note}</Text></View>}
+      {amounts.length > 0 && <View style={{ borderTopWidth: 1, borderTopColor: palette.line, marginTop: 14, paddingTop: 12, gap: 8 }}>{amounts.map((amount) => <View key={amount.label} style={{ flexDirection: "row", justifyContent: "space-between", gap: 12 }}><Text style={styles.workspaceDetailLabel}>{amount.label}</Text><Text style={styles.workspaceDetailValue}>£{amount.value!.toFixed(2)}</Text></View>)}<Text style={styles.workspaceHint}>{t("Quoted amounts are not proof of payment.", "报价金额不代表付款凭证。", "報價金額不代表付款憑證。")}</Text></View>}
+      <BookingPhotoGallery title={t("Request photos", "预订照片", "預訂相片")} photos={booking.intake?.photos || []} language={language} />
+      {completed && <><BookingPhotoGallery title={t("Before-service photos", "服务前照片", "服務前相片")} photos={beforePhotos} language={language} /><BookingPhotoGallery title={t("Completion photos", "完工照片", "完工相片")} photos={completionPhotos} language={language} /></>}
+    </View>
+  </>;
+}
 const cleaningArrivalWindows = ["09:00–12:00", "12:00–15:00", "15:00–18:00"];
 const movingPickupWindows = [...cleaningArrivalWindows, "18:00–21:00"];
 const airportTimeHours = Array.from({ length: 24 }, (_, index) => String(index).padStart(2, "0"));
@@ -15817,7 +15823,6 @@ function StaffWorkspace({ service, movingDriver, language, onLanguage, darkMode,
   const [bookingEditError, setBookingEditError] = useState("");
   const [cancelArmed, setCancelArmed] = useState(false);
   const t = (en: string, simplified: string, traditional = simplified) => tr(language, en, simplified, traditional);
-  const airportBookingTimeLabel = (booking: StaffBooking) => booking.intake?.fields.find((field) => field.label === "Journey")?.value === "Airport drop-off" || booking.title.toLowerCase().includes("drop-off") ? t("Airport arrival time (London time)", "到达机场时间（伦敦时间）", "到達機場時間（倫敦時間）") : t("Flight arrival time (London time)", "航班到达时间（伦敦时间）", "航班到達時間（倫敦時間）");
   const pickStaffPhoto = async (source?: PhotoSource) => { if (!source) { askPhotoSource(language, pickStaffPhoto); return; } const uris = await selectPhotoUris(language, source, { allowsEditing: true, aspect: [1, 1], quality: 0.8 }); if (uris[0]) setStaffPhoto(uris[0]); };
   const pickJobPhoto = async (stage: "before" | "after", source?: PhotoSource) => { if (!selectedBooking) return; if (!source) { askPhotoSource(language, (selected) => pickJobPhoto(stage, selected)); return; } const uris = await selectPhotoUris(language, source, { quality: 0.8, multiple: source === "library", limit: 8 }); if (uris.length) { const bookingId = selectedBooking.id; const setPhotos = stage === "before" ? setBeforePhotos : setCompletionPhotos; setPhotos((current) => ({ ...current, [bookingId]: [...(current[bookingId] || []), ...uris].slice(0, 8) })); setCompletionError(""); } };
   const completedForService = completedJobs.filter((job) => job.service === service);
@@ -15995,22 +16000,7 @@ function StaffWorkspace({ service, movingDriver, language, onLanguage, darkMode,
     </ScrollView>
     <WorkspaceTabs tabs={tabs} active={tab} onSelect={setTab} />
     <Sheet visible={selectedBooking !== null} title={t("Booking details", "预订详情", "預訂詳情")} onClose={() => setSelectedBooking(null)}>{selectedBooking && <ScrollView contentContainerStyle={styles.modalBody}>
-      <View style={[styles.workspaceCard, { backgroundColor: bookingState[selectedBooking.id] === "completed" || completedIds.has(selectedBooking.id) ? "#F0FAF4" : "#F5F9FF", borderColor: bookingState[selectedBooking.id] === "completed" || completedIds.has(selectedBooking.id) ? palette.green : palette.line, padding: 16, marginBottom: 15, gap: 11 }]}>
-        <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}><Text style={[styles.workspaceSectionTitle, { flex: 1, marginTop: 0 }]}>{selectedBooking.title}</Text><Text style={[styles.workspaceStatus, (bookingState[selectedBooking.id] === "completed" || completedIds.has(selectedBooking.id)) && { backgroundColor: "#D9F4E5", color: palette.green }]}>{bookingStatusText(selectedBooking)}</Text></View>
-        <Text style={[styles.workspaceHint, { marginTop: -5 }]}>{t("Booking reference", "预订编号", "預訂編號")} · {selectedBooking.id}</Text>
-        <View style={{ flexDirection: "row", gap: 9 }}><Ionicons name="person-outline" size={17} color={palette.blue} /><Text style={[styles.workspaceCardText, { flex: 1 }]}>{selectedBooking.student}</Text></View>
-        <View style={{ flexDirection: "row", gap: 9 }}><Ionicons name="calendar-outline" size={17} color={palette.blue} /><Text style={[styles.workspaceCardText, { flex: 1 }]}>{selectedBooking.date}</Text></View>
-        <View style={{ flexDirection: "row", gap: 9 }}><Ionicons name="time-outline" size={17} color={palette.blue} /><Text style={[styles.workspaceCardText, { flex: 1 }]}>{service === "airport" ? airportBookingTimeLabel(selectedBooking) : service === "moving" ? t("Pickup arrival window", "取件到达时间段", "取件到達時段") : t("Arrival window", "到达时间段", "到達時段")} · {selectedBooking.time}</Text></View>
-        {service === "moving" && <View style={{ flexDirection: "row", gap: 9 }}><Ionicons name="navigate-outline" size={17} color={palette.blue} /><Text style={[styles.workspaceCardText, { flex: 1 }]}>{t("Estimated arrival at drop-off", "预计到达送货地点", "預計到達送貨地點")} · {selectedBooking.dropoffEta || t("Not set", "未设置", "未設定")}</Text></View>}
-        <View style={{ flexDirection: "row", gap: 9 }}><Ionicons name="location-outline" size={17} color={palette.blue} /><Text style={[styles.workspaceCardText, { flex: 1 }]}>{selectedBooking.place}</Text></View>
-        {!!selectedBooking.detail && <View style={{ borderTopWidth: 1, borderTopColor: palette.line, paddingTop: 9 }}><Text style={styles.workspaceCardText}>{selectedBooking.detail}</Text></View>}
-      </View>
-      <Text style={[styles.workspaceSectionTitle, { marginBottom: 9 }]}>{t("Client booking details", "客户填写的预订详情", "客戶填寫的預訂詳情")}</Text>
-      <Text style={[styles.workspaceHint, { marginBottom: 9 }]}>{selectedBooking.id.startsWith("PV-") ? t("These fields mirror the student's submitted booking form.", "这些字段与学生提交的预订表单一致。", "這些欄位與學生提交的預訂表單一致。") : t("Illustrative sample booking; live student form data will appear here for real jobs.", "这是示例预订；真实工作会在此显示学生提交的表单资料。", "這是示例預訂；真實工作會在此顯示學生提交的表單資料。")}</Text>
-      <View style={[styles.workspaceCard, { marginBottom: 16, padding: 15 }]}>
-        {selectedBooking.intake?.fields.length ? <View style={{ flexDirection: "row", flexWrap: "wrap", columnGap: 12, rowGap: 14 }}>{selectedBooking.intake.fields.map((field) => <View key={field.label} style={{ width: "48%", minWidth: 130 }}><Text style={styles.workspaceDetailLabel}>{field.label}</Text><Text style={[styles.workspaceDetailValue, { marginTop: 3 }]}>{field.value}</Text></View>)}</View> : <Text style={styles.workspaceHint}>{t("No additional details were provided for this booking.", "此预订未提供更多资料。", "此預訂未提供更多資料。")}</Text>}
-        <View style={{ borderTopWidth: 1, borderTopColor: palette.line, marginTop: 16, paddingTop: 12 }}><Text style={styles.workspaceCardTitle}>{t("Client photos", "客户照片", "客戶相片")}</Text>{selectedBooking.intake?.photos.length ? <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>{selectedBooking.intake.photos.map((uri, index) => <Image key={`${uri}-${index}`} source={{ uri }} style={{ width: 82, height: 82, borderRadius: 9 }} />)}</View> : <Text style={styles.workspaceHint}>{t("No photos provided", "未提供照片", "未提供相片")}</Text>}</View>
-      </View>
+      <ServiceBookingDetails booking={selectedBooking} service={service} language={language} statusLabel={bookingStatusText(selectedBooking)} completed={bookingState[selectedBooking.id] === "completed" || completedIds.has(selectedBooking.id)} beforePhotos={beforePhotosFor(selectedBooking)} completionPhotos={proofPhotosFor(selectedBooking)} />
       {!historicalBooking(selectedBooking) && bookingState[selectedBooking.id] !== "cancel-requested" && bookingState[selectedBooking.id] !== "completed" && !completedIds.has(selectedBooking.id) && <>
         {(service === "cleaning" || service === "moving") && <View style={[styles.workspaceCard, { marginBottom: 16 }]}><Text style={styles.workspaceCardTitle}>{t("1. Before-service photos · required", "1. 服务前照片 · 必填", "1. 服務前相片 · 必填")}</Text><Text style={styles.workspaceCardText}>{t("Document the condition before work starts. At least one photo is required together with completion photos for invoice review.", "工作开始前记录现场状况。发票审核要求至少一张服务前照片及完工照片。", "工作開始前記錄現場狀況。發票審核要求至少一張服務前相片及完工相片。")}</Text><Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 8 }]} onPress={() => pickJobPhoto("before")}><Ionicons name="camera-outline" size={17} color={palette.blue} /><Text style={styles.secondaryButtonText}>{t("Add before photos", "添加服务前照片", "加入服務前相片")}</Text></Pressable><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>{beforePhotosFor(selectedBooking).map((uri, index) => <Pressable key={`${uri}-${index}`} accessibilityRole="button" accessibilityLabel={t("Remove photo", "移除照片", "移除相片")} onPress={() => setBeforePhotos((current) => ({ ...current, [selectedBooking.id]: (current[selectedBooking.id] || []).filter((_, photoIndex) => photoIndex !== index) }))}><Image source={{ uri }} style={{ width: 76, height: 76, borderRadius: 9 }} /><Ionicons name="close-circle" size={19} color={palette.coral} style={{ position: "absolute", right: -5, top: -5 }} /></Pressable>)}</View></View>}
         <Text style={[styles.workspaceSectionTitle, { marginBottom: 9 }]}>{t("Job progress", "服务进度", "服務進度")}</Text>
@@ -16041,8 +16031,6 @@ function StaffWorkspace({ service, movingDriver, language, onLanguage, darkMode,
         <Text style={styles.workspaceCardText}>{t("The customer can now leave a review. The direct customer chat has closed automatically; completion photos remain private booking evidence.", "客户现在可以评价服务。客户与员工的直接聊天已自动关闭；完工照片仅作私人订单凭证。", "客戶現在可以評價服務。客戶與員工的直接聊天已自動關閉；完工相片僅作私人訂單憑證。")}</Text>
         <Text style={styles.workspaceHint}>{serviceReviews.some((review) => review.bookingId === selectedBooking.id) ? t("Customer review received", "已收到客户评价", "已收到客戶評價") : t("Customer review pending", "等待客户评价", "等待客戶評價")}</Text>
         <Text style={[styles.workspaceCardText, { color: tipForBooking(selectedBooking.id) ? palette.green : palette.muted }]}>{tipForBooking(selectedBooking.id) ? `${t("Tip recorded for you", "已记录给您的小费", "已記錄給您的貼士")} · £${tipForBooking(selectedBooking.id)?.amount.toFixed(2)}` : t("No tip recorded for this job", "此工作尚无小费记录", "此工作尚無貼士記錄")}</Text>
-        {(service === "cleaning" || service === "moving") && <><Text style={styles.workspaceHint}>{t("Before photos", "服务前照片", "服務前相片")} · {beforePhotosFor(selectedBooking).length}</Text><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 5 }}>{beforePhotosFor(selectedBooking).map((uri, index) => <Image key={`${uri}-${index}`} source={{ uri }} style={{ width: 76, height: 76, borderRadius: 9 }} />)}</View><Text style={styles.workspaceHint}>{t("Completion photos", "完工照片", "完工相片")} · {proofPhotosFor(selectedBooking).length}</Text></>}
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 5 }}>{proofPhotosFor(selectedBooking).map((uri, index) => <Image key={`${uri}-${index}`} source={{ uri }} style={{ width: 76, height: 76, borderRadius: 9 }} />)}</View>
         {serviceChatCases.some((item) => item.bookingId === selectedBooking.id && item.service === service) ? <Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 12 }]} onPress={() => openStudentMessage(selectedBooking)}><Text style={styles.secondaryButtonText}>{t("Open UniMate-supported case", "打开优你伴支持个案", "開啟優你伴支援個案")}</Text></Pressable> : <Pressable accessibilityRole="button" style={[styles.secondaryButton, { marginTop: 12 }]} onPress={() => openStaffSupport(selectedBooking)}><Text style={styles.secondaryButtonText}>{t("Report lost property or a safety concern", "报告失物或安全问题", "報告失物或安全問題")}</Text></Pressable>}
       </View>}
       {historicalBooking(selectedBooking) && <View style={[styles.workspaceCard, { marginTop: 14 }]}><Text style={styles.workspaceCardTitle}>{t("Historical job", "历史工作", "歷史工作")}</Text><Text style={styles.workspaceCardText}>{t("This archived booking is read-only. Its original customer details are not available in this sample record.", "此归档预订只供查看。示例记录中没有原始客户资料。", "此封存預訂只供查看。示例記錄中沒有原始客戶資料。")}</Text></View>}
@@ -16890,7 +16878,7 @@ export default function App() {
   const markMarketplaceSold = (id: string) => setMarketplaceConversations((current) => current.map((item) => item.id === id && item.status === "enquiry" && item.requestStatus === "accepted" ? { ...item, status: "sold" } : item));
   const confirmMarketplaceReceipt = (id: string) => setMarketplaceConversations((current) => current.map((item) => item.id === id && item.status === "sold" ? { ...item, status: "received" } : item));
   const openMarketplaceIssue = (id: string, reason: MarketplaceIssueReason, details: string, openedBy: "buyer" | "seller") => setMarketplaceConversations((current) => current.map((item) => item.id === id && !item.issue && details.trim().length >= 10 ? { ...item, issue: { reason, details: details.trim() }, messages: [...item.messages, { author: openedBy, text: details.trim() }, { author: "support", text: "UniMate support joined this product case in the demo. A real support agent is not connected." }] } : item));
-  const addPreviewBooking = (order: ServiceCheckoutOrder) => { const service: StaffService = order.service === "airport" ? "airport" : order.service === "moving" ? "moving" : "cleaning"; setPreviewBookings((current) => [{ service, id: `PV-${Date.now()}`, title: order.title, student: accountName.trim() || "Student preview", date: order.bookingDate || "24 Sep 2026", time: order.bookingTime || order.when, place: order.bookingAddress || order.details, detail: order.details, intake: order.intake }, ...current]); };
+  const addPreviewBooking = (order: ServiceCheckoutOrder) => { const service: StaffService = order.service === "airport" ? "airport" : order.service === "moving" ? "moving" : "cleaning"; setPreviewBookings((current) => [{ service, id: `PV-${Date.now()}`, title: order.title, student: accountName.trim() || "Student preview", date: order.bookingDate || "24 Sep 2026", time: order.bookingTime || order.when, place: order.bookingAddress || order.details, detail: order.details, total: order.total, dueNow: order.dueNow, note: order.note, intake: order.intake }, ...current]); };
   const recordCompletedJob = (job: StaffCompletedJob) => setCompletedJobs((current) => current.some((item) => item.booking.id === job.booking.id) ? current : [job, ...current]);
   const openServiceChatCase = (job: StaffCompletedJob, reason: ServiceCaseReason, openedBy: "customer" | "staff", details: string) => { if (!completedJobs.some((item) => item.booking.id === job.booking.id)) return; setServiceChatCases((current) => current.some((item) => item.bookingId === job.booking.id) ? current : [{ bookingId: job.booking.id, service: job.service, reason, booking: job.booking, openedBy, messages: details.trim() ? [{ author: openedBy, text: details.trim() }] : [] }, ...current]); };
   const addServiceCaseMessage = (bookingId: string, author: "customer" | "staff", message: string) => setServiceChatCases((current) => current.map((item) => item.bookingId === bookingId ? { ...item, messages: [...item.messages, { author, text: message.trim() }] } : item));
@@ -20948,7 +20936,11 @@ const styles = StyleSheet.create({
   groupMemberAvatar: { width: 46, height: 46, borderRadius: 23 },
   darkSafe: { backgroundColor: "#0F1929" },
   darkHeader: { backgroundColor: "#111D30", borderBottomColor: "#30415A" },
-  brandLogoDark: { tintColor: "#F5F8FF" },
+  // Web's SVG tint filter can leave the lettering dark; keep the colour mark
+  // in its existing overlay and whiten the wordmark with a CSS filter instead.
+  brandLogoDark: Platform.OS === "web"
+    ? { filter: "brightness(0) invert(1)" }
+    : { tintColor: "#F5F8FF" },
   darkContent: { backgroundColor: "#0F1929" },
   darkTabBar: { backgroundColor: "#111D30", borderTopColor: "#30415A" },
   attendingButton: {

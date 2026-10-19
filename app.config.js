@@ -1,9 +1,7 @@
-const { expo } = require('./app.json');
-
-module.exports = () => ({
-  ...expo,
+module.exports = ({ config }) => ({
+  ...config,
   experiments: {
-    ...(expo.experiments || {}),
+    ...(config.experiments || {}),
     ...(process.env.GITHUB_PAGES === 'true' ? { baseUrl: '/unimate-prototype' } : {}),
   },
 });

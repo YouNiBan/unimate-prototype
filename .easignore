@@ -1,0 +1,21 @@
+# Upload only the mobile app to EAS, never the local administration service.
+node_modules/
+node_modules 2/
+.expo/
+.git/
+.DS_Store
+dist/
+web-build/
+backend/
+public/administration/
+output/
+tmp/
+*.log
+.env
+.env.*
+credentials.json
+*.p8
+*.p12
+*.mobileprovision
+*.ipa
+*.xcarchive
