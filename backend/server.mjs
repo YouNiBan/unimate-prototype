@@ -8,6 +8,7 @@ import { token, digest, hashPassword, verifyPassword, passwordValid } from './se
 import {reportCountSql,reviewEligibleSql,REPORT_THRESHOLD} from './moderation.mjs';
 import {taskList,taskQuery} from './tasks.mjs';
 import {createBookingInvoice} from './invoices.mjs';
+import {readBookingSubmission} from './public/booking-details.mjs';
 
 const root = fileURLToPath(new URL('.', import.meta.url));
 const fullAccess=role=>['owner','superadmin'].includes(role);
@@ -69,7 +70,7 @@ export async function createApplication({ filename = resolve(root, 'data/unimate
           const logo = await readFile(resolve(root,'../assets/unimate-logo.png'));
           res.writeHead(200, { 'Content-Type': 'image/png' }); res.end(logo); return;
         }
-        const files = { '/': ['index.html','text/html'], '/app.js': ['app.js','text/javascript'], '/styles.css': ['styles.css','text/css'] };
+        const files = { '/': ['index.html','text/html'], '/app.js': ['app.js','text/javascript'], '/styles.css': ['styles.css','text/css'], '/booking-details.mjs': ['booking-details.mjs','text/javascript'] };
         if (req.method !== 'GET' || !files[path]) fail(404,'Not found.');
         const [file, type] = files[path];
         res.writeHead(200, { 'Content-Type': `${type}; charset=utf-8` }); res.end(await readFile(resolve(root,'public',file))); return;
@@ -402,6 +403,11 @@ export async function createApplication({ filename = resolve(root, 'data/unimate
         if(kind==='approvals'&&!fullAccess(actor.role)&&row.kind!=='event')fail(403,'Account approvals require SuperAdmin or UniMate Owner access.');
         if(kind==='reports'&&row.unique_reports<REPORT_THRESHOLD)fail(404,'Review threshold not reached.');
         const submission=db.prepare('SELECT details_json FROM submission_details WHERE resource=? AND record_id=?').get(kind,id);
+        if(kind==='bookings'){
+          const details=readBookingSubmission(submission?.details_json);
+          const assignment=db.prepare('SELECT a.member_id,a.starts_at,a.ends_at,m.name,m.team FROM booking_assignments a JOIN team_members m ON m.id=a.member_id WHERE a.booking_id=?').get(id);
+          return reply(200,{row:{...row,...(details?{submission:details}:{}),...(submission&&!details?{submissionUnavailable:true}:{}),...(assignment?{assignment}:{})},canManage:fullAccess(actor.role)});
+        }
         return reply(200,{row:{...row,...(submission?{submission:JSON.parse(submission.details_json)}:{})},canManage:config.roles.includes(actor.role)||(actor.role==='owner'&&config.roles.includes('superadmin'))});
       }
       if (req.method === 'GET' && !id) {

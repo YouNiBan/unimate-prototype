@@ -59,6 +59,12 @@ Admin account status is separate from role: **Active** or **Deactivated**. The a
 
 All decisions affect **only this service's records**. Resolving a report does not automatically hide its post; use Posts to moderate the linked post separately. Approving a linked staff application creates its local user and matching team membership automatically. It does not provision live app access; live signup and authentication are not connected.
 
+### Booking details and photos
+
+Booking details display the saved student request fields, assigned staff and schedule, and three photo groups: Request photos, Before-service photos and Completion photos. The adapter reads both legacy `submission.images` and the app's `intake.photos`, `beforePhotos`, and completed-job `photos` shapes without rewriting stored records. PNG, JPEG and WebP data images up to 5 MB receive format and file-signature checks before display; this is not evidence verification. Missing or unsupported attachments are labelled; phone `file:`/`content:` and browser `blob:` references are device-only and cannot be opened by another user. Remote URLs are not fetched.
+
+Photo display does not verify service completion or change the existing completion and invoicing rules. Unsupported or damaged images are shown as unavailable. There is still no booking-photo upload or app synchronization service: photos must already exist in the local saved submission. Production sharing needs private media storage, authenticated upload/read access and a common booking ID across the app and admin.
+
 ### Staff, documents and invoices
 
 Staff applications and approved staff have separate lists, with an All teams filter. Owner/SuperAdmin-only HR records include contact, identity-check, vehicle, insurance and job-certificate references. Company documents support local authenticated PDF storage and download. These records are not production-ready encrypted document storage; do not commit any database or uploaded files.
