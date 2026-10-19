@@ -1,3 +1,4 @@
+import {normalizeBookingDetails} from './booking-details.mjs';
 const app = document.querySelector('#app'), notice = document.querySelector('#notice'), dialog = document.querySelector('#detail');
 let session, section = 'overview', page = 1, requestVersion = 0, search = '', statusFilter = '', bookingDivision='all', menuExpanded=false;
 const names = {overview:'Overview',users:'Users',events:'Event approvals',approvals:'Approvals',posts:'Posts',reports:'Reports',bookings:'Bookings',teams:'Teams',schedule:'Staff calendar',messages:'Message centre',admins:'Admin accounts',audit:'Activity log',settings:'Account settings'};
@@ -342,13 +343,38 @@ function adminEditor(row){
   form.onsubmit=async e=>{e.preventDefault();save.disabled=true;try{const data=Object.fromEntries(new FormData(form));if(row){data.active=data.active==='true';data.expectedRole=row.role;data.expectedActive=Boolean(row.active);}await api('admins'+(row?'/'+encodeURIComponent(row.id):''),data);dialog.close();await render();message(row?'Admin access updated. Existing sessions have been revoked.':'Admin account created.');}catch(error){message(error.message);}finally{save.disabled=false;}};
   dialog.append(form,button('Close',()=>dialog.close()));dialog.showModal();
 }
+function bookingDetails(row) {
+  const model=normalizeBookingDetails(row),section=el('section',undefined,'booking-details');
+  section.append(el('p','Booking details','booking-detail-eyebrow'),el('h3',row.title||'Service booking'));
+  const fields=el('dl',undefined,'booking-detail-fields');
+  for(const field of model.fields){const item=el('div');item.append(el('dt',field.label),el('dd',field.value));fields.append(item);}
+  section.append(fields);
+  if(row.submissionUnavailable)section.append(el('p','Additional booking details could not be read from this saved record.','muted'));
+  for(const group of model.photoGroups){
+    const block=el('section',undefined,'booking-photo-group');block.append(el('h3',group.label));
+    if(!group.photos.length)block.append(el('p','No photos saved for this stage.','muted'));
+    else {const gallery=el('div',undefined,'booking-photo-grid');group.photos.forEach((photo,index)=>{
+      const item=el('figure',undefined,'booking-photo');
+      if(photo.src){const img=el('img');img.src=photo.src;img.alt=t(group.label)+' '+(index+1);img.loading='lazy';img.onerror=()=>{img.remove();item.prepend(el('p','Photo unavailable: the saved image could not be opened.','booking-photo-unavailable'));};item.append(img,el('figcaption',group.label+' '+(index+1)));}
+      else item.append(el('p',photo.unavailable,'booking-photo-unavailable'));
+      gallery.append(item);
+    });block.append(gallery);}
+    section.append(block);
+  }
+  section.append(el('p','Booking photos are private. Photos on a student or staff device appear here only after they have been saved to the shared booking record.','muted'));
+  dialog.append(section);
+}
+
 async function details(row,canManage,kind){
   if(kind==='comment_reports')kind='reports';
   if(['events','students','teams'].includes(kind))kind='approvals';
   try{const result=await api(kind+'/'+encodeURIComponent(row.id));row=result.row;}catch(error){message(error.message);return;}
-  const submission=row.submission;delete row.submission;
-  dialog.replaceChildren(el('h2',row.title||row.name||'Activity details'));const list=el('dl');for(const [key,value] of Object.entries(row)){if(value===null)continue;list.append(el('dt',key.replaceAll('_',' ')),el('dd',key==='amount_pence'?new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(value/100):String(value)));}dialog.append(list);
+  const submission=row.submission;
+  dialog.replaceChildren(el('h2',row.title||row.name||'Activity details'));
+  if(kind==='bookings')bookingDetails(row);
+  else {delete row.submission;const list=el('dl');for(const [key,value] of Object.entries(row)){if(value===null)continue;list.append(el('dt',key.replaceAll('_',' ')),el('dd',key==='amount_pence'?new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(value/100):String(value)));}dialog.append(list);
   if(submission){dialog.append(el('h3','Submission details'));const extra=el('dl');for(const [key,value] of Object.entries(submission)){if(key==='images'){for(const src of Array.isArray(value)?value:[]){if(typeof src==='string'&&/^data:image\/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(src)){const img=el('img',undefined,'submission-image');img.src=src;img.alt='Submitted image';extra.append(img);}}continue;}extra.append(el('dt',key.replaceAll('_',' ')),el('dd',Array.isArray(value)?value.join('\n'):String(value)));}dialog.append(extra);}else if(['posts','bookings'].includes(kind))dialog.append(el('p','Only the saved fields above are available. No images or additional student submission details have been imported.','muted'));
+  }
   const options={users:row.status==='active'?['suspended']:['active'],posts:row.status==='published'?['hidden']:['published'],approvals:row.status==='pending'?['approved','rejected']:[],reports:row.status==='open'?['resolved','dismissed']:[]};
   if(kind==='bookings'&&fullAccess()&&['confirmed','in_progress','assigned'].includes(row.status)){const form=el('form');field(form,'Completion note','reason');const complete=el('button','Complete service & create invoice','primary');form.append(complete);form.onsubmit=async e=>{e.preventDefault();complete.disabled=true;try{const result=await api('bookings/'+encodeURIComponent(row.id)+'/complete',{reason:form.elements.reason.value,expectedStatus:row.status});dialog.close();await render();message('Service completed. Invoice '+result.invoice.reference+' created locally.');}catch(error){message(error.message);}finally{complete.disabled=false;}};dialog.append(form);}
   options.account_reports=options.reports;
