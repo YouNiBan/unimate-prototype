@@ -243,7 +243,7 @@ test('authentication, permissions, moderation, persistence and audit integrity',
   await t.test('dashboard assets and browser security headers',async()=>{
     const logo=await fetch(origin+'/unimate-logo.png');assert.equal(logo.status,200);assert.equal(logo.headers.get('content-type'),'image/png');
     assert.deepEqual(Buffer.from(await logo.arrayBuffer()),await readFile(new URL('../../assets/unimate-logo.png',import.meta.url)));
-    for(const path of ['/','/app.js','/styles.css']){const res=await fetch(origin+path);assert.equal(res.status,200);assert.match(res.headers.get('content-security-policy'),/frame-ancestors 'none'/);}
+    for(const path of ['/','/app.js','/styles.css','/booking-details.mjs']){const res=await fetch(origin+path);assert.equal(res.status,200);assert.match(res.headers.get('content-security-policy'),/frame-ancestors 'none'/);}
     const status=await new Promise((resolve,reject)=>{http.get(origin+'/api/health',{headers:{Host:'evil.invalid'}},res=>{res.resume();resolve(res.statusCode);}).on('error',reject);});
     assert.equal(status,403);
   });

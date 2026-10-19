@@ -58,6 +58,12 @@ test('teams and assignments enforce roles, service match, overlap and persistenc
   assert.equal((await call('staff-schedule',assignment)).r.status,400);
   assert.equal(db.prepare('SELECT count(*) n FROM booking_assignments').get().n,1);
   db.prepare("UPDATE bookings SET status='confirmed' WHERE id='one'").run();
+  const png='data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6qjEAAAAASUVORK5CYII=';
+  db.prepare('INSERT INTO submission_details VALUES(?,?,?)').run('bookings','one',JSON.stringify({intake:{fields:[{label:'Bedrooms',value:'1'}],photos:[png]}}));
+  const detail=(await call('bookings/one')).data.row;
+  assert.equal(detail.submission.intake.photos[0],png);assert.equal(detail.assignment.name,'Sample Cleaner');
+  db.prepare('INSERT INTO submission_details VALUES(?,?,?)').run('bookings','two','{invalid');
+  const unreadable=await call('bookings/two');assert.equal(unreadable.r.status,200);assert.equal(unreadable.data.row.submissionUnavailable,true);
   const completed=await call('bookings/one/complete',{expectedStatus:'confirmed',reason:'Service finished successfully'});assert.equal(completed.r.status,200);assert.match(completed.data.invoice.reference,/^UM-INV-\d{4}-000001$/);
   const repeated=await call('bookings/one/complete',{expectedStatus:'confirmed',reason:'Retry completion request'});assert.equal(repeated.data.invoice.id,completed.data.invoice.id);
   assert.equal((await call('invoices')).data.total,1);
