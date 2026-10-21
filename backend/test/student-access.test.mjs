@@ -4,3 +4,30 @@ async function fixture(t){const sent=[],a=await createApplication({filename:':me
 const details={name:'Student Name',birthday:'2002-07-17',country:'CN',province:'Shanghai'};
 test('private details and university-only verification preserve personal login and unlock server permissions',async t=>{const f=await fixture(t),user={id:'student'};assert.equal(studentCapabilities(f.a.db,user.id).studentVerified,false);assert.equal((await f.call('profile',details,'student','wrong')).status,403);assert.equal((await f.call('profile',{...details,birthday:'2026-02-30'})).status,400);assert.equal((await f.call('student-verification/request',{email:'name@ucl.ac.uk'})).status,400);assert.equal((await f.call('profile',{...details,studentVerified:true,university:'Spoofed'})).status,200);assert.equal((await f.call('profile')).data.university,'');assert.equal((await f.call('profile',undefined,'other')).data.birthday,'');const pub=(await f.call('session')).data.user;assert.equal(pub.birthday,undefined);assert.equal(pub.universityEmail,undefined);assert.equal(pub.studentVerified,false);assert.equal(pub.permissions.bookServices,true);for(const path of ['events','listings','forum','moments','restaurant-reviews'])assert.equal((await f.call(path,{text:'hello'})).status,403);assert.equal((await f.call('events/example/join',{})).status,404);assert.equal((await f.call('restaurants')).status,200);for(const email of ['name@gmail.com','name@ucl.ac.uk.evil.test','bad'])await assert.rejects(f.service.requestCode(user,{email},'ip'),{status:400});const response=await f.call('student-verification/request',{email:'NAME@STUDENT.UCL.AC.UK'});assert.equal(response.status,200);assert.equal(f.sent.at(-1).to,'name@student.ucl.ac.uk');const code=f.code(),saved=f.a.db.prepare('SELECT * FROM student_verification_codes').get();assert.notEqual(saved.code_hash,code);assert.notEqual(saved.handle_hash,response.data.verificationToken);assert.equal((await f.call('student-verification/confirm',{code,verificationToken:response.data.verificationToken},'other')).status,400);assert.equal((await f.call('student-verification/confirm',{code:'invalid',verificationToken:response.data.verificationToken})).status,400);const confirmed=await f.call('student-verification/confirm',{code,verificationToken:response.data.verificationToken});assert.equal(confirmed.status,200);assert.equal(confirmed.data.profile.university,'University College London');assert.equal(f.a.db.prepare('SELECT email FROM users WHERE id=?').get(user.id).email,'student@example.invalid');assert.equal((await f.call('session')).data.user.permissions.createEvents,true);assert.equal((await f.call('student-verification/confirm',{code,verificationToken:response.data.verificationToken})).status,400);f.service.saveProfile({id:'other'},details);await assert.rejects(f.service.requestCode({id:'other'},{email:'name@student.ucl.ac.uk'},'other-ip'),{status:409});});
 test('university codes expire, throttle resends and attempts, and cannot verify suspended accounts',async t=>{const f=await fixture(t),user={id:'student'};f.service.saveProfile(user,details);const one=await f.service.requestCode(user,{email:'name@kcl.ac.uk'},'ip');await assert.rejects(f.service.requestCode(user,{email:'name@kcl.ac.uk'},'ip'),{status:429});for(let i=0;i<5;i++)assert.throws(()=>f.service.confirm(user,{verificationToken:one.verificationToken,code:'xxxxxx'}),{status:400});assert.throws(()=>f.service.confirm(user,{verificationToken:one.verificationToken,code:f.code()}),{status:429});f.advance(61000);const two=await f.service.requestCode(user,{email:'name@kcl.ac.uk'},'ip');f.advance(600000);assert.throws(()=>f.service.confirm(user,{verificationToken:two.verificationToken,code:f.code()}),{status:400});const three=await f.service.requestCode(user,{email:'name@kcl.ac.uk'},'ip');f.a.db.prepare("UPDATE users SET status='suspended' WHERE id='student'").run();assert.throws(()=>f.service.confirm(user,{verificationToken:three.verificationToken,code:f.code()}),{status:401});assert.equal(studentCapabilities(f.a.db,'student').studentVerified,false);});
+test('owner tester access is server-selected, verified-email-only and does not manufacture university verification', async t => {
+  const f = await fixture(t);
+  const previous = process.env.UNIMATE_TESTER_EMAILS;
+  process.env.UNIMATE_TESTER_EMAILS = 'student@example.invalid';
+  t.after(() => {if(previous===undefined)delete process.env.UNIMATE_TESTER_EMAILS;else process.env.UNIMATE_TESTER_EMAILS=previous;});
+  let capabilities = studentCapabilities(f.a.db,'student');
+  assert.equal(capabilities.ownerTester,true);
+  assert.equal(capabilities.studentVerified,false);
+  assert.equal(capabilities.badge,'owner_tester');
+  assert.equal(capabilities.permissions.postForum,true);
+  assert.equal(studentCapabilities(f.a.db,'other').ownerTester,false);
+  assert.equal(f.a.db.prepare('SELECT count(*) count FROM student_verifications').get().count,0);
+  f.a.db.prepare("UPDATE member_credentials SET verified_at=NULL WHERE user_id='student'").run();
+  assert.equal(studentCapabilities(f.a.db,'student').ownerTester,false);
+});
+
+test('partial personal details can be saved and resumed without completing verification', async t => {
+  const f = await fixture(t), user={id:'student'};
+  const result=f.service.saveProfile(user,{name:'Student Name',birthday:'',country:'CN',province:'',draft:true});
+  assert.equal(result.profile.country,'CN');
+  assert.equal(result.profile.profileComplete,false);
+  assert.equal(f.service.profile(user).country,'CN');
+  assert.throws(()=>f.service.saveProfile(user,{name:'Student Name',birthday:'2026-02-30',country:'CN',draft:true}),{status:400});
+  await assert.rejects(f.service.requestCode(user,{email:'student@ucl.ac.uk'},'ip'),{status:400});
+  f.service.saveProfile(user,details);
+  await assert.rejects(f.service.requestCode(user,{email:'student@made-up-university.ac.uk'},'ip'),{status:400});
+});
