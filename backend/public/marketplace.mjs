@@ -1,3 +1,4 @@
+import {openAdminDialog} from './admin-layout.mjs';
 import {bindText,translateCurrent as t,currentLocale,observeUiAttributes} from './ui-i18n.mjs';
 const el=(tag,text,cls,localize=true)=>{const n=document.createElement(tag);if(text!==undefined)bindText(n,text,localize);if(cls)n.className=cls;return n;};
 const button=(text,action,cls)=>{const n=el('button',text,cls);n.type='button';n.onclick=action;return n;};
@@ -14,7 +15,7 @@ export async function renderProducts({container,api,dialog,canManage=false}){
  const preview=el('img',undefined,'product-edit-photo');preview.alt='Product photo preview';preview.hidden=!photo;if(photo)preview.src=photo;form.append(preview);
  const statusLabel=el('label','Visibility'),status=el('select');for(const value of ['draft','published','archived']){const option=el('option',value[0].toUpperCase()+value.slice(1));option.value=value;status.append(option);}status.value=row?.status||'draft';statusLabel.append(status);form.append(statusLabel);
  const error=el('p',undefined,'support-error');error.setAttribute('role','alert');const save=el('button','Save product','primary');form.append(error,save);file.onchange=async()=>{bindText(error,()=>'');const chosen=file.files?.[0];if(!chosen)return;if(chosen.size>1048576){bindText(error,()=>'Choose a photo under 1 MB.');file.value='';return;}reading=true;save.disabled=true;try{photo=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=reject;reader.readAsDataURL(chosen);});preview.src=photo;preview.hidden=false;}catch{bindText(error,()=>'Could not read this photo.');}finally{reading=false;save.disabled=false;}};
- form.onsubmit=async e=>{e.preventDefault();if(reading)return;save.disabled=true;try{await api('marketplace',{id:row?.id,version:row?.version,title:fields.title.value,description:fields.description.value,pricePence:Math.round(Number(fields.price.value)*100),stock:Number(fields.stock.value),photo,status:status.value});dialog.close();await load();}catch(e){bindText(error,()=>e.message);}finally{save.disabled=false;}};dialog.append(form,button('Cancel',()=>dialog.close()));dialog.showModal();
+ form.onsubmit=async e=>{e.preventDefault();if(reading)return;save.disabled=true;try{await api('marketplace',{id:row?.id,version:row?.version,title:fields.title.value,description:fields.description.value,pricePence:Math.round(Number(fields.price.value)*100),stock:Number(fields.stock.value),photo,status:status.value});dialog.close();await load();}catch(e){bindText(error,()=>e.message);}finally{save.disabled=false;}};dialog.append(form,button('Cancel',()=>dialog.close()));openAdminDialog(dialog);
  }
  await load();
 }
