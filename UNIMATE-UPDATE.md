@@ -8,4 +8,6 @@ The retained Expo prototype App.tsx moves its illustrative reviewer leaderboard 
 
 Administration supports automatic mobile/desktop layouts and a saved manual override, grouped navigation, multiple department responsibilities, Owner-only encrypted company documents and an initial UK compliance checklist for a business with no employees yet. Product sales reporting is separate from service invoices. Marketplace product checkout is not connected yet, so there is no live product-payment feed; the sales report states this explicitly. Event/forum posting and marketplace purchase flows remain unfinished and are not represented as completed sales or activity.
 
-Validation: 160 backend tests, 75 website tests, type checking and web export passed. The menu OCR browser check extracted the sample item names and prices; publication requires a human review of recognised prices.
+Sign-in has an optional Keep me signed in checkbox. New unchecked sign-ins use a browser-session cookie; checked sign-ins persist for up to 30 days, including after two-factor verification. Existing remembered sessions retain their original expiry.
+
+Validation: 161 backend tests, 75 website tests, type checking and web export passed. The menu OCR browser check extracted the sample item names and prices; publication requires a human review of recognised prices.
