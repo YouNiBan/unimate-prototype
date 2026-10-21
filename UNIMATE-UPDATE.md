@@ -11,3 +11,5 @@ Administration supports automatic mobile/desktop layouts and a saved manual over
 Sign-in has an optional Keep me signed in checkbox. New unchecked sign-ins use a browser-session cookie; checked sign-ins persist for up to 30 days, including after two-factor verification. Existing remembered sessions retain their original expiry.
 
 Validation: 161 backend tests, 75 website tests, type checking and web export passed. The menu OCR browser check extracted the sample item names and prices; publication requires a human review of recognised prices.
+
+Mobile administration: record tables reflow into labelled cards with visible View actions. Admin accounts use compact searchable summaries and separate detail/permission dialogs. The mobile staff calendar uses a dated agenda. Message centre has no section dropdown. Small-screen forms, menus, long text, message controls and dialogs wrap within safe edges; desktop retains its table and calendar layouts. Checked at 320, 390 and 520 px, plus desktop.
