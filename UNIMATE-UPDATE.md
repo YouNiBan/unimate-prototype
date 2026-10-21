@@ -10,6 +10,10 @@ Administration supports automatic mobile/desktop layouts and a saved manual over
 
 Sign-in has an optional Keep me signed in checkbox. New unchecked sign-ins use a browser-session cookie; checked sign-ins persist for up to 30 days, including after two-factor verification. Existing remembered sessions retain their original expiry.
 
-Validation: 161 backend tests, 75 website tests, type checking and web export passed. The menu OCR browser check extracted the sample item names and prices; publication requires a human review of recognised prices.
+Validation: 170 backend tests, 82 website tests, type checking and web export passed. The menu OCR browser check extracted the sample item names and prices; publication requires a human review of recognised prices.
 
 Mobile administration: record tables reflow into labelled cards with visible View actions. Admin accounts use compact searchable summaries and separate detail/permission dialogs. The mobile staff calendar uses a dated agenda. Message centre has no section dropdown. Small-screen forms, menus, long text, message controls and dialogs wrap within safe edges; desktop retains its table and calendar layouts. Checked at 320, 390 and 520 px, plus desktop.
+
+Member management: Owner and SuperAdmin can approve verified access without university email confirmation, temporarily suspend with an end date, restore access early, and permanently remove a member account after typing its readable Member ID. Admin approval preserves personal email login and does not manufacture university email proof. Deletion removes credentials, private profile and public restaurant reviews; business/audit records remain and the username stays reserved. This is an administrator control, not yet a student-initiated deletion flow.
+
+Student signup requires a unique case-insensitive username of 3–30 letters, numbers, dots or underscores, with available suggestions and atomic server enforcement. Authenticated header order: Notifications, Location, Theme, Language. Public footer and About identify UniMate LTD. Connected website source commit: 6d5b4e84303d9afa248404a2229fac696d9f8429.
