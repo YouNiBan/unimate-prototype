@@ -7,7 +7,7 @@ import {createRestaurants} from './restaurants.mjs';
 import {createAdminScopes} from './admin-scopes.mjs';
 import {createAdminPasswordReset} from './admin-password-reset.mjs';
 import {createAdminProfile} from './admin-profile.mjs';
-import {initializeAdminSessions,ADMIN_SESSION_SECONDS} from './admin-sessions.mjs';
+import {initializeAdminSessions,ADMIN_SESSION_SECONDS,saveAdminSessionPreference,adminSessionCookie} from './admin-sessions.mjs';
 import {createDepartments} from './departments.mjs';
 import {createFoodReviews} from './food-reviews.mjs';
 import {createVisitorMetrics} from './visitor-metrics.mjs';
@@ -183,7 +183,7 @@ export async function createApplication({
         fail(404,'Not found.');
       }
       const needsSetup = !runtime?.hosted && !db.prepare('SELECT id FROM admins LIMIT 1').get();
-      if (path === '/api/session' && req.method === 'GET') {if(actor)res.setHeader('Set-Cookie',`unimate_admin=${rawToken}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${Math.max(0,Math.floor((session.expires-Date.now())/1000))}${secureCookie}`);return reply(200,{mfaRequired,mfaMandatory:requireAdminMfa, access:actor?scopes.access(actor):null, admin: actor, csrf: actor ? session.csrf : setupCsrf, mfa:actor?adminMfa.status(actor):null, departments:actor?db.prepare('SELECT id FROM departments WHERE manager_id=?').all(actor.id).map(d=>d.id):[], needsSetup,demo,hosted:!!runtime?.hosted,localMailbox:!!localMailbox&&fullAccess(actor?.role),webOrigin:webDirectory?`${runtime?.hosted?'https':'http'}://${req.headers.host}`:runtime?.webOrigin||'http://localhost:8083',webPreviewUrl:demoAdminHost?`https://${req.headers.host}/index.html`:null });}
+      if (path === '/api/session' && req.method === 'GET') {if(actor)res.setHeader('Set-Cookie',adminSessionCookie(db,rawToken,session,secureCookie));return reply(200,{mfaRequired,mfaMandatory:requireAdminMfa, access:actor?scopes.access(actor):null, admin: actor, csrf: actor ? session.csrf : setupCsrf, mfa:actor?adminMfa.status(actor):null, departments:actor?db.prepare('SELECT id FROM departments WHERE manager_id=?').all(actor.id).map(d=>d.id):[], needsSetup,demo,hosted:!!runtime?.hosted,localMailbox:!!localMailbox&&fullAccess(actor?.role),webOrigin:webDirectory?`${runtime?.hosted?'https':'http'}://${req.headers.host}`:runtime?.webOrigin||'http://localhost:8083',webPreviewUrl:demoAdminHost?`https://${req.headers.host}/index.html`:null });}
       if(path==='/api/admin-access/request'&&req.method==='POST'){
         if(demo)fail(403,'Admin access requests are not available in the demo.');
         if(req.headers['x-csrf-token']!==setupCsrf)fail(403,'Reload the sign-up page.');
@@ -215,6 +215,8 @@ export async function createApplication({
       if (path === '/api/login' && req.method === 'POST') {
         if (req.headers['x-csrf-token'] !== setupCsrf) fail(403,'Reload the login page.');
         const data = await body(req);
+        if(data.keepSignedIn!==undefined&&typeof data.keepSignedIn!=='boolean')fail(400,'Choose whether to keep signed in.');
+        const keepSignedIn=data.keepSignedIn===true;
         const email = text(data.email,3,254,'email').toLowerCase();
         if (typeof data.password !== 'string' || data.password.length > 128) fail(400,'Invalid credentials.');
         const now = Date.now();
@@ -234,7 +236,7 @@ export async function createApplication({
         if(adminMfa.enabled(admin.id)){
           const current=db.prepare('SELECT active,password_hash FROM admins WHERE id=?').get(admin.id);
           if(!current?.active||current.password_hash!==admin.password_hash)fail(401,'Sign in again.');
-          const browserToken=token(),challenge=adminMfa.challenge(admin,req.clientAddress,browserToken);
+          const browserToken=token(),challenge=adminMfa.challenge(admin,req.clientAddress,browserToken,keepSignedIn);
           res.setHeader('Set-Cookie',[`unimate_admin=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0${secureCookie}`,`unimate_mfa=${challenge}; HttpOnly; SameSite=Strict; Path=/api/login/2fa; Max-Age=600${secureCookie}`,`unimate_mfa_browser=${browserToken}; HttpOnly; SameSite=Strict; Path=/api/login/2fa; Max-Age=600${secureCookie}`]);
           return reply(200,{requiresTwoFactor:true});
         }
@@ -245,9 +247,10 @@ export async function createApplication({
           for (const key of keys) db.prepare('DELETE FROM login_limits WHERE key=?').run(key);
           db.prepare('DELETE FROM sessions WHERE expires<?').run(now);
           db.prepare('INSERT INTO sessions VALUES(?,?,?,?)').run(digest(cookie),admin.id,csrf,now+ADMIN_SESSION_SECONDS*1000);
+          saveAdminSessionPreference(db,digest(cookie),keepSignedIn);
           audit(db,admin,'login','admins',admin.id,null,null,'Successful sign-in');
         });
-        res.setHeader('Set-Cookie',`unimate_admin=${cookie}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${ADMIN_SESSION_SECONDS}${secureCookie}`);
+        res.setHeader('Set-Cookie',adminSessionCookie(db,cookie,db.prepare('SELECT * FROM sessions WHERE token_hash=?').get(digest(cookie)),secureCookie));
         return reply(200,{ ok: true });
       }
       if(path==='/api/login/2fa'&&req.method==='POST'){
@@ -260,10 +263,11 @@ export async function createApplication({
         transaction(db,()=>{
           db.prepare('DELETE FROM sessions WHERE expires<?').run(Date.now());
           db.prepare('INSERT INTO sessions VALUES(?,?,?,?)').run(digest(cookie),admin.id,csrf,Date.now()+ADMIN_SESSION_SECONDS*1000);
+          saveAdminSessionPreference(db,digest(cookie),admin.keepSignedIn);
           db.prepare('DELETE FROM login_limits WHERE key=? OR key=?').run('ip:'+req.clientAddress,'email:'+digest(admin.email));
           audit(db,admin,'login','admins',admin.id,null,null,'Successful sign-in with two-factor authentication');
         });
-        res.setHeader('Set-Cookie',[`unimate_admin=${cookie}; HttpOnly; SameSite=Strict; Path=/; Max-Age=${ADMIN_SESSION_SECONDS}${secureCookie}`,`unimate_mfa=; HttpOnly; SameSite=Strict; Path=/api/login/2fa; Max-Age=0${secureCookie}`,`unimate_mfa_browser=; HttpOnly; SameSite=Strict; Path=/api/login/2fa; Max-Age=0${secureCookie}`]);
+        res.setHeader('Set-Cookie',[adminSessionCookie(db,cookie,db.prepare('SELECT * FROM sessions WHERE token_hash=?').get(digest(cookie)),secureCookie),`unimate_mfa=; HttpOnly; SameSite=Strict; Path=/api/login/2fa; Max-Age=0${secureCookie}`,`unimate_mfa_browser=; HttpOnly; SameSite=Strict; Path=/api/login/2fa; Max-Age=0${secureCookie}`]);
         return reply(200,{ok:true});
       }
       if (!actor) fail(401,'Please sign in.');
