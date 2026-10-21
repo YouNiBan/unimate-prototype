@@ -1,3 +1,7 @@
+import { marketplaceSplit } from "./marketplace-fees.mjs";
+import PostVideo from "./PostVideo";
+import { formatPostTime } from "./post-time";
+import { displayUsername, validUsername, matchesPerson } from "./usernames";
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -581,7 +585,7 @@ const words = {
     addReview: "Add review",
     book: "Book service",
     sell: "Sell an item",
-    commission: "UNIMATE receives a 15% commission only when your item sells.",
+    commission: "UniMate takes 12% of the item price when it sells, including Stripe processing. Delivery is excluded.",
   },
   简体: {
     home: "首页",
@@ -605,7 +609,7 @@ const words = {
     addReview: "写点评",
     book: "预约服务",
     sell: "出售物品",
-    commission: "物品成功售出后，UNIMATE 收取15%佣金。",
+    commission: "物品售出后，UniMate 收取商品价格的12%作为佣金，已包含Stripe支付手续费，不含配送费。",
   },
   繁體: {
     home: "首頁",
@@ -629,7 +633,7 @@ const words = {
     addReview: "寫點評",
     book: "預約服務",
     sell: "出售物品",
-    commission: "物品成功售出後，UNIMATE 收取15%佣金。",
+    commission: "物品售出後，UniMate 收取商品價格的12%作為佣金，已包含Stripe支付手續費，不含配送費。",
   },
 };
 
@@ -1146,25 +1150,7 @@ function Header({
         style={[styles.headerControls, compact && styles.headerControlsCompact]}
       >
         <Pressable
-          accessibilityLabel={
-            darkMode
-              ? tr(language, "Use light mode", "使用浅色模式", "使用淺色模式")
-              : tr(language, "Use dark mode", "使用深色模式", "使用深色模式")
-          }
-          style={[
-            styles.headerIconButton,
-            compact && styles.headerIconButtonCompact,
-          ]}
-          onPress={onToggleTheme}
-        >
-          <Ionicons
-            name={darkMode ? "sunny-outline" : "moon-outline"}
-            size={compact ? 18 : 20}
-            color={darkMode ? "#FFD166" : palette.navy}
-          />
-        </Pressable>
-        <Pressable
-          accessibilityLabel="Notifications"
+          accessibilityLabel={tr(language, "Notifications", "通知", "通知")}
           style={[
             styles.headerIconButton,
             compact && styles.headerIconButtonCompact,
@@ -1183,17 +1169,21 @@ function Header({
           )}
         </Pressable>
         <Pressable
-          accessibilityLabel={`Location: ${locationLabel}`}
+          accessibilityLabel={
+            darkMode
+              ? tr(language, "Use light mode", "使用浅色模式", "使用淺色模式")
+              : tr(language, "Use dark mode", "使用深色模式", "使用深色模式")
+          }
           style={[
             styles.headerIconButton,
             compact && styles.headerIconButtonCompact,
           ]}
-          onPress={onLocation}
+          onPress={onToggleTheme}
         >
           <Ionicons
-            name="location-outline"
+            name={darkMode ? "sunny-outline" : "moon-outline"}
             size={compact ? 18 : 20}
-            color={palette.navy}
+            color={darkMode ? "#FFD166" : palette.navy}
           />
         </Pressable>
         <Pressable
@@ -1214,6 +1204,20 @@ function Header({
             name={languageOpen ? "chevron-up" : "chevron-down"}
             size={11}
             color={palette.blue}
+          />
+        </Pressable>
+        <Pressable
+          accessibilityLabel={`Location: ${locationLabel}`}
+          style={[
+            styles.headerIconButton,
+            compact && styles.headerIconButtonCompact,
+          ]}
+          onPress={onLocation}
+        >
+          <Ionicons
+            name="location-outline"
+            size={compact ? 18 : 20}
+            color={palette.navy}
           />
         </Pressable>
       </View>
@@ -2113,24 +2117,6 @@ function Home({
           </View>
           <Ionicons name="chevron-forward" size={16} color={palette.muted} />
         </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel={tr(language, "See your friends’ UniMate Moments", "看看好友的 UniMate 朋友圈", "看看好友的 UniMate 朋友圈")} style={styles.homeStatusCard} onPress={openMoments}>
-          <View style={[styles.homeStatusIcon, { backgroundColor: "#ECF9F2" }]}>
-            <Ionicons
-              name="images-outline"
-              size={19}
-              color={palette.green}
-            />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.homeStatusLabel}>
-              {tr(language, "UniMate Moments", "UniMate 朋友圈", "UniMate 朋友圈")}
-            </Text>
-            <Text style={styles.homeStatusValue}>
-              {tr(language, "See your friends’ moments", "看看好友的动态", "看看好友的動態")}
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={16} color={palette.muted} />
-        </Pressable>
       </View>}
       <View style={styles.sectionHead}>
         <View>
@@ -2528,6 +2514,7 @@ function EventsForum({
   onPublishAnnouncement,
   onLargeEventRequest,
   acceptedFriends,
+  onShareEvent,
 }: {
   language: Language;
   onPost?: () => void;
@@ -2545,6 +2532,7 @@ function EventsForum({
   onPublishAnnouncement: (announcement: string) => void;
   onLargeEventRequest: () => void;
   acceptedFriends: string[];
+  onShareEvent: (title: string, username: string) => void;
 }) {
   const [category, setCategory] = useState("All");
   const [selected, setSelected] = useState<(typeof events)[number] | null>(
@@ -2589,6 +2577,7 @@ function EventsForum({
   };
   const categories = [
     "All",
+    "Favourites",
     "Friends going",
     "Sports",
     "Parties",
@@ -2945,7 +2934,9 @@ function EventsForum({
               <Text style={styles.primaryButtonText}>{tr(language, "Share link", "分享链接", "分享連結")}</Text>
             </Pressable>
             <Text style={styles.formSectionTitle}>{tr(language, "Send to friends", "发送给好友", "傳送給好友")}</Text>
-            <View style={styles.eventShareFriends}>{friends.slice(0, 3).map((friend) => <View key={friend.username} style={styles.eventShareFriendRow}><View style={[styles.avatar, { backgroundColor: friend.color }]}><Text style={styles.avatarText}>{friend.initials}</Text></View><View style={{ flex: 1 }}><Text style={styles.friendName}>{friend.fullName}</Text><Text style={styles.friendUni}>{friend.username}</Text></View><Pressable style={[styles.eventShareSendButton, sharedWith.includes(friend.username) && styles.eventShareSentButton]} onPress={() => setSharedWith([...sharedWith, friend.username])}><Text style={[styles.eventShareSendText, sharedWith.includes(friend.username) && styles.eventShareSentText]}>{sharedWith.includes(friend.username) ? tr(language, "Sent", "已发送", "已傳送") : tr(language, "Send", "发送", "傳送")}</Text></Pressable></View>)}</View>
+            <View style={styles.eventShareFriends}>{friends.filter(friend => acceptedFriends.includes(friend.username)).map((friend) => <View key={friend.username} style={styles.eventShareFriendRow}><View style={[styles.avatar, { backgroundColor: friend.color }]}><Text style={styles.avatarText}>{friend.initials}</Text></View><View style={{ flex: 1 }}><Text style={styles.friendName}>{friend.fullName}</Text><Text style={styles.friendUni}>{friend.username}</Text></View><Pressable style={[styles.eventShareSendButton, sharedWith.includes(friend.username) && styles.eventShareSentButton]} accessibilityRole="button" accessibilityLabel={`Send event to ${friend.fullName}`} onPress={() => { setSharedWith(current => [...current, friend.username]); onShareEvent(selected.title, friend.username); }}><Text style={[styles.eventShareSendText, sharedWith.includes(friend.username) && styles.eventShareSentText]}>{sharedWith.includes(friend.username) ? tr(language, "Sent", "已发送", "已傳送") : tr(language, "Send", "发送", "傳送")}</Text></Pressable></View>)}</View>
+            {!acceptedFriends.length && <Text style={styles.formDesc}>{tr(language, "Add a friend to share events in chat.", "添加好友后即可在聊天中分享活动。", "新增好友後即可在聊天中分享活動。")}</Text>}
+            <Text style={styles.faqMeta}>{tr(language, "Shared events appear in your preview chat.", "分享的活动会显示在预览聊天中。", "分享的活動會顯示在預覽聊天中。")}</Text>
           </ScrollView>
         </Sheet>
       </>
@@ -3091,7 +3082,7 @@ function EventsForum({
               <Ionicons name="time-outline" size={21} color="#B97A0D" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.myEventStateTitle}>Welcome to London Mixer</Text>
+              <Text style={styles.myEventStateTitle}>{tr(language, "Welcome to London Mixer", "伦敦迎新交流会", "倫敦迎新交流會")}</Text>
               <Text style={styles.myEventStateMeta}>{tr(language, "Submitted 22 September 2026", "2026年9月22日提交", "2026年9月22日提交")}</Text>
             </View>
             <View style={styles.myEventPendingPill}><Text style={styles.myEventPendingText}>{tr(language, "Pending approval", "等待审核", "等待審核")}</Text></View>
@@ -3110,7 +3101,7 @@ function EventsForum({
               <Ionicons name={declinedResubmitted ? "time-outline" : "close-circle-outline"} size={21} color={declinedResubmitted ? "#B97A0D" : palette.coral} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.myEventStateTitle}>Freshers House Party</Text>
+              <Text style={styles.myEventStateTitle}>{tr(language, "Freshers House Party", "新生派对", "新生派對")}</Text>
               <Text style={styles.myEventStateMeta}>{tr(language, "Submitted 20 September 2026", "2026年9月20日提交", "2026年9月20日提交")}</Text>
             </View>
             <View style={declinedResubmitted ? styles.myEventPendingPill : styles.myEventDeclinedPill}><Text style={declinedResubmitted ? styles.myEventPendingText : styles.myEventDeclinedText}>{declinedResubmitted ? tr(language, "Pending approval", "等待审核", "等待審核") : tr(language, "Declined", "未通过", "未通過")}</Text></View>
@@ -3136,12 +3127,12 @@ function EventsForum({
             <PhotoSourceActions language={language} onCamera={() => pickDraftEventPhoto("camera")} onLibrary={() => pickDraftEventPhoto("library")} />
             <View style={styles.field}><Text style={styles.fieldLabel}>{tr(language, "Event name", "活动名称", "活動名稱")}</Text><TextInput value={editingEvent === "approved" ? draftEventTitle : "Freshers House Party"} onChangeText={editingEvent === "approved" ? setDraftEventTitle : undefined} /></View>
             <EventDateField language={language} value={draftEventDateKey} onChange={setDraftEventDateKey} />
-            <EventTimeField label={tr(language, "Start time", "开始时间", "開始時間")} value={draftEventStartTime} onChange={setDraftEventStartTime} />
-            <EventTimeField label={tr(language, "End time", "结束时间", "結束時間")} value={draftEventEndTime} onChange={setDraftEventEndTime} />
+            <EventTimeField language={language} label={tr(language, "Start time", "开始时间", "開始時間")} value={draftEventStartTime} onChange={setDraftEventStartTime} />
+            <EventTimeField language={language} label={tr(language, "End time", "结束时间", "結束時間")} value={draftEventEndTime} onChange={setDraftEventEndTime} />
             <View style={styles.field}><Text style={styles.fieldLabel}>{tr(language, "Location / full address", "地点 / 完整地址", "地點 / 完整地址")}</Text><TextInput value={draftEventLocation} onChangeText={setDraftEventLocation} /></View>
             <View style={[styles.field, { minHeight: 100 }]}><Text style={styles.fieldLabel}>{tr(language, "Summary of the event", "活动简介", "活動簡介")}</Text><TextInput multiline value={draftEventSummary} onChangeText={setDraftEventSummary} /></View>
             <View style={styles.field}><Text style={styles.fieldLabel}>{tr(language, "Cost / ticket price", "费用 / 票价", "費用 / 票價")}</Text><View style={styles.currencyInputRow}><Text style={styles.currencyPrefix}>£</Text><TextInput value={draftEventPrice} onChangeText={setDraftEventPrice} keyboardType="decimal-pad" style={styles.currencyInput} /></View></View>
-            <EventTimeField label={tr(language, "Last entry time", "最晚入场时间", "最晚入場時間")} value={draftEventLastEntry} onChange={setDraftEventLastEntry} />
+            <EventTimeField language={language} label={tr(language, "Last entry time", "最晚入场时间", "最晚入場時間")} value={draftEventLastEntry} onChange={setDraftEventLastEntry} />
             <View style={styles.eventCapacityField}>
               <View style={styles.eventCapacityHead}><View style={styles.eventCapacityIcon}><Ionicons name="people-outline" size={20} color={palette.blue} /></View><View style={{ flex: 1 }}><Text style={styles.fieldLabel}>{tr(language, "Event capacity", "活动人数上限", "活動人數上限")}</Text><Text style={styles.eventCapacityHint}>{tr(language, "Standard student events can host 2–30 people.", "普通学生活动可容纳2至30人。", "一般學生活動可容納2至30人。")}</Text></View></View>
               <View style={styles.eventCapacityControl}>
@@ -3170,7 +3161,7 @@ function EventsForum({
   const shown =
     category === "All"
       ? events
-      : events.filter((event) => category === "Friends going" ? friendsGoingToEvent(event.title, acceptedFriends).length > 0 : event.category === category);
+      : events.filter((event) => category === "Favourites" ? favourites.includes(event.title) : category === "Friends going" ? friendsGoingToEvent(event.title, acceptedFriends).length > 0 : event.category === category);
   return (
     <ScrollView
       contentContainerStyle={styles.scroll}
@@ -3207,7 +3198,7 @@ function EventsForum({
                 category === item && styles.categoryChipTextActive,
               ]}
             >
-              {item === "Friends going" ? tr(language, "Friends going", "好友将参加", "好友將參加") : categoryLabel(language, item)}
+              {item === "Favourites" ? tr(language, "Favourites", "收藏活动", "收藏活動") : item === "Friends going" ? tr(language, "Friends going", "好友将参加", "好友將參加") : categoryLabel(language, item)}
             </Text>
           </Pressable>
         ))}
@@ -3232,15 +3223,10 @@ function EventsForum({
         <View style={styles.noEvents}>
           <Ionicons name="calendar-outline" size={38} color={palette.blue} />
           <Text style={styles.emptyTitle}>
-            {tr(language, "No events yet", "暂无活动", "暫無活動")}
+            {category === "Favourites" ? tr(language, "No favourite events yet", "暂无收藏活动", "暫無收藏活動") : tr(language, "No events yet", "暂无活动", "暫無活動")}
           </Text>
           <Text style={styles.emptyText}>
-            {tr(
-              language,
-              "Be the first student to post in this category.",
-              "成为第一个在此分类发布活动的同学。",
-              "成為第一個在此分類發佈活動的同學。",
-            )}
+            {category === "Favourites" ? tr(language, "Tap the heart on an event to save it here.", "点击活动上的爱心，即可收藏到这里。", "點按活動上的愛心，即可收藏到這裡。") : tr(language, "Be the first student to post in this category.", "成为第一个在此分类发布活动的同学。", "成為第一個在此分類發佈活動的同學。")}
           </Text>
         </View>
       )}
@@ -7241,6 +7227,8 @@ function FoodForum({ language, visitedPlaces, setVisitedPlaces, submittedReviews
   reviewReplies: Record<string, string>;
   restaurantProfile: RestaurantPublicProfile;
 }) {
+  const [showLeaderboard,setShowLeaderboard]=useState(false);
+  const [leaderboardScope,setLeaderboardScope]=useState<"all"|"friends">("all");
   const [mode, setMode] = useState<
     "discover" | "trending" | "friends" | "saved" | "visited"
   >("discover");
@@ -7473,6 +7461,16 @@ function FoodForum({ language, visitedPlaces, setVisitedPlaces, submittedReviews
       </LinearGradient>
     </Pressable>
   );
+  if(showLeaderboard)return <ScrollView contentContainerStyle={styles.scroll}><Pressable style={styles.categoryChip} onPress={()=>setShowLeaderboard(false)}><Text style={styles.categoryChipText}>{tr(language,"Back to restaurants","返回餐厅","返回餐廳")}</Text></Pressable><View style={styles.foodModeRow}>{([['all','All time','总榜','總榜'],['friends','Friends','好友','好友']] as const).map(([value,en,cn,tw])=><Pressable key={value} style={[styles.foodMode,leaderboardScope===value&&styles.foodModeActive]} onPress={()=>setLeaderboardScope(value)}><Text style={[styles.foodModeText,leaderboardScope===value&&styles.foodModeTextActive]}>{tr(language,en,cn,tw)}</Text></Pressable>)}</View><Text style={styles.workspaceHint}>{tr(language,"Layout preview · Example rankings","布局预览 · 示例排名","版面預覽 · 範例排名")}</Text>        <View style={styles.workspaceCard}>
+          <View style={styles.workspaceCardTop}><View><Text style={styles.workspaceCardTitle}>{tr(language, "Food reviewer leaderboard", "美食点评达人榜", "美食評論達人榜")}</Text><Text style={styles.workspaceHint}>{tr(language, "Based on helpful, verified student reviews", "按真实到访且有帮助的学生点评排名", "按真實到訪且有幫助的學生評論排名")}</Text></View><Ionicons name="trophy" size={24} color="#E7A51A" /></View>
+          {(leaderboardScope === "all" ? [
+            ["1", "Jenna · UniMate official reviewer", "42", "4.9"],
+            ["2", "@londonlatte", "28", "4.8"],
+            ["3", "@studybuddy_uk", "17", "4.7"],
+          ] : [["1", "@londonlatte", "28", "4.8"], ["2", "@studybuddy_uk", "17", "4.7"]]).map(([rank, name, reviews, rating]) => <View key={rank} style={[styles.friend, { paddingHorizontal: 0 }]}><View style={[styles.avatar, { backgroundColor: rank === "1" ? "#FFF0BD" : "#DCEBFF" }]}><Text style={styles.avatarText}>{rank}</Text></View><View style={{ flex: 1 }}><Text style={styles.friendName}>{name}</Text><Text style={styles.friendInterests}>{reviews} {tr(language, "reviews", "条点评", "則評論")} · ★ {rating}</Text></View>{rank === "1" && <VerificationBadge kind="staff" language={language} />}</View>)}
+          <Text style={styles.workspaceHint}>{tr(language, "Jenna independently reviews value, dishes and student offers, and helps restaurants join UniMate. Official reviews are labelled and are never restaurant photoshoots.", "Jenna 会独立点评价格、菜品和学生优惠，并协助餐厅加入优你伴。官方点评均有明确标识，绝不使用餐厅摆拍照片。", "Jenna 會獨立評論價錢、菜式及學生優惠，並協助餐廳加入優你伴。官方評論均有清晰標示，絕不使用餐廳擺拍相片。")}</Text>
+        </View>
+</ScrollView>;
   return (
     <>
       <ScrollView
@@ -7520,15 +7518,7 @@ function FoodForum({ language, visitedPlaces, setVisitedPlaces, submittedReviews
             placeholderTextColor="#8B98AD"
           />
         </View>
-        <View style={styles.workspaceCard}>
-          <View style={styles.workspaceCardTop}><View><Text style={styles.workspaceCardTitle}>{tr(language, "Food reviewer leaderboard", "美食点评达人榜", "美食評論達人榜")}</Text><Text style={styles.workspaceHint}>{tr(language, "Based on helpful, verified student reviews", "按真实到访且有帮助的学生点评排名", "按真實到訪且有幫助的學生評論排名")}</Text></View><Ionicons name="trophy" size={24} color="#E7A51A" /></View>
-          {[
-            ["1", "Jenna · UniMate official reviewer", "42", "4.9"],
-            ["2", "@londonlatte", "28", "4.8"],
-            ["3", "@studybuddy_uk", "17", "4.7"],
-          ].map(([rank, name, reviews, rating]) => <View key={rank} style={[styles.friend, { paddingHorizontal: 0 }]}><View style={[styles.avatar, { backgroundColor: rank === "1" ? "#FFF0BD" : "#DCEBFF" }]}><Text style={styles.avatarText}>{rank}</Text></View><View style={{ flex: 1 }}><Text style={styles.friendName}>{name}</Text><Text style={styles.friendInterests}>{reviews} {tr(language, "reviews", "条点评", "則評論")} · ★ {rating}</Text></View>{rank === "1" && <VerificationBadge kind="staff" language={language} />}</View>)}
-          <Text style={styles.workspaceHint}>{tr(language, "Jenna independently reviews value, dishes and student offers, and helps restaurants join UniMate. Official reviews are labelled and are never restaurant photoshoots.", "Jenna 会独立点评价格、菜品和学生优惠，并协助餐厅加入优你伴。官方点评均有明确标识，绝不使用餐厅摆拍照片。", "Jenna 會獨立評論價錢、菜式及學生優惠，並協助餐廳加入優你伴。官方評論均有清晰標示，絕不使用餐廳擺拍相片。")}</Text>
-        </View>
+        <Pressable style={styles.categoryChip} onPress={() => setShowLeaderboard(true)}><Text style={styles.categoryChipText}>{tr(language, "Leaderboard", "排行榜", "排行榜")}</Text></Pressable>
         <SlidableCategories language={language} rowStyle={styles.foodModeRow}>
           {modeOptions.map((item) => (
             <Pressable
@@ -7938,7 +7928,7 @@ function FoodForum({ language, visitedPlaces, setVisitedPlaces, submittedReviews
             {submittedReviews.filter((review) => review.placeName === placeKey(selected)).map((review, index) => (
               <View style={styles.studentReviewCard} key={`${selected.name}-${index}`}>
                 <View style={styles.studentReviewHead}>
-                  <View style={[styles.avatar, { backgroundColor: palette.sky }]}><Text style={styles.avatarText}>YOU</Text></View>
+                  <View style={[styles.avatar, { backgroundColor: palette.sky }]}><Text style={styles.avatarText}>{tr(language, "YOU", "你", "你")}</Text></View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.friendName}>{tr(language, "Your review", "你的评价", "你的評價")}</Text>
                     <Text style={styles.metaText}>{review.friendsOnly ? tr(language, "Visible to friends", "仅好友可见", "只限好友可見") : tr(language, "Visible to students", "学生可见", "學生可見")}</Text>
@@ -8747,7 +8737,7 @@ function Marketplace({
 }
 
 type ForumCategory = "arrival" | "money" | "travel" | "daily" | "post";
-type ForumPost = { id: string; title: string; body: string; category?: ForumCategory; author: string; authorPhoto?: string; isOwn?: boolean; createdAt: string; likes: number; bookmarkCount?: number; tags?: string[]; coverPhoto?: string; photos?: string[]; links?: { label: string; url: string }[] };
+type ForumPost = { commentsEnabled?: boolean; repostsEnabled?: boolean; repostOf?: string; originalAuthor?: string; archived?: boolean; id: string; title: string; body: string; category?: ForumCategory; author: string; authorUsername?: string; authorPhoto?: string; isOwn?: boolean; createdAt: string; likes: number; bookmarkCount?: number; tags?: string[]; coverPhoto?: string; photos?: string[]; links?: { label: string; url: string }[] };
 function safeForumUrl(value: string): string | null {
   try { const url = new URL(value.trim()); return ["https:", "http:"].includes(url.protocol) && !!url.hostname && !url.username && !url.password ? url.href : null; }
   catch { return null; }
@@ -8844,11 +8834,18 @@ function MentionInput({ language, people = friends, value = "", onChangeText, ..
   </View>;
 }
 
-function mentionText(text: string) {
-  return text.split(/((?<![\p{L}\p{N}_])@[\p{L}\p{N}_-]+)/u).map((part, index) => part.startsWith("@") ? <Text key={index} style={{ color: palette.blue, fontWeight: "700" }}>{part}</Text> : part);
+function PostInteractionOptions({ comments, reposts, onComments, onReposts }: { comments: boolean; reposts: boolean; onComments: (value: boolean) => void; onReposts: (value: boolean) => void }) {
+  return <View style={{ paddingVertical: 12, gap: 8 }}><Text style={styles.formSectionTitle}>Post options</Text>{[{ label: "Allow comments", value: comments, change: onComments }, { label: "Allow reposts", value: reposts, change: onReposts }].map(option => <Pressable key={option.label} accessibilityRole="switch" accessibilityLabel={option.label} accessibilityState={{ checked: option.value }} onPress={() => option.change(!option.value)} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 48 }}><Text style={styles.faqCardAuthor}>{option.label}</Text><View style={[styles.toggle, option.value && styles.toggleOn]}><SwitchThumb on={option.value} /></View></Pressable>)}<Text style={styles.faqMeta}>Likes and saves stay available. Reposts respect the original audience.</Text></View>;
+}
+
+function mentionText(text: string, onHashtag?: (tag: string) => void) {
+  return text.split(/((?<![\p{L}\p{N}_])(?:@[\p{L}\p{N}_.-]+|#[\p{L}\p{N}_]+))/u).map((part, index) => /^[#@]/.test(part) ? <Text key={index} accessibilityRole={part.startsWith("#") && onHashtag ? "button" : undefined} onPress={part.startsWith("#") && onHashtag ? (event) => { event.stopPropagation(); onHashtag(part); } : undefined} style={{ color: palette.blue, fontWeight: "700" }}>{part}</Text> : part);
 }
 
 type StudentMoment = {
+  commentsEnabled?: boolean;
+  repostsEnabled?: boolean;
+  archived?: boolean;
   id: string;
   repostOf?: string;
   repostComment?: string;
@@ -8862,7 +8859,9 @@ type StudentMoment = {
   username: string;
   author: string;
   caption: ForumCopy;
+  // Ordered media URIs; legacy posts contain photos only.
   photos: string[];
+  videoUris?: string[];
   location: ForumCopy;
   createdAt: number;
   likes: number;
@@ -8942,17 +8941,24 @@ function MomentsPrivacySheet({ visible, onClose, settings, onSettingsChange, acc
     </Sheet>;
 }
 
-function PostPhotoCarousel({ photos, language, onOpen, maxHeight }: { photos: string[]; language: Language; onOpen: (uri: string) => void; maxHeight?: number }) {
+function PostPhotoCarousel({ photos, videoUris = [], language, onOpen, maxHeight }: { photos: string[]; videoUris?: string[]; language: Language; onOpen: (uri: string) => void; maxHeight?: number }) {
   const [width, setWidth] = useState(390);
   const [index, setIndex] = useState(0);
   const slider = useRef<NativeScrollView>(null);
-  useEffect(() => { slider.current?.scrollTo({ x: index * width, animated: false }); }, [width]);
+  useEffect(() => { const next = Math.min(index, Math.max(0, photos.length - 1)); setIndex(next); slider.current?.scrollTo({ x: next * width, animated: false }); }, [width, photos.length]);
   if (!photos.length) return null;
-  return <View onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
-    <NativeScrollView ref={slider} horizontal pagingEnabled directionalLockEnabled nestedScrollEnabled showsHorizontalScrollIndicator={false} scrollEventThrottle={32} onScroll={(event) => setIndex(Math.max(0, Math.min(photos.length - 1, Math.round(event.nativeEvent.contentOffset.x / Math.max(1, width)))))}>
-      {photos.map((uri, photoIndex) => <Pressable key={`${photoIndex}-${uri}`} accessibilityRole="button" accessibilityLabel={tr(language, `View photo ${photoIndex + 1}`, `查看照片 ${photoIndex + 1}`, `查看相片 ${photoIndex + 1}`)} style={{ width }} onPress={() => onOpen(uri)}><Image source={{ uri }} resizeMode="contain" style={{ width: "100%", height: Math.min(width, maxHeight || width), backgroundColor: "#0E1726" }} /></Pressable>)}
+  const height = Math.min(width, maxHeight || width);
+  const go = (next: number) => { setIndex(next); slider.current?.scrollTo({ x: next * width, animated: true }); };
+  return <View onLayout={event => setWidth(event.nativeEvent.layout.width)}>
+    <NativeScrollView ref={slider} horizontal pagingEnabled directionalLockEnabled nestedScrollEnabled showsHorizontalScrollIndicator={false} scrollEventThrottle={32} onScroll={event => setIndex(Math.max(0, Math.min(photos.length - 1, Math.round(event.nativeEvent.contentOffset.x / Math.max(1, width)))))}>
+      {photos.map((uri, mediaIndex) => <View key={mediaIndex + uri} style={{ width }}>
+        {videoUris.includes(uri) ? (index === mediaIndex ? <PostVideo uri={uri} active height={height} errorLabel={tr(language, "This video cannot be played. Try an MP4 video.", "无法播放此视频，请尝试MP4格式。", "無法播放此影片，請嘗試MP4格式。")} /> : <View style={{ height, backgroundColor: "#0E1726", alignItems: "center", justifyContent: "center" }}><Ionicons name="play-circle" size={48} color="#FFFFFF" /></View>)
+          : <Pressable accessibilityRole="button" accessibilityLabel={tr(language, `View photo ${mediaIndex + 1}`, `查看照片 ${mediaIndex + 1}`, `查看相片 ${mediaIndex + 1}`)} onPress={() => onOpen(uri)}><Image source={{ uri }} resizeMode="contain" style={{ width: "100%", height, backgroundColor: "#0E1726" }} /></Pressable>}
+      </View>)}
     </NativeScrollView>
-    {photos.length > 1 && <><View pointerEvents="none" style={{ position: "absolute", top: 12, right: 12, borderRadius: 18, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: "rgba(0,0,0,0.5)" }}><Text style={{ color: "#FFFFFF", fontSize: 12 }}>{index + 1}/{photos.length}</Text></View><View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center" }}>{photos.map((_, photoIndex) => <Pressable key={photoIndex} accessibilityRole="button" accessibilityLabel={tr(language, `Go to photo ${photoIndex + 1}`, `切换到照片 ${photoIndex + 1}`, `切換至相片 ${photoIndex + 1}`)} accessibilityState={{ selected: photoIndex === index }} onPress={() => { setIndex(photoIndex); slider.current?.scrollTo({ x: photoIndex * width, animated: true }); }} style={{ width: 24, height: 36, alignItems: "center", justifyContent: "center" }}><View style={{ width: photoIndex === index ? 7 : 5, height: photoIndex === index ? 7 : 5, borderRadius: 4, backgroundColor: photoIndex === index ? palette.blue : palette.muted }} /></Pressable>)}</View></>}
+    {photos.length > 1 && <View style={{ flexDirection: "row", justifyContent: "center", alignItems: "center", paddingVertical: 4 }}>
+      {photos.map((_, mediaIndex) => <Pressable key={mediaIndex} accessibilityRole="button" accessibilityLabel={tr(language, `Slide ${mediaIndex + 1} of ${photos.length}`, `第${mediaIndex + 1}张，共${photos.length}张`, `第${mediaIndex + 1}張，共${photos.length}張`)} accessibilityState={{ selected: mediaIndex === index }} onPress={() => go(mediaIndex)} style={{ width: 32, height: 44, alignItems: "center", justifyContent: "center" }}><View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: mediaIndex === index ? palette.blue : "#C0CCDC" }} /></Pressable>)}
+    </View>}
   </View>;
 }
 
@@ -8961,7 +8967,8 @@ function MomentsNavigation({ language, selected, onSelect, showForum = true }: {
   return <View style={{ flexDirection: "row", borderBottomWidth: 1, borderColor: palette.line, marginBottom: 8 }}>{(["foryou", "following", "explore", "forum"] as const).filter((tab) => showForum || tab !== "forum").map((tab) => <Pressable key={tab} accessibilityRole="tab" accessibilityState={{ selected: selected === tab }} onPress={() => onSelect(tab)} style={{ flex: 1, alignItems: "center", justifyContent: "center", minHeight: 48, borderBottomWidth: 2, borderBottomColor: selected === tab ? palette.blue : "transparent" }}><Text style={{ fontSize: 14, fontWeight: selected === tab ? "800" : "600", color: selected === tab ? palette.blue : palette.muted }}>{tab === "forum" ? tr(language, "Forum", "论坛", "論壇") : tab === "explore" ? tr(language, "Explore", "发现", "探索") : tab === "foryou" ? tr(language, "For You", "推荐", "推薦") : tr(language, "Following", "关注", "關注")}</Text></Pressable>)}</View>;
 }
 
-function StudentMoments({ onOpenForum, initialDiscoveryTab = "foryou", onDiscoveryTabChange, embedded = false, profileAudience = "owner", followedPublishers, onTogglePublisher, language, accountName, canInteract, onVerify, acceptedFriends, moments, onMomentsChange, onFindFriends, onOpenEvent, selectedAuthor, onSelectAuthor, settings, onSettingsChange, profilePhoto, entry, onShareMoment }: {
+function StudentMoments({ discoveryCity = "", myEventTitles = [], ownUniversity = "", onOpenForum, initialDiscoveryTab = "foryou", onDiscoveryTabChange, embedded = false, profileAudience = "owner", followedPublishers, onTogglePublisher, language, accountName, canInteract, onVerify, acceptedFriends, moments, onMomentsChange, onFindFriends, onOpenEvent, selectedAuthor, onSelectAuthor, settings, onSettingsChange, profilePhoto, entry, onShareMoment }: {
+  discoveryCity?: string; myEventTitles?: string[]; ownUniversity?: string;
   onOpenForum?: () => void;
   initialDiscoveryTab?: "explore" | "foryou" | "following";
   onDiscoveryTabChange?: (tab: "explore" | "foryou" | "following") => void;
@@ -8992,10 +8999,20 @@ function StudentMoments({ onOpenForum, initialDiscoveryTab = "foryou", onDiscove
   const [activityFilter, setActivityFilter] = useState<"liked" | "commented" | "reposted" | "saved" | null>(null);
   const savedOnly = activityFilter === "saved";
   const momentBookmarkCount = (id: string) => Math.max(0, moments.find((moment) => moment.id === id)?.bookmarkCount || 0) + Number(savedMoments.ids.includes(id));
-  const saveMomentButton = (id: string, compact = false) => <Pressable accessibilityRole="button" accessibilityLabel={savedMoments.ids.includes(id) ? t("Unsave moment", "取消收藏动态", "取消收藏動態") : t("Save moment", "收藏动态", "收藏動態")} accessibilityHint={t(`${momentBookmarkCount(id)} bookmarks · local preview count`, `${momentBookmarkCount(id)} 次收藏 · 本机演示计数`, `${momentBookmarkCount(id)} 次收藏 · 本機示範計數`)} accessibilityState={{ selected: savedMoments.ids.includes(id) }} onPress={() => savedMoments.toggle(id)} style={{ flex: compact ? 1 : undefined, minWidth: compact ? 0 : 38, minHeight: 44, flexDirection: "row", gap: compact ? 5 : 3, alignItems: "center", justifyContent: "center" }}><Ionicons name={savedMoments.ids.includes(id) ? "bookmark" : "bookmark-outline"} size={compact ? 18 : 20} color={savedMoments.ids.includes(id) ? palette.blue : compact ? palette.muted : palette.blue} /><Text style={compact ? styles.forumCardActionCount : styles.faqActionText}>{momentBookmarkCount(id)}</Text></Pressable>;
-  const [discoveryTopic, setDiscoveryTopic] = useState<"all" | "food" | "events" | "campus" | "beauty" | "travel" | "lifestyle">("all");
-  const [campus, setCampus] = useState("UCL");
+  const saveMomentButton = (id: string, compact = false) => <Pressable accessibilityRole="button" accessibilityLabel={savedMoments.ids.includes(id) ? t("Unsave moment", "取消收藏动态", "取消收藏動態") : t("Save moment", "收藏动态", "收藏動態")} accessibilityHint={t(`${momentBookmarkCount(id)} bookmarks · local preview count`, `${momentBookmarkCount(id)} 次收藏 · 本机演示计数`, `${momentBookmarkCount(id)} 次收藏 · 本機示範計數`)} accessibilityState={{ selected: savedMoments.ids.includes(id) }} onPress={() => savedMoments.toggle(id)} style={{ flex: compact ? 1 : undefined, minWidth: compact ? 0 : 38, minHeight: 44, flexDirection: "row", gap: compact ? 5 : 3, alignItems: "center", justifyContent: "center" }}><Ionicons name={savedMoments.ids.includes(id) ? "bookmark" : "bookmark-outline"} size={compact ? 18 : 26} color={savedMoments.ids.includes(id) ? palette.blue : compact ? palette.muted : palette.blue} /><Text style={compact ? styles.forumCardActionCount : styles.faqActionText}>{momentBookmarkCount(id)}</Text></Pressable>;
+  const [discoveryTopic, setDiscoveryTopic] = useState<"all" | "nearby" | "events" | "campus">("all");
+  const campus = ownUniversity;
+  const normalizeUniversity = (value: string) => value.toLowerCase().replace("university college london", "ucl").trim();
+  const sameUniversity = (moment: StudentMoment) => !!campus && normalizeUniversity(moment.university || friends.find(friend => friend.username === moment.username)?.uni || "") === normalizeUniversity(campus);
+  const nearbyMoment = (moment: StudentMoment) => !!discoveryCity.trim() && moment.location.some(place => place.toLowerCase().includes(discoveryCity.trim().toLowerCase()));
+  const sameEvent = (moment: StudentMoment) => myEventTitles.some(title => title === moment.eventTitle || (eventFriendAttendees[title] || []).includes(moment.username));
+  const matchesDiscovery = (moment: StudentMoment) => discoveryTopic === "nearby" ? nearbyMoment(moment) : discoveryTopic === "campus" ? sameUniversity(moment) : discoveryTopic === "events" ? sameEvent(moment) : nearbyMoment(moment) || sameUniversity(moment) || sameEvent(moment);
   const [momentSearch, setMomentSearch] = useState("");
+  const searchHashtag = (tag: string) => {
+    setMomentSearch(tag); setActivityFilter(null); setDiscoveryTopic("all");
+    setDiscoveryTab("explore"); onDiscoveryTabChange?.("explore");
+    setSelectedId(null); setDetailFeedIds([]); onSelectAuthor(null);
+  };
   const [audience, setAudience] = useState<"public" | "friends" | "private">("friends");
   const [coverBusy, setCoverBusy] = useState(false);
   const [coverError, setCoverError] = useState("");
@@ -9014,10 +9031,16 @@ function StudentMoments({ onOpenForum, initialDiscoveryTab = "foryou", onDiscove
     finally { setCoverBusy(false); }
   };
   const [caption, setCaption] = useState("");
+  const [commentsEnabled, setCommentsEnabled] = useState(true);
+  const [repostsEnabled, setRepostsEnabled] = useState(true);
   const [photos, setPhotos] = useState<string[]>([]);
+  const [videoUris, setVideoUris] = useState<string[]>([]);
+  const [postClock, setPostClock] = useState(Date.now());
+  useEffect(() => { const timer = setInterval(() => setPostClock(Date.now()), 60000); return () => clearInterval(timer); }, []);
   const [location, setLocation] = useState("");
   const [error, setError] = useState("");
   const [picking, setPicking] = useState(false);
+  const [mediaMenuOpen, setMediaMenuOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   useEffect(() => { if (entry) openMomentFeed(entry.id); }, [entry]);
   const [comment, setComment] = useState("");
@@ -9057,11 +9080,11 @@ function StudentMoments({ onOpenForum, initialDiscoveryTab = "foryou", onDiscove
   const author = accountName.trim() || "Sophie C";
   const isOwnTimeline = selectedAuthor === "self";
   const previewing = profileAudience !== "owner";
-  const accessibleMoments = moments.filter((moment) => !moment.repostOf || moments.some((source) => source.id === moment.repostOf && source.publicPost && source.audience !== "private" && source.audience !== "friends")).filter((moment) => moment.username === "self" || (!settings.hideTheirPosts.includes(moment.username) && moment.audience !== "private" && (moment.publicPost || acceptedFriends.includes(moment.username))));
+  const accessibleMoments = moments.filter(moment => !moment.archived).filter((moment) => !moment.repostOf || moments.some((source) => source.id === moment.repostOf && !source.archived && source.publicPost && source.audience !== "private" && source.audience !== "friends")).filter((moment) => moment.username === "self" || (!settings.hideTheirPosts.includes(moment.username) && moment.audience !== "private" && (moment.publicPost || acceptedFriends.includes(moment.username))));
   const visibleMoments = isOwnTimeline
     ? momentsVisibleTo(accessibleMoments.filter((moment) => moment.username === "self"), settings, profileAudience)
-    : accessibleMoments.filter((moment) => selectedAuthor ? moment.username === selectedAuthor : moment.audience !== "private" && (activityFilter ? activityFilter === "liked" ? moment.liked : activityFilter === "commented" ? moment.comments.some((comment) => comment.author === author) : activityFilter === "reposted" ? moment.username === "self" && !!moment.repostOf : savedMoments.ids.includes(moment.id) : discoveryTab === "following" ? moment.username === "self" || acceptedFriends.includes(moment.username) || !!moment.publisherId && followedPublishers.includes(moment.publisherId) : discoveryTab === "explore" && discoveryTopic === "campus" ? (moment.university || friends.find((friend) => friend.username === moment.username)?.uni) === campus : !!moment.publicPost))
-      .filter((moment) => !!selectedAuthor || (activityFilter || discoveryTab !== "explore" || discoveryTopic === "all" || discoveryTopic === "campus" || (moment.topic || "campus") === discoveryTopic) && `${moment.author} ${tr(language, ...moment.caption)} ${moment.eventTitle || ""}`.toLowerCase().includes(momentSearch.trim().toLowerCase()))
+    : accessibleMoments.filter((moment) => selectedAuthor ? moment.username === selectedAuthor : moment.audience !== "private" && (activityFilter ? activityFilter === "liked" ? moment.liked : activityFilter === "commented" ? moment.comments.some((comment) => comment.author === author) : activityFilter === "reposted" ? moment.username === "self" && !!moment.repostOf : savedMoments.ids.includes(moment.id) : discoveryTab === "following" ? moment.username === "self" || acceptedFriends.includes(moment.username) || !!moment.publisherId && followedPublishers.includes(moment.publisherId) : !!moment.publicPost && moment.audience !== "friends"))
+      .filter((moment) => !!selectedAuthor || (activityFilter || discoveryTab !== "explore" || matchesDiscovery(moment)) && forumMatchesSearch(momentSearch, `${moment.author} ${moment.username || ""} ${tr(language, ...moment.caption)} ${moment.eventTitle || ""}`, extractForumHashtags(tr(language, ...moment.caption))))
       .sort((a, b) => !selectedAuthor && discoveryTab === "foryou" ? (b.likes + Number(b.liked) + b.comments.length) - (a.likes + Number(a.liked) + a.comments.length) || b.createdAt - a.createdAt : b.createdAt - a.createdAt);
   const pinnedMoments = selectedAuthor ? visibleMoments.filter((moment) => moment.pinned) : [];
   const openMomentFeed = (id: string) => {
@@ -9072,6 +9095,8 @@ function StudentMoments({ onOpenForum, initialDiscoveryTab = "foryou", onDiscove
   };
   const detailFeed = detailFeedIds.map((id) => accessibleMoments.find((moment) => moment.id === id)).filter((moment): moment is StudentMoment => !!moment);
   const openComposer = (nextAudience: "public" | "friends" | "private" = "friends") => {
+    setMediaMenuOpen(false);
+    setCommentsEnabled(true); setRepostsEnabled(true);
     if (!canInteract) { onVerify(); return; }
     setAudience(nextAudience); setComposeOpen(true);
   };
@@ -9088,25 +9113,35 @@ function StudentMoments({ onOpenForum, initialDiscoveryTab = "foryou", onDiscove
   };
   const selectedAuthorName = selectedAuthor === "self" ? author : friends.find((friend) => friend.username === selectedAuthor)?.fullName || moments.find((moment) => moment.username === selectedAuthor)?.author || "";
   const selected = accessibleMoments.find((moment) => moment.id === selectedId);
-  const relativeTime = (timestamp: number) => {
-    const minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60000));
-    if (minutes < 1) return t("Just now", "刚刚", "剛剛");
-    if (minutes < 60) return t(`${minutes} min ago`, `${minutes} 分钟前`, `${minutes} 分鐘前`);
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return t(`${hours} hr ago`, `${hours} 小时前`, `${hours} 小時前`);
-    return new Date(timestamp).toLocaleDateString(language === "EN" ? "en-GB" : language === "简体" ? "zh-CN" : "zh-TW");
-  };
-  const pickMomentPhotos = async (source: PhotoSource) => {
+  const relativeTime = (timestamp: number) => formatPostTime(timestamp, language, postClock);
+  const pickMomentPhotos = async (source: PhotoSource | "video") => {
     if (picking || photos.length >= 9) return;
     setPicking(true); setError("");
     try {
-      const selectedPhotos = await selectPhotoUris(language, source, { multiple: source === "library", limit: 9 - photos.length });
-      setPhotos((current) => [...current, ...selectedPhotos].slice(0, 9));
+      if (source === "camera") {
+        const selectedPhotos = await selectPhotoUris(language, source, { limit: 9 - photos.length });
+        setPhotos(current => [...current, ...selectedPhotos].slice(0, 9));
+      } else {
+        if (Platform.OS !== "web") {
+          const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (!permission.granted) {
+            setError(t("Allow photo library access in your device settings, then try again.", "请在设备设置中允许照片库访问后重试。", "請在裝置設定中允許相片庫存取後重試。"));
+            return;
+          }
+        }
+        const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: source === "video" ? ["videos"] : ["images", "videos"], allowsMultipleSelection: true, selectionLimit: 9 - photos.length, quality: 0.8 });
+        if (!result.canceled) {
+          const assets = result.assets.slice(0, 9 - photos.length);
+          if (assets.some(asset => (asset.fileSize || 0) > 100 * 1024 * 1024)) throw new Error("Media too large");
+          setPhotos(current => [...current, ...assets.map(asset => asset.uri)].slice(0, 9));
+          setVideoUris(current => [...current, ...assets.filter(asset => asset.type === "video").map(asset => asset.uri)]);
+        }
+      }
     } catch {
-      setError(t("Couldn't open your photos. Please try again.", "无法打开照片，请重试。", "無法開啟相片，請重試。"));
+      setError(t("Couldn’t add media. Choose photos or videos under 100 MB and try again.", "无法打开照片，请重试。", "無法開啟相片，請重試。"));
     } finally { setPicking(false); }
   };
-  const pickPhotos = () => pickMomentPhotos("library");
+  const pickPhotos = () => setMediaMenuOpen((open) => !open);
   const startPhotoMoment = (source: PhotoSource) => {
     if (!canInteract) { onVerify(); return; }
     openComposer();
@@ -9117,8 +9152,8 @@ function StudentMoments({ onOpenForum, initialDiscoveryTab = "foryou", onDiscove
     if ((!caption.trim() && !photos.length && !attachedEvent) || picking) return;
     const text = caption.trim(); const place = location.trim();
     setActivityFilter(null); setDiscoveryTopic("all"); setMomentSearch(""); setDiscoveryTab(audience === "public" ? "foryou" : "following");
-    onMomentsChange((current) => [{ id: `moment-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, username: "self", author, caption: [text, text, text], photos, location: [place, place, place], eventTitle: attachedEvent || undefined, audience, publicPost: audience === "public", pinned: false, createdAt: Date.now(), likes: 0, liked: false, comments: [] }, ...current]);
-    setComposeOpen(false); setCaption(""); setPhotos([]); setLocation(""); setAttachedEvent(null); setEventPickerOpen(false); setEventQuery(""); setError(""); onSelectAuthor(audience === "private" ? "self" : null);
+    onMomentsChange((current) => [{ id: `moment-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, username: "self", author, commentsEnabled, repostsEnabled, caption: [text, text, text], photos, videoUris: videoUris.filter(uri => photos.includes(uri)), location: [place, place, place], eventTitle: attachedEvent || undefined, audience, publicPost: audience === "public", pinned: false, createdAt: Date.now(), likes: 0, liked: false, comments: [] }, ...current]);
+    setComposeOpen(false); setCaption(""); setPhotos([]); setVideoUris([]); setLocation(""); setAttachedEvent(null); setEventPickerOpen(false); setEventQuery(""); setError(""); onSelectAuthor(audience === "private" ? "self" : null);
   };
   const toggleLike = (id: string) => {
     if (previewing) return;
@@ -9127,6 +9162,7 @@ function StudentMoments({ onOpenForum, initialDiscoveryTab = "foryou", onDiscove
   };
   const addComment = () => {
     if (previewing) return;
+    if (selected?.commentsEnabled === false) return;
     if (!canInteract) { setSelectedId(null); onVerify(); return; }
     const text = comment.trim();
     if ((!text && !commentPhoto) || !selected || commentPhotoBusy) return;
@@ -9147,14 +9183,14 @@ function StudentMoments({ onOpenForum, initialDiscoveryTab = "foryou", onDiscove
     if (previewing) return;
     if (!canInteract) { onVerify(); return; }
     const original = originalMoment(moment);
-    if (!original?.publicPost || original.audience === "private" || original.audience === "friends") return;
+    if (original?.archived || original?.repostsEnabled === false || moment.repostsEnabled === false || !original?.publicPost || original.audience === "private" || original.audience === "friends") return;
     const existing = moments.find((item) => item.username === "self" && item.repostOf === original.id);
     if (!existing) { setRepostComment(""); setRepostDraftId(original.id); return; }
     onMomentsChange((current) => current.filter((item) => item.id !== existing.id));
   };
   const publishRepost = () => {
     const original = moments.find((item) => item.id === repostDraftId);
-    if (!canInteract || !original?.publicPost || original.audience === "private" || original.audience === "friends") return;
+    if (!canInteract || original?.archived || original?.repostsEnabled === false || !original?.publicPost || original.audience === "private" || original.audience === "friends") return;
     onMomentsChange((current) => {
       const existing = current.find((item) => item.username === "self" && item.repostOf === original.id);
       if (existing) return current;
@@ -9164,23 +9200,24 @@ function StudentMoments({ onOpenForum, initialDiscoveryTab = "foryou", onDiscove
   };
   const repostButton = (moment: StudentMoment) => {
     const original = originalMoment(moment);
-    if (!original?.publicPost || original.audience === "private" || original.audience === "friends" || original.username === "self") return null;
+    if (original?.archived || original?.repostsEnabled === false || moment.repostsEnabled === false || !original?.publicPost || original.audience === "private" || original.audience === "friends" || original.username === "self") return null;
     const reposted = moments.some((item) => item.username === "self" && item.repostOf === original.id);
     const repostCount = moments.filter((item) => item.repostOf === original.id).length;
-    return <Pressable accessibilityRole="button" accessibilityLabel={reposted ? t("Undo repost", "取消转发", "取消轉發") : t("Repost moment", "转发动态", "轉發動態")} accessibilityHint={t(`${repostCount} reposts · preview count`, `${repostCount} 次转发 · 演示计数`, `${repostCount} 次轉發 · 示範計數`)} accessibilityState={{ selected: reposted }} disabled={previewing} style={{ minHeight: 44, minWidth: 38, flexDirection: "row", gap: 4, alignItems: "center", justifyContent: "center" }} onPress={() => toggleRepost(moment)}><RepostIcon reposted={reposted} color={reposted ? palette.green : palette.blue} /><Text style={[styles.faqActionText, { color: reposted ? palette.green : palette.blue }]}>{repostCount}</Text></Pressable>;
+    return <Pressable accessibilityRole="button" accessibilityLabel={reposted ? t("Undo repost", "取消转发", "取消轉發") : t("Repost moment", "转发动态", "轉發動態")} accessibilityHint={t(`${repostCount} reposts · preview count`, `${repostCount} 次转发 · 演示计数`, `${repostCount} 次轉發 · 示範計數`)} accessibilityState={{ selected: reposted }} disabled={previewing} style={{ minHeight: 44, minWidth: 38, flexDirection: "row", gap: 4, alignItems: "center", justifyContent: "center" }} onPress={() => toggleRepost(moment)}><RepostIcon size={26} reposted={reposted} color={reposted ? palette.green : palette.blue} /><Text style={[styles.faqActionText, { color: reposted ? palette.green : palette.blue }]}>{repostCount}</Text></Pressable>;
   };
   const repostLabel = (moment: StudentMoment) => {
     const original = originalMoment(moment);
     return moment.repostOf && original ? <Pressable accessibilityRole="button" accessibilityLabel={t("View original moment", "查看原动态", "查看原動態")} onPress={() => openMomentFeed(original.id)} style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 8 }}><RepostIcon size={18} reposted color={palette.green} /><Text style={[styles.faqMeta, { flex: 1, color: palette.green }]}>{t(`Reposted from ${original.author}`, `转发自 ${original.author}`, `轉發自 ${original.author}`)}</Text></Pressable> : null;
   };
-  const shareMomentButton = (moment: StudentMoment) => moment.publicPost && moment.audience !== "private" && moment.audience !== "friends" ? <Pressable accessibilityRole="button" accessibilityLabel={t("Share with friends", "分享给好友", "分享給好友")} style={{ minHeight: 44, minWidth: 38, alignItems: "center", justifyContent: "center" }} onPress={() => { if (!canInteract) { onVerify(); return; } setShareMomentId(moment.id); }}><Ionicons name="paper-plane-outline" size={20} color={palette.blue} /></Pressable> : null;
-  const momentActionBar = (moment: StudentMoment) => <View style={{ flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44 }}>
-    <Pressable accessibilityRole="button" accessibilityLabel={moment.liked ? t("Unlike moment", "取消点赞", "取消讚好") : t("Like moment", "点赞动态", "讚好動態")} accessibilityState={{ selected: moment.liked }} disabled={previewing} style={[styles.momentAction, { minHeight: 44 }]} onPress={() => toggleLike(moment.id)}><Ionicons name={moment.liked ? "heart" : "heart-outline"} size={21} color={moment.liked ? palette.coral : palette.blue} /><Text style={styles.faqActionText}>{moment.likes + Number(moment.liked)}</Text></Pressable>
-    <Pressable accessibilityRole="button" accessibilityLabel={t("View comments", "查看评论", "查看留言")} style={[styles.momentAction, { minHeight: 44 }]} onPress={() => { if (selectedId === moment.id) detailScroll.current?.scrollTo({ y: commentsOffset.current, animated: true }); else { setSelectedId(moment.id); setComment(""); } }}><Ionicons name="chatbubble-outline" size={21} color={palette.blue} /><Text style={styles.faqActionText}>{moment.comments.length}</Text></Pressable>
+  const shareMomentButton = (moment: StudentMoment) => moment.publicPost && moment.audience !== "private" && moment.audience !== "friends" ? <Pressable accessibilityRole="button" accessibilityLabel={t("Share with friends", "分享给好友", "分享給好友")} style={{ minHeight: 44, minWidth: 38, alignItems: "center", justifyContent: "center" }} onPress={() => { if (!canInteract) { onVerify(); return; } setShareMomentId(moment.id); }}><Ionicons name="paper-plane-outline" size={26} color={palette.blue} /></Pressable> : null;
+  const reportMomentButton = (moment: StudentMoment) => <Pressable accessibilityRole="button" accessibilityLabel={t("Report post", "举报动态", "檢舉動態")} disabled={previewing} style={[styles.momentAction, { minWidth: 36, minHeight: 44, justifyContent: "center" }]} onPress={() => { setReportMomentId(moment.id); setMomentReportReason(""); setMomentReportSaved(false); setSelectedId(null); }}><Ionicons name="ellipsis-horizontal" size={20} color={palette.muted} /></Pressable>;
+  const momentActionBar = (moment: StudentMoment) => <View style={{ flexDirection: "row", alignItems: "center", gap: 10, minHeight: 48 }}>
+    <Pressable accessibilityRole="button" accessibilityLabel={moment.liked ? t("Unlike moment", "取消点赞", "取消讚好") : t("Like moment", "点赞动态", "讚好動態")} accessibilityState={{ selected: moment.liked }} disabled={previewing} style={[styles.momentAction, { minHeight: 44 }]} onPress={() => toggleLike(moment.id)}><Ionicons name={moment.liked ? "heart" : "heart-outline"} size={26} color={moment.liked ? palette.coral : palette.blue} /><Text style={styles.faqActionText}>{moment.likes + Number(moment.liked)}</Text></Pressable>
+    <Pressable accessibilityRole="button" accessibilityLabel={t("View comments", "查看评论", "查看留言")} style={[styles.momentAction, { minHeight: 44 }]} onPress={() => { if (selectedId === moment.id) detailScroll.current?.scrollTo({ y: commentsOffset.current, animated: true }); else { setSelectedId(moment.id); setComment(""); } }}><Ionicons name="chatbubble-outline" size={26} color={palette.blue} /><Text style={styles.faqActionText}>{moment.comments.length}</Text></Pressable>
     {repostButton(moment)}
-    {saveMomentButton(moment.id)}
+
     {shareMomentButton(moment)}
-    <Pressable accessibilityRole="button" accessibilityLabel={t("Report post", "举报动态", "檢舉動態")} disabled={previewing} style={[styles.momentAction, { marginLeft: "auto", minWidth: 36, minHeight: 44, justifyContent: "center" }]} onPress={() => { setReportMomentId(moment.id); setMomentReportReason(""); setMomentReportSaved(false); setSelectedId(null); }}><Ionicons name="flag-outline" size={20} color={palette.muted} /></Pressable>
+    <View style={{ marginLeft: "auto" }}>{saveMomentButton(moment.id)}</View>
   </View>;
   const selectedPublisherId = selectedAuthor ? moments.find((moment) => moment.username === selectedAuthor && moment.publisherId)?.publisherId : undefined;
   const commentLikeButton = (momentId: string, reply: StudentMoment["comments"][number]) => <Pressable accessibilityRole="button" accessibilityLabel={reply.liked ? t(`Unlike ${reply.author}’s comment`, `取消赞同 ${reply.author} 的评论`, `取消讚好 ${reply.author} 的留言`) : t(`Like ${reply.author}’s comment`, `赞同 ${reply.author} 的评论`, `讚好 ${reply.author} 的留言`)} accessibilityState={{ selected: !!reply.liked }} disabled={previewing} style={[styles.momentCommentLike, previewing && { opacity: 0.5 }]} onPress={() => toggleCommentLike(momentId, reply.id)}><Ionicons name={reply.liked ? "heart" : "heart-outline"} size={16} color={reply.liked ? palette.coral : palette.muted} />{((reply.likes || 0) + (reply.liked ? 1 : 0)) > 0 && <Text style={styles.faqMeta}>{(reply.likes || 0) + (reply.liked ? 1 : 0)}</Text>}</Pressable>;
@@ -9193,43 +9230,49 @@ function StudentMoments({ onOpenForum, initialDiscoveryTab = "foryou", onDiscove
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
             <Text style={[styles.pageTitle, { flex: 1, minWidth: 0 }]}>{t("Moments", "朋友圈", "朋友圈")}</Text>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <Pressable accessibilityRole="button" accessibilityLabel={t("New Post", "新建动态", "新增動態")} accessibilityHint={t("Open the moment composer", "打开动态编辑器", "開啟動態編輯器")} onPress={() => openComposer()} style={styles.headerPostButton}>
-                <Ionicons name="add" size={20} color="#FFFFFF" />
-                <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "800" }}>{t("New Post", "新建动态", "新增動態")}</Text>
-              </Pressable>
-              <Pressable accessibilityRole="button" accessibilityLabel={t("View my profile", "查看我的个人资料", "查看我的個人資料")} accessibilityHint={t("View your profile and moments", "查看你的个人资料和动态", "查看你的個人資料和動態")} onPress={() => onSelectAuthor("self")} style={{ width: 46, height: 46, justifyContent: "center", alignItems: "center" }}>
-                <ChatPersonAvatar name={author} photo={profilePhoto} size={42} />
-                <View pointerEvents="none" style={{ position: "absolute", right: 0, bottom: 0, width: 19, height: 19, borderRadius: 10, backgroundColor: palette.blue, borderWidth: 2, borderColor: "#FFFFFF", alignItems: "center", justifyContent: "center" }}><Ionicons name="pencil" size={10} color="#FFFFFF" /></View>
+              <Pressable accessibilityRole="button" accessibilityLabel={t("New Post", "新建动态", "新增動態")} accessibilityHint={t("Open the moment composer", "打开动态编辑器", "開啟動態編輯器")} onPress={() => openComposer()} hitSlop={5} style={styles.headerPostButton}>
+                <Ionicons name="add-outline" size={17} color={palette.blue} />
+                <Text style={{ color: palette.blue, fontSize: 12, fontWeight: "600" }}>{t("New Post", "新建动态", "新增動態")}</Text>
               </Pressable>
             </View>
           </View>
           <Text style={styles.faqCardSummary}>{t("Your people. New discoveries.", "好友动态，发现精彩。", "好友動態，發現精彩。")}</Text>
         </View>
         <MomentsNavigation language={language} selected={activityFilter ? null : discoveryTab} onSelect={(next) => { if (next === "forum") { onOpenForum?.(); return; } setDiscoveryTab(next); onDiscoveryTabChange?.(next); setActivityFilter(null); setDiscoveryTopic("all"); }} showForum={!!onOpenForum} />
-        <TextInput accessibilityLabel={t("Search moments", "搜索动态", "搜尋動態")} value={momentSearch} onChangeText={setMomentSearch} placeholder={t("Search moments, food & events", "搜索动态、美食和活动", "搜尋動態、美食和活動")} placeholderTextColor={palette.muted} style={[styles.faqInput, { marginBottom: 0 }]} />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}><Pressable accessibilityRole="button" accessibilityState={{ selected: !activityFilter && discoveryTopic === "all" }} style={[styles.faqTopicChip, !activityFilter && discoveryTopic === "all" && styles.faqTopicChipActive]} onPress={() => { setActivityFilter(null); setDiscoveryTopic("all"); setMomentSearch(""); }}><Text style={[styles.faqTopicText, !activityFilter && discoveryTopic === "all" && styles.faqTopicTextActive]}>{t("All", "全部", "全部")}</Text></Pressable>{(["liked", "commented", "reposted", "saved"] as const).map((filter) => <Pressable key={filter} accessibilityRole="button" accessibilityState={{ selected: activityFilter === filter }} style={[styles.faqTopicChip, activityFilter === filter && styles.faqTopicChipActive]} onPress={() => { setActivityFilter((current) => current === filter ? null : filter); setDiscoveryTopic("all"); setMomentSearch(""); }}><Text style={[styles.faqTopicText, activityFilter === filter && styles.faqTopicTextActive]}>{filter === "liked" ? t("Liked", "赞过", "讚過") : filter === "commented" ? t("Commented", "评论过", "留言過") : filter === "reposted" ? t("Reposted", "转发过", "轉發過") : t("Saved", "收藏", "收藏")}</Text></Pressable>)}{!activityFilter && discoveryTab === "explore" && (["campus", "food", "events", "beauty", "travel", "lifestyle"] as const).map((topic) => <Pressable key={topic} accessibilityRole="button" accessibilityState={{ selected: discoveryTopic === topic }} onPress={() => setDiscoveryTopic(topic)} style={[styles.faqTopicChip, discoveryTopic === topic && styles.faqTopicChipActive]}><Text style={styles.faqTopicText}>{topic === "food" ? t("Food", "美食", "美食") : topic === "events" ? t("Events", "活动", "活動") : topic === "campus" ? t("University", "大学", "大學") : topic === "beauty" ? t("Beauty", "美妆", "美妝") : topic === "travel" ? t("Travel", "旅行", "旅行") : t("Lifestyle", "生活", "生活")}</Text></Pressable>)}</ScrollView>
-        {!activityFilter && discoveryTab === "explore" && discoveryTopic === "campus" && <><Text style={styles.faqCardSummary}>{t("Choose a university — no location sharing needed.", "选择大学，无需分享实时位置。", "選擇大學，無需分享即時位置。")}</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>{["UCL", "King’s College London", "LSE", "Imperial College London"].map((uni) => <Pressable key={uni} accessibilityRole="button" accessibilityState={{ selected: campus === uni }} onPress={() => setCampus(uni)} style={[styles.faqTopicChip, campus === uni && styles.faqTopicChipActive]}><Text style={styles.faqTopicText}>{uni}</Text></Pressable>)}</ScrollView></>}
-        <Text style={styles.faqMeta}>{activityFilter && !savedOnly ? t("Your activity · this preview session", "你的互动 · 当前预览会话", "你的互動 · 目前預覽工作階段") : savedOnly ? t("Saved moments · bookmarks on this device", "收藏动态 · 书签保存在此设备", "收藏動態 · 書籤儲存在此裝置") : discoveryTab === "following" ? t("Friends and the places & events you follow", "好友，以及你关注的餐厅和活动", "好友，以及你關注的餐廳和活動") : discoveryTab === "foryou" ? t("Popular public posts · ranked by likes and comments", "热门公开动态 · 按点赞和评论排序", "熱門公開動態 · 按讚好和留言排序") : discoveryTopic === "campus" ? t(`Browsing ${campus} · public posts and your friends`, `浏览 ${campus} · 公开动态和好友`, `瀏覽 ${campus} · 公開動態和好友`) : t("Discover public posts by topic", "按主题发现公开动态", "按主題探索公開動態")}</Text>
+        <TextInput accessibilityLabel={t("Search moments", "搜索动态", "搜尋動態")} value={momentSearch} onChangeText={setMomentSearch} placeholder={t("Search names, usernames, posts or hashtags", "搜索动态或 @用户名", "搜尋動態或 @用戶名稱")} placeholderTextColor={palette.muted} style={[styles.faqInput, { marginBottom: 0 }]} />
+        {!!momentSearch.trim() && <View style={{ gap: 4 }}>{friends.filter(person => matchesPerson(momentSearch, person.fullName, person.username)).map(person => <Pressable key={person.username} accessibilityRole="button" accessibilityLabel={`View ${person.fullName} (${displayUsername(person.username)})`} onPress={() => onSelectAuthor(person.username)} style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10 }}><ChatPersonAvatar name={person.fullName} size={42} /><View><Text style={styles.faqCardAuthor}>{displayUsername(person.username)}</Text><Text style={styles.faqMeta}>{person.fullName}</Text></View></Pressable>)}</View>}
+        {!activityFilter && discoveryTab === "explore" && <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>{!activityFilter && discoveryTab === "explore" && (["nearby", "campus", "events"] as const).map((topic) => <Pressable key={topic} accessibilityRole="button" accessibilityState={{ selected: discoveryTopic === topic }} onPress={() => setDiscoveryTopic((current) => current === topic ? "all" : topic)} style={[styles.faqTopicChip, discoveryTopic === topic && styles.faqTopicChipActive]}><Text style={styles.faqTopicText}>{topic === "nearby" ? t("Nearby", "附近", "附近") : topic === "campus" ? t("Same university", "同校", "同校") : t("Same events", "共同活动", "共同活動")}</Text></Pressable>)}</ScrollView>}
+
+        <Text style={styles.faqMeta}>{activityFilter && !savedOnly ? t("Your activity · this preview session", "你的互动 · 当前预览会话", "你的互動 · 目前預覽工作階段") : savedOnly ? t("Saved moments · bookmarks on this device", "收藏动态 · 书签保存在此设备", "收藏動態 · 書籤儲存在此裝置") : discoveryTab === "following" ? t("Friends and the places & events you follow", "好友，以及你关注的餐厅和活动", "好友，以及你關注的餐廳和活動") : discoveryTab === "foryou" ? t("Popular public posts · ranked by likes and comments", "热门公开动态 · 按点赞和评论排序", "熱門公開動態 · 按讚好和留言排序") : discoveryTopic === "campus" ? t(campus ? `${campus} · public posts` : "Add your university to discover classmates", "发现同校公开动态", "探索同校公開動態") : discoveryTopic === "nearby" ? t(`${discoveryCity || "Choose a city"} · shared post locations, not live GPS`, "按公开动态地点发现附近内容，不使用实时定位", "按公開動態地點探索附近內容，不使用即時定位") : discoveryTopic === "events" ? t("Your booked events · event posts and publicly shared attendance", "你已报名的活动 · 活动动态及公开参与记录", "你已報名的活動 · 活動動態及公開參與紀錄") : t("Public posts near you, at your university and from shared events", "发现附近、同校和共同活动的公开动态", "探索附近、同校及共同活動的公開動態")}</Text>
       </View>}
       {!embedded && !!selectedAuthor && <View style={styles.momentProfileCover}>
         <Image source={{ uri: isOwnTimeline && settings.coverUri ? settings.coverUri : "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=900" }} style={StyleSheet.absoluteFill} />
         <LinearGradient colors={["transparent", "rgba(0,0,0,0.65)"]} style={StyleSheet.absoluteFill} />
-        {isOwnTimeline && !previewing && <Pressable accessibilityRole="button" accessibilityLabel={t("Change cover photo", "更换封面照片", "更換封面相片")} disabled={coverBusy} hitSlop={6} style={styles.momentCoverButton} onPress={changeCover}><Ionicons name="camera" size={20} color="#FFFFFF" /></Pressable>}
         <View style={styles.momentCoverIdentity}><Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 21, flexShrink: 1 }}>{selectedAuthorName}</Text><ChatPersonAvatar name={selectedAuthorName} photo={isOwnTimeline ? profilePhoto : undefined} size={62} /></View>
       </View>}
       {!!coverError && <Text style={{ color: palette.coral }}>{coverError}</Text>}
-      {!!selectedAuthor && ((!embedded && isOwnTimeline && !previewing) || pinnedMoments.length > 0) && <View style={{ marginVertical: 14 }}><Text style={styles.faqCardAuthor}>{t("Pinned posts", "置顶动态", "置頂動態")}</Text>{!pinnedMoments.length && <Text style={[styles.faqCardSummary, { marginTop: 8 }]}>{t("No pinned posts yet. Open ••• on one of your posts and choose Pin.", "暂无置顶动态。打开自己动态的 ••• 菜单，选择置顶。", "暫無置頂動態。開啟自己動態的 ••• 選單，選擇置頂。")}</Text>}<ScrollView horizontal contentContainerStyle={{ gap: 10, paddingVertical: 12 }}>{pinnedMoments.map((moment) => <Pressable key={moment.id} accessibilityRole="button" accessibilityLabel={t("Open pinned moment", "查看置顶动态", "查看置頂動態")} style={styles.momentPinnedTile} onPress={() => { openMomentFeed(moment.id); setComment(""); }}>{moment.photos[0] ? <Image source={{ uri: moment.photos[0] }} style={{ width: "100%", height: 78, borderRadius: 5 }} /> : <Ionicons name={moment.audience === "private" ? "lock-closed-outline" : "document-text-outline"} size={29} color={palette.blue} />}<Text numberOfLines={2} style={styles.faqCardSummary}>{tr(language, ...moment.caption) || moment.eventTitle || t("Photo moment", "照片动态", "相片動態")}</Text></Pressable>)}</ScrollView></View>}
+      {!!selectedAuthor && ((!embedded && isOwnTimeline && !previewing) || pinnedMoments.length > 0) && <View style={{ marginVertical: 14 }}><Text style={styles.faqCardAuthor}>{t("Pinned posts", "置顶动态", "置頂動態")}</Text>{!pinnedMoments.length && <Text style={[styles.faqCardSummary, { marginTop: 8 }]}>{t("No pinned posts yet. Open ••• on one of your posts and choose Pin.", "暂无置顶动态。打开自己动态的 ••• 菜单，选择置顶。", "暫無置頂動態。開啟自己動態的 ••• 選單，選擇置頂。")}</Text>}<ScrollView horizontal contentContainerStyle={{ gap: 10, paddingVertical: 12 }}>{pinnedMoments.map((moment) => <Pressable key={moment.id} accessibilityRole="button" accessibilityLabel={t("Open pinned moment", "查看置顶动态", "查看置頂動態")} style={styles.momentPinnedTile} onPress={() => { openMomentFeed(moment.id); setComment(""); }}>{moment.videoUris?.includes(moment.photos[0]) ? <Ionicons name="play-circle" size={40} color={palette.blue} /> : moment.photos[0] ? <Image source={{ uri: moment.photos[0] }} style={{ width: "100%", height: 78, borderRadius: 5 }} /> : <Ionicons name={moment.audience === "private" ? "lock-closed-outline" : "document-text-outline"} size={29} color={palette.blue} />}<Text numberOfLines={2} style={styles.faqCardSummary}>{tr(language, ...moment.caption) || moment.eventTitle || t("Photo moment", "照片动态", "相片動態")}</Text></Pressable>)}</ScrollView></View>}
       {isOwnTimeline && !previewing && <Pressable accessibilityRole="button" style={[styles.momentPinnedTile, { width: "100%", minHeight: 52, flexDirection: "row", borderRadius: 12, marginBottom: 16 }]} onPress={() => openComposer("friends")}><Ionicons name="add-circle-outline" size={22} color={palette.blue} /><Text style={styles.faqActionText}>{t("New Post", "新建动态", "新增動態")}</Text></Pressable>}
       {!embedded && !!selectedAuthor && <View style={styles.momentFeedHeading}><View><Text style={styles.pageTitle}>{t(`${selectedAuthorName}’s moments`, `${selectedAuthorName} 的朋友圈`, `${selectedAuthorName} 的朋友圈`)}</Text><Text style={styles.faqCardSummary}>{t("Everyday life, shared with friends.", "和朋友分享生活点滴。", "和朋友分享生活點滴。")}</Text></View></View>}
       {!!selectedPublisherId && <Pressable accessibilityRole="button" accessibilityLabel={followedPublishers.includes(selectedPublisherId) ? t("Unfollow organisation", "取消关注机构", "取消關注機構") : t("Follow organisation", "关注机构", "關注機構")} accessibilityState={{ selected: followedPublishers.includes(selectedPublisherId) }} onPress={() => canInteract ? onTogglePublisher(selectedPublisherId) : onVerify()} style={{ alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 6, minHeight: 44, borderRadius: 22, borderWidth: 1, borderColor: palette.blue, paddingHorizontal: 18, marginBottom: 18 }}><Ionicons name={followedPublishers.includes(selectedPublisherId) ? "checkmark" : "add"} size={18} color={palette.blue} /><Text style={styles.faqActionText}>{followedPublishers.includes(selectedPublisherId) ? t("Following", "已关注", "已關注") : t("Follow", "关注", "關注")}</Text></Pressable>}
-      {!selectedAuthor && <View style={{ flexDirection: "row", gap: 10, alignItems: "flex-start", marginTop: 14 }}>{[0, 1].map((column) => <View key={column} style={{ flex: 1, minWidth: 0, gap: 12 }}>{visibleMoments.filter((_, index) => index % 2 === column).map((moment, index) => <View key={moment.id} style={{ borderRadius: 12, overflow: "hidden", backgroundColor: "#F2F6FC" }}>
-        <Pressable accessibilityRole="button" accessibilityLabel={t(`Open moment by ${moment.author}`, `查看 ${moment.author} 的动态`, `查看 ${moment.author} 的動態`)} onPress={() => { openMomentFeed(moment.id); setComment(""); }}>
-          {!!moment.photos[0] && <Image source={{ uri: moment.photos[0] }} style={{ width: "100%", aspectRatio: (index + column) % 2 === 0 ? 0.82 : 1.05 }} />}
-          <View style={{ padding: 10, gap: 6 }}>{moment.publicPost && <Text style={[styles.faqMeta, { color: palette.blue }]}>{moment.publisherId ? t("PUBLIC · SAMPLE", "公开 · 示例", "公開 · 範例") : t("PUBLIC", "公开", "公開")}</Text>}<Text numberOfLines={3} style={{ fontSize: 14, lineHeight: 20, fontWeight: "700", color: palette.navy }}>{tr(language, ...moment.caption) || moment.eventTitle || t("A moment from my day", "生活点滴", "生活點滴")}</Text></View>
-        <View style={{ paddingHorizontal: 10 }}>{!!moment.repostComment && <Text style={[styles.faqCardSummary, { color: palette.ink }]}>{moment.repostComment}</Text>}{repostLabel(moment)}</View>
-        </Pressable>
-        <View><View style={{ paddingHorizontal: 12, paddingTop: 4 }}><Pressable accessibilityRole="button" accessibilityLabel={t(`View ${moment.author}’s moments`, `查看 ${moment.author} 的动态`, `查看 ${moment.author} 的動態`)} onPress={() => onSelectAuthor(moment.username)} style={{ minHeight: 32, alignSelf: "flex-start", justifyContent: "center" }}><ChatPersonAvatar name={moment.author} photo={moment.username === "self" ? profilePhoto : undefined} size={24} /></Pressable></View><View style={styles.forumCardActionRow}><Pressable accessibilityRole="button" accessibilityLabel={moment.liked ? t("Unlike moment", "取消点赞", "取消讚好") : t("Like moment", "点赞动态", "讚好動態")} accessibilityState={{ selected: moment.liked }} onPress={() => toggleLike(moment.id)} style={styles.forumCardAction}><Ionicons name={moment.liked ? "heart" : "heart-outline"} size={18} color={moment.liked ? palette.coral : palette.muted} /><Text style={styles.forumCardActionCount}>{moment.likes + Number(moment.liked)}</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel={t("View comments", "查看评论", "查看留言")} onPress={() => { setSelectedId(moment.id); setComment(""); }} style={styles.forumCardAction}><Ionicons name="chatbubble-outline" size={18} color={palette.muted} /><Text style={styles.forumCardActionCount}>{moment.comments.length}</Text></Pressable>{saveMomentButton(moment.id, true)}</View></View>
-      </View>)}</View>)}</View>}
+      {!selectedAuthor && <View style={{ marginTop: 14, gap: 24 }}>
+        {visibleMoments.map(moment => <View key={moment.id} style={{ borderBottomWidth: 1, borderBottomColor: palette.line, paddingBottom: 18 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 12 }}>
+            <Pressable accessibilityRole="button" accessibilityLabel={t(`View ${moment.author}’s moments`, `查看 ${moment.author} 的动态`, `查看 ${moment.author} 的動態`)} onPress={() => onSelectAuthor(moment.username)}><ChatPersonAvatar name={moment.author} photo={moment.username === "self" ? profilePhoto : undefined} size={40} /></Pressable>
+            <View style={{ flex: 1, minWidth: 0 }}><Text style={styles.faqCardAuthor}>{moment.author}</Text><Text style={styles.faqMeta}>{moment.username === "self" ? t("Your post", "你的动态", "你的動態") : displayUsername(moment.username)}{moment.publisherId ? t(" · Sample post", " · 示例动态", " · 範例動態") : ""}</Text></View>
+            {!!moment.publisherId && <Pressable accessibilityRole="button" style={{ minHeight: 44, justifyContent: "center", paddingHorizontal: 8 }} onPress={() => canInteract ? onTogglePublisher(moment.publisherId!) : onVerify()}><Text style={styles.faqActionText}>{followedPublishers.includes(moment.publisherId) ? t("Following", "已关注", "已關注") : t("Follow", "关注", "關注")}</Text></Pressable>}
+            {reportMomentButton(moment)}
+          </View>
+          {repostLabel(moment)}
+          <PostPhotoCarousel photos={moment.photos} videoUris={moment.videoUris} language={language} onOpen={setPhotoPreview} />
+          {momentActionBar(moment)}
+          {!!moment.repostComment && <Text style={styles.momentCaption}>{moment.repostComment}</Text>}
+          <Pressable accessibilityRole="button" accessibilityLabel={t(`Open moment by ${moment.author}`, `查看 ${moment.author} 的动态`, `查看 ${moment.author} 的動態`)} onPress={() => openMomentFeed(moment.id)}><Text numberOfLines={3} style={styles.momentCaption}><Text style={{ fontWeight: "800" }}>{moment.author} </Text>{mentionText(tr(language, ...moment.caption), searchHashtag)}</Text></Pressable>
+          {!!moment.eventTitle && eventCard(moment.eventTitle)}
+          <Pressable accessibilityRole="button" style={{ minHeight: 36, justifyContent: "center" }} onPress={() => { setSelectedId(moment.id); setComment(""); }}><Text style={styles.faqMeta}>{t(`View comments · ${moment.comments.length}`, `查看评论 · ${moment.comments.length}`, `查看留言 · ${moment.comments.length}`)}</Text></Pressable>
+          <Text style={styles.faqMeta}>{relativeTime(moment.createdAt)}</Text>
+        </View>)}
+      </View>}
       {(selectedAuthor ? visibleMoments : []).map((moment) => <View key={moment.id} style={styles.momentTimelinePost}>
         {selectedAuthor ? <View style={{ width: 48 }}><Text style={{ fontSize: 24, fontWeight: "800", color: palette.navy }}>{new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", day: "2-digit" }).format(moment.createdAt)}</Text><Text style={styles.faqMeta}>{new Intl.DateTimeFormat(language === "EN" ? "en-GB" : "zh-CN", { timeZone: "Europe/London", month: "short", year: "numeric" }).format(moment.createdAt)}</Text></View> : <Pressable accessibilityRole="button" accessibilityLabel={t(`View ${moment.author}’s moments`, `查看 ${moment.author} 的朋友圈`, `查看 ${moment.author} 的朋友圈`)} onPress={() => onSelectAuthor(moment.username)} style={styles.momentAvatar}><Text style={styles.momentInitials}>{moment.author.split(/\s+/).map((part) => part[0]).slice(0, 2).join("")}</Text></Pressable>}
         <View style={{ flex: 1, minWidth: 0 }}>
@@ -9237,8 +9280,8 @@ function StudentMoments({ onOpenForum, initialDiscoveryTab = "foryou", onDiscove
           {!!moment.repostComment && <Text style={[styles.momentCaption, { fontWeight: "700" }]}>{moment.repostComment}</Text>}
           {repostLabel(moment)}
           {moment.audience === "private" && <Text style={[styles.faqMeta, { marginBottom: 8 }]}>{t("🔒 Only me", "🔒 仅自己可见", "🔒 僅自己可見")}</Text>}
-          {!!tr(language, ...moment.caption) && <Text style={styles.momentCaption}>{mentionText(tr(language, ...moment.caption))}</Text>}
-          {!!moment.photos.length && <PostPhotoCarousel key={moment.id} photos={moment.photos} language={language} onOpen={setPhotoPreview} />}
+          {!!tr(language, ...moment.caption) && <Text style={styles.momentCaption}>{mentionText(tr(language, ...moment.caption), searchHashtag)}</Text>}
+          {!!moment.photos.length && <PostPhotoCarousel key={moment.id} photos={moment.photos} videoUris={moment.videoUris} language={language} onOpen={setPhotoPreview} />}
           {!!tr(language, ...moment.location) && <View style={styles.momentLocation}><Ionicons name="location-outline" size={13} color={palette.blue} /><Text style={styles.faqMeta}>{tr(language, ...moment.location)}</Text></View>}
           {!!moment.eventTitle && eventCard(moment.eventTitle)}
           <View style={styles.momentTimelineMeta}>
@@ -9249,7 +9292,7 @@ function StudentMoments({ onOpenForum, initialDiscoveryTab = "foryou", onDiscove
             <Pressable accessibilityRole="button" accessibilityLabel={moment.liked ? t("Unlike moment", "取消点赞", "取消讚好") : t("Like moment", "点赞动态", "讚好動態")} style={styles.momentAction} onPress={() => { toggleLike(moment.id); setMomentMenuId(null); }}><Ionicons name={moment.liked ? "heart" : "heart-outline"} size={18} color={palette.blue} /><Text style={styles.faqActionText}>{moment.liked ? t("Unlike", "取消点赞", "取消讚好") : t("Like", "点赞", "讚好")}</Text></Pressable>
             <Pressable accessibilityRole="button" style={styles.momentAction} onPress={() => { setSelectedId(moment.id); setComment(""); setMomentMenuId(null); }}><Ionicons name="chatbubble-outline" size={18} color={palette.blue} /><Text style={styles.faqActionText}>{t("Comment", "评论", "留言")}</Text></Pressable>
             <Pressable accessibilityRole="button" style={styles.momentAction} onPress={() => { setReportMomentId(moment.id); setMomentReportReason(""); setMomentReportSaved(false); setMomentMenuId(null); }}><Ionicons name="flag-outline" size={18} color={palette.blue} /><Text style={styles.faqActionText}>{t("Report post", "举报动态", "檢舉動態")}</Text></Pressable>
-            {isOwnTimeline && moment.username === "self" && <><Pressable accessibilityRole="button" style={styles.momentAction} onPress={() => togglePin(moment.id)}><Ionicons name="pin-outline" size={18} color={palette.blue} /><Text style={styles.faqActionText}>{moment.pinned ? t("Unpin", "取消置顶", "取消置頂") : t("Pin", "置顶", "置頂")}</Text></Pressable>{(["private", "friends", "public"] as const).map((value) => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: (moment.audience || "friends") === value }} style={[styles.momentAction, { minHeight: 44 }]} onPress={() => changeMomentAudience(moment.id, value)}><Ionicons name={value === "private" ? "lock-closed-outline" : value === "friends" ? "people-outline" : "globe-outline"} size={18} color={palette.blue} /><Text style={[styles.faqActionText, { flex: 1 }]}>{value === "private" ? t("Make private", "设为私密", "設為私密") : value === "friends" ? t("Share with friends", "分享给好友", "分享給好友") : t("Share with everyone", "分享给所有人", "分享給所有人")}</Text>{(moment.audience || "friends") === value && <Ionicons name="checkmark" size={16} color={palette.blue} />}</Pressable>)}</>}
+            {isOwnTimeline && moment.username === "self" && <><Pressable accessibilityRole="button" style={styles.momentAction} onPress={() => { if (!canInteract) { onVerify(); return; } onMomentsChange(current => current.map(post => post.id === moment.id && post.username === "self" ? { ...post, archived: true } : post)); setMomentMenuId(null); }}><Ionicons name="archive-outline" size={18} color={palette.blue} /><Text style={styles.faqActionText}>Archive post</Text></Pressable><Pressable accessibilityRole="button" style={styles.momentAction} onPress={() => togglePin(moment.id)}><Ionicons name="pin-outline" size={18} color={palette.blue} /><Text style={styles.faqActionText}>{moment.pinned ? t("Unpin", "取消置顶", "取消置頂") : t("Pin", "置顶", "置頂")}</Text></Pressable>{(["private", "friends", "public"] as const).map((value) => <Pressable key={value} accessibilityRole="button" accessibilityState={{ selected: (moment.audience || "friends") === value }} style={[styles.momentAction, { minHeight: 44 }]} onPress={() => changeMomentAudience(moment.id, value)}><Ionicons name={value === "private" ? "lock-closed-outline" : value === "friends" ? "people-outline" : "globe-outline"} size={18} color={palette.blue} /><Text style={[styles.faqActionText, { flex: 1 }]}>{value === "private" ? t("Make private", "设为私密", "設為私密") : value === "friends" ? t("Share with friends", "分享给好友", "分享給好友") : t("Share with everyone", "分享给所有人", "分享給所有人")}</Text>{(moment.audience || "friends") === value && <Ionicons name="checkmark" size={16} color={palette.blue} />}</Pressable>)}</>}
           </View>}
           {momentActionBar(moment)}
           {moment.comments.length > 0 && <View style={styles.momentReplies}>
@@ -9263,7 +9306,7 @@ function StudentMoments({ onOpenForum, initialDiscoveryTab = "foryou", onDiscove
       <Text style={styles.faqDisclaimer}>{t("Preview with sample moments. Your posts, likes and comments stay in this session and reset on reload.", "此预览包含示例动态。发布、点赞和评论仅在当前会话保留，刷新后重置。", "此預覽包含示例動態。發佈、讚好及留言只在目前會話保留，重新載入後重設。")}</Text>
     </TimelineContainer>
     <Sheet visible={!!repostDraftId} title={t("Repost", "转发", "轉發")} cancelLabel={t("Cancel", "取消", "取消")} onClose={() => setRepostDraftId(null)} headerAction={<Pressable accessibilityRole="button" style={[styles.primaryButton, { minHeight: 36, paddingHorizontal: 16, paddingVertical: 8 }]} onPress={publishRepost}><Text style={styles.primaryButtonText}>{t("Repost", "转发", "轉發")}</Text></Pressable>}>
-      <ScrollView contentContainerStyle={styles.modalBody}><Text style={styles.formDesc}>{t("Public repost · visible to everyone", "公开转发 · 所有人可见", "公開轉發 · 所有人可見")}</Text><MentionInput language={language} accessibilityLabel={t("Add a comment to your repost", "添加转发评论", "新增轉發評論")} value={repostComment} onChangeText={setRepostComment} multiline maxLength={1000} style={[styles.faqInput, styles.faqBodyInput]} placeholder={t("Add your thoughts… (optional)", "说说你的想法…（选填）", "說說你的想法…（選填）")} placeholderTextColor={palette.muted} />{moments.filter((moment) => moment.id === repostDraftId).map((moment) => <View key={moment.id} style={{ padding: 14, backgroundColor: "#F2F6FB", borderRadius: 12, gap: 10 }}><Text style={styles.faqCardAuthor}>{moment.author}</Text>{!!moment.photos[0] && <Image source={{ uri: moment.photos[0] }} style={{ width: "100%", aspectRatio: 4 / 3, borderRadius: 8 }} />}<Text style={styles.faqCardSummary}>{tr(language, ...moment.caption)}</Text></View>)}</ScrollView>
+      <ScrollView contentContainerStyle={styles.modalBody}><Text style={styles.formDesc}>{t("Public repost · visible to everyone", "公开转发 · 所有人可见", "公開轉發 · 所有人可見")}</Text><MentionInput language={language} accessibilityLabel={t("Add a comment to your repost", "添加转发评论", "新增轉發評論")} value={repostComment} onChangeText={setRepostComment} multiline maxLength={1000} style={[styles.faqInput, styles.faqBodyInput]} placeholder={t("Add your thoughts… (optional)", "说说你的想法…（选填）", "說說你的想法…（選填）")} placeholderTextColor={palette.muted} />{moments.filter((moment) => moment.id === repostDraftId).map((moment) => <View key={moment.id} style={{ padding: 14, backgroundColor: "#F2F6FB", borderRadius: 12, gap: 10 }}><Text style={styles.faqCardAuthor}>{moment.author}</Text>{moment.videoUris?.includes(moment.photos[0]) && <View style={{ height: 180, backgroundColor: "#EAF4FF", alignItems: "center", justifyContent: "center" }}><Ionicons name="play-circle" size={44} color={palette.blue} /></View>}{!!moment.photos[0] && !moment.videoUris?.includes(moment.photos[0]) && <Image source={{ uri: moment.videoUris?.includes(moment.photos[0]) ? undefined : moment.photos[0] }} style={{ width: "100%", aspectRatio: 4 / 3, borderRadius: 8 }} />}<Text style={styles.faqCardSummary}>{tr(language, ...moment.caption)}</Text></View>)}</ScrollView>
     </Sheet>
     <Sheet visible={!!shareMomentId} title={t("Share with friends", "分享给好友", "分享給好友")} onClose={() => setShareMomentId(null)}>
       <ScrollView contentContainerStyle={styles.modalBody}><Text style={styles.formDesc}>{t("Choose a friend to share this public moment in your preview chat. No real message is delivered.", "选择好友，将此公开动态分享到预览聊天。不会发送真实消息。", "選擇好友，將此公開動態分享到預覽聊天。不會傳送真實訊息。")}</Text>{friends.filter((friend) => acceptedFriends.includes(friend.username)).map((friend) => <Pressable key={friend.username} accessibilityRole="button" accessibilityLabel={t(`Share with ${friend.fullName}`, `分享给 ${friend.fullName}`, `分享給 ${friend.fullName}`)} style={styles.momentSettingsRow} onPress={() => { if (shareMomentId) onShareMoment(shareMomentId, friend.username); setShareMomentId(null); }}><ChatPersonAvatar name={friend.fullName} size={38} /><Text style={[styles.faqCardAuthor, { flex: 1 }]}>{friend.fullName}</Text><Ionicons name="paper-plane-outline" size={20} color={palette.blue} /></Pressable>)}{!acceptedFriends.length && <Text style={styles.formDesc}>{t("Add a friend first to share moments.", "先添加好友再分享动态。", "先新增好友再分享動態。")}</Text>}</ScrollView>
@@ -9276,8 +9319,17 @@ function StudentMoments({ onOpenForum, initialDiscoveryTab = "foryou", onDiscove
     </Sheet>
     <Sheet visible={composeOpen} title={t("Share a moment", "分享动态", "分享動態")} cancelLabel={t("Cancel", "取消", "取消")} headerAction={<Pressable accessibilityRole="button" disabled={(!caption.trim() && !photos.length && !attachedEvent) || picking} style={[styles.primaryButton, { minHeight: 36, paddingHorizontal: 18, paddingVertical: 8, opacity: (!caption.trim() && !photos.length && !attachedEvent) || picking ? 0.5 : 1 }]} onPress={publish}><Text style={styles.primaryButtonText}>{t("Post", "发布", "發佈")}</Text></Pressable>} onClose={() => setComposeOpen(false)}>
       <ScrollView contentContainerStyle={styles.modalBody} keyboardShouldPersistTaps="handled">
-        <MentionInput language={language} people={friends.filter((person) => acceptedFriends.includes(person.username))} accessibilityLabel={t("Moment caption", "动态内容", "動態內容")} style={{ minHeight: 120, fontSize: 16, lineHeight: 24, color: palette.ink, textAlignVertical: "top", paddingVertical: 12 }} value={caption} onChangeText={setCaption} multiline maxLength={1000} placeholder={t("Say something…", "说点什么…", "說點甚麼…")} placeholderTextColor="#8B98AD" />
-        <View style={[styles.momentPhotoGrid, { marginTop: 12, marginBottom: 28 }]}>{photos.map((uri, index) => <View key={`${uri}-${index}`} style={{ width: "31.5%" }}><Image source={{ uri }} style={styles.momentPhoto} /><Pressable accessibilityRole="button" accessibilityLabel={t(`Remove photo ${index + 1}`, `移除照片 ${index + 1}`, `移除相片 ${index + 1}`)} style={styles.momentRemovePhoto} onPress={() => setPhotos((current) => current.filter((_, photoIndex) => photoIndex !== index))}><Ionicons name="close-circle" size={24} color={palette.coral} /></Pressable></View>)}{photos.length < 9 && <Pressable accessibilityRole="button" accessibilityLabel={t(`Add photos (${photos.length}/9)`, `添加照片（${photos.length}/9）`, `新增相片（${photos.length}/9）`)} disabled={picking} style={{ width: "31.5%", aspectRatio: 1, backgroundColor: "#F2F6FB", alignItems: "center", justifyContent: "center", borderRadius: 8, opacity: picking ? 0.5 : 1 }} onPress={pickPhotos}><Ionicons name="add" size={40} color={palette.muted} /></Pressable>}</View>
+        <MentionInput language={language} people={friends.filter((person) => acceptedFriends.includes(person.username))} accessibilityLabel={t("Moment caption", "动态内容", "動態內容")} style={{ minHeight: 120, fontSize: 16, lineHeight: 24, color: palette.ink, textAlignVertical: "top", paddingVertical: 12 }} value={caption} onChangeText={setCaption} multiline maxLength={1000} placeholder={t("Write a caption… Add #hashtags or @mentions", "说点什么…", "說點甚麼…")} placeholderTextColor="#8B98AD" />
+        <PostInteractionOptions comments={commentsEnabled} reposts={repostsEnabled} onComments={setCommentsEnabled} onReposts={setRepostsEnabled} />
+        <Text style={[styles.faqMeta, { marginTop: 8 }]}>{picking ? t("Opening media…", "正在打开媒体…", "正在開啟媒體…") : t("Up to 9 photos or videos · 100 MB per library item", "最多9张照片或视频 · 每项不超过100 MB", "最多9張相片或影片 · 每項不超過100 MB")}</Text>
+        <View style={[styles.momentPhotoGrid, { marginTop: 12, marginBottom: 28 }]}>{photos.map((uri, index) => <View key={`${uri}-${index}`} style={{ width: "31.5%" }}>{videoUris.includes(uri) ? <View style={[styles.momentPhoto, { alignItems: "center", justifyContent: "center" }]}><Ionicons name="videocam" size={32} color={palette.blue} /><Text style={styles.faqMeta}>{t("Video", "视频", "影片")}</Text></View> : <Image source={{ uri }} style={styles.momentPhoto} />}<Pressable accessibilityRole="button" accessibilityLabel={t(`Remove media ${index + 1}`, `移除照片 ${index + 1}`, `移除相片 ${index + 1}`)} style={styles.momentRemovePhoto} onPress={() => setPhotos((current) => current.filter((_, photoIndex) => photoIndex !== index))}><Ionicons name="close-circle" size={24} color={palette.coral} /></Pressable></View>)}{photos.length < 9 && <Pressable accessibilityRole="button" accessibilityLabel={t(`Add photos / videos (${photos.length}/9)`, `添加照片（${photos.length}/9）`, `新增相片（${photos.length}/9）`)} accessibilityState={{ expanded: mediaMenuOpen }} disabled={picking} style={{ width: "31.5%", aspectRatio: 1, backgroundColor: "#F2F6FB", alignItems: "center", justifyContent: "center", borderRadius: 8, opacity: picking ? 0.5 : 1 }} onPress={pickPhotos}><Ionicons name="add" size={40} color={palette.muted} /></Pressable>}</View>
+        {mediaMenuOpen && <View style={{ gap: 8, marginBottom: 16 }}>
+          {([
+            { source: "camera", icon: "camera-outline", label: t("Take photo", "拍照", "拍照") },
+            { source: "library", icon: "images-outline", label: t("Photo library", "照片库", "相片庫") },
+            { source: "video", icon: "videocam-outline", label: t("Upload video", "上传视频", "上傳影片") },
+          ] as const).map((option) => <Pressable key={option.source} accessibilityRole="button" disabled={picking || photos.length >= 9} onPress={() => { setMediaMenuOpen(false); void pickMomentPhotos(option.source); }} style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, backgroundColor: "#EAF4FF", opacity: picking || photos.length >= 9 ? 0.5 : 1 }}><Ionicons name={option.icon} size={20} color={palette.blue} /><Text style={styles.faqActionText}>{option.label}</Text></Pressable>)}
+        </View>}
         <Pressable accessibilityRole="button" accessibilityState={{ expanded: locationOpen }} style={styles.momentSettingsRow} onPress={() => setLocationOpen(!locationOpen)}><Ionicons name="location-outline" size={23} color={palette.ink} /><Text style={[styles.faqCardSummary, { flex: 1 }]}>{t("Location", "地点", "地點")}</Text><Text numberOfLines={1} style={[styles.faqMeta, { maxWidth: "50%" }]}>{location}</Text><Ionicons name="chevron-forward" size={18} color={palette.muted} /></Pressable>
         {locationOpen && <TextInput accessibilityLabel={t("Location (optional)", "地点（选填）", "地點（選填）")} style={styles.faqInput} value={location} onChangeText={setLocation} maxLength={80} placeholder={t("e.g. South Bank, London", "例如：伦敦南岸", "例如：倫敦南岸")} placeholderTextColor="#8B98AD" />}
         <Pressable accessibilityRole="button" accessibilityState={{ expanded: eventPickerOpen }} style={styles.momentSettingsRow} onPress={() => setEventPickerOpen((current) => !current)}><Ionicons name="calendar-outline" size={21} color={palette.blue} /><Text style={[styles.faqCardSummary, { flex: 1 }]}>{attachedEvent ? t("Change linked event", "更换关联活动", "更換關聯活動") : t("Attach UniMate event", "关联优你伴活动", "關聯優你伴活動")}</Text><Ionicons name="chevron-down" size={16} color={palette.blue} /></Pressable>
@@ -9297,15 +9349,17 @@ function StudentMoments({ onOpenForum, initialDiscoveryTab = "foryou", onDiscove
             <Pressable accessibilityRole="button" accessibilityLabel={t(`View ${moment.author}’s moments`, `查看 ${moment.author} 的动态`, `查看 ${moment.author} 的動態`)} onPress={() => { setDetailFeedIds([]); onSelectAuthor(moment.username); }}><ChatPersonAvatar name={moment.author} photo={moment.username === "self" ? profilePhoto : undefined} size={38} /></Pressable>
             <View style={{ flex: 1 }}><Text style={styles.faqCardAuthor}>{moment.author}</Text><Text style={styles.faqMeta}>{moment.publicPost ? moment.publisherId ? t("Public · Sample post", "公开 · 示例动态", "公開 · 範例動態") : t("Public", "公开", "公開") : moment.audience === "private" ? t("Only me", "仅自己", "僅自己") : t("Friends", "好友", "好友")}</Text></View>
             {!!moment.publisherId && <Pressable accessibilityRole="button" style={{ borderWidth: 1, borderColor: palette.blue, borderRadius: 20, paddingHorizontal: 14, minHeight: 36, justifyContent: "center" }} onPress={() => onTogglePublisher(moment.publisherId!)}><Text style={styles.faqActionText}>{followedPublishers.includes(moment.publisherId) ? t("Following", "已关注", "已關注") : t("Follow", "关注", "關注")}</Text></Pressable>}
+            {reportMomentButton(moment)}
           </View>
           <View style={{ paddingHorizontal: 16 }}>{!!moment.repostComment && <Text style={[styles.momentCaption, { fontWeight: "700" }]}>{moment.repostComment}</Text>}{repostLabel(moment)}</View>
-          <PostPhotoCarousel photos={moment.photos} language={language} maxHeight={Math.max(220, Math.min(480, momentWindowHeight * 0.48))} onOpen={setPhotoPreview} />
+          <PostPhotoCarousel photos={moment.photos} videoUris={moment.videoUris} language={language} maxHeight={Math.max(220, Math.min(480, momentWindowHeight * 0.48))} onOpen={setPhotoPreview} />
           <View style={{ padding: 16, gap: 10 }}>
-            <Text numberOfLines={4} ellipsizeMode="tail" style={[styles.momentCaption, { fontSize: 16, lineHeight: 24 }]}>{mentionText(tr(language, ...moment.caption))}</Text>
+            {momentActionBar(moment)}
+            <Text numberOfLines={4} ellipsizeMode="tail" style={[styles.momentCaption, { fontSize: 16, lineHeight: 24 }]}>{mentionText(tr(language, ...moment.caption), searchHashtag)}</Text>
             <Pressable accessibilityRole="button" onPress={() => { setSelectedId(moment.id); setComment(""); }}><Text style={styles.faqActionText}>{t("Details & comments", "详情与评论", "詳情與留言")}</Text></Pressable>
             {!!moment.eventTitle && eventCard(moment.eventTitle)}
             {!!tr(language, ...moment.location) && <Text style={styles.faqMeta}>{tr(language, ...moment.location)}</Text>}
-            {momentActionBar(moment)}
+            <Text style={styles.faqMeta}>{relativeTime(moment.createdAt)}</Text>
           </View>
           {index < detailFeed.length - 1 && <View style={{ alignItems: "center", paddingVertical: 4 }}><Ionicons name="chevron-up" size={17} color={palette.muted} /><Text style={styles.faqMeta}>{t("Swipe up for the next moment", "上滑查看下一条动态", "上滑查看下一則動態")}</Text></View>}
         </View>)}
@@ -9319,14 +9373,15 @@ function StudentMoments({ onOpenForum, initialDiscoveryTab = "foryou", onDiscove
             <Pressable accessibilityRole="button" accessibilityLabel={t("View author’s moments", "查看作者动态", "查看作者動態")} onPress={() => { setSelectedId(null); onSelectAuthor(selected.username); }}><ChatPersonAvatar name={selected.author} photo={selected.username === "self" ? profilePhoto : undefined} size={38} /></Pressable>
             <View style={{ flex: 1, minWidth: 0 }}><Text numberOfLines={1} style={styles.faqCardAuthor}>{selected.author}</Text>{selected.publicPost && <Text style={styles.faqMeta}>{selected.publisherId ? t("Public · Sample post", "公开 · 示例动态", "公開 · 範例動態") : t("Public", "公开", "公開")}</Text>}</View>
             {!!selected.publisherId && <Pressable accessibilityRole="button" style={{ borderWidth: 1, borderColor: palette.blue, borderRadius: 20, paddingHorizontal: 14, minHeight: 36, justifyContent: "center" }} onPress={() => onTogglePublisher(selected.publisherId!)}><Text style={styles.faqActionText}>{followedPublishers.includes(selected.publisherId) ? t("Following", "已关注", "已關注") : t("Follow", "关注", "關注")}</Text></Pressable>}
+            {reportMomentButton(selected)}
           </View>
           <View style={{ paddingHorizontal: 18 }}>{!!selected.repostComment && <Text style={[styles.momentCaption, { fontWeight: "700" }]}>{selected.repostComment}</Text>}{repostLabel(selected)}</View>
-          <PostPhotoCarousel key={selected.id} photos={selected.photos} language={language} onOpen={setPhotoPreview} />
+          <PostPhotoCarousel key={selected.id} photos={selected.photos} videoUris={selected.videoUris} language={language} onOpen={setPhotoPreview} />
           <View style={{ padding: 18, gap: 10 }}>
-            <Text style={[styles.momentCaption, { fontSize: 17, lineHeight: 26, fontWeight: "600" }]}>{mentionText(tr(language, ...selected.caption))}</Text>
+            <Text style={[styles.momentCaption, { fontSize: 17, lineHeight: 26, fontWeight: "600" }]}>{mentionText(tr(language, ...selected.caption), searchHashtag)}</Text>
             {!!selected.eventTitle && eventCard(selected.eventTitle)}
             {!!tr(language, ...selected.location) && <Text style={styles.faqMeta}>{tr(language, ...selected.location)}</Text>}
-            <Text style={styles.faqMeta}>{formatForumDate(new Date(selected.createdAt).toISOString(), language)}</Text>
+            <Text style={styles.faqMeta}>{relativeTime(selected.createdAt)}</Text>
             {selected.publisherId && <Text style={styles.faqMeta}>{t("Demo content, not posted by this business.", "演示内容，并非商家发布。", "示範內容，並非商家發佈。")}</Text>}
           </View>
           <View onLayout={(event) => { commentsOffset.current = event.nativeEvent.layout.y; }} style={[styles.momentReplies, { marginHorizontal: 18, backgroundColor: "transparent", padding: 0 }]}>
@@ -9353,10 +9408,10 @@ function StudentMoments({ onOpenForum, initialDiscoveryTab = "foryou", onDiscove
         {!!commentPhotoError && <Text style={{ color: palette.coral }}>{commentPhotoError}</Text>}
         {commentEmojiOpen && <View style={styles.emojiTray}>{commonChatEmojis.map((emoji) => <Pressable key={emoji} accessibilityRole="button" accessibilityLabel={emoji} style={styles.emojiOption} onPress={() => setComment((current) => (current + emoji).slice(0, 500))}><Text style={styles.emojiText}>{emoji}</Text></Pressable>)}</View>}
         <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 6 }}>
-          <View style={{ flex: 1, minWidth: 0 }}><MentionInput language={language} people={friends.filter((person) => acceptedFriends.includes(person.username))} accessibilityLabel={t("Write a comment", "写评论", "寫留言")} value={comment} onChangeText={setComment} multiline maxLength={500} editable={canInteract} style={{ backgroundColor: "#F2F6FB", borderRadius: 10, padding: 12, minHeight: 44, maxHeight: 100, color: palette.ink }} placeholder={replyTo ? t(`Reply to ${replyTo.author}…`, `回复 ${replyTo.author}…`, `回覆 ${replyTo.author}…`) : t("Comment…", "评论…", "留言…")} placeholderTextColor="#8B98AD" /></View>
+          <View style={{ flex: 1, minWidth: 0 }}><MentionInput language={language} people={friends.filter((person) => acceptedFriends.includes(person.username))} accessibilityLabel={t("Write a comment", "写评论", "寫留言")} value={comment} onChangeText={setComment} multiline maxLength={500} editable={canInteract && selected?.commentsEnabled !== false} style={{ backgroundColor: "#F2F6FB", borderRadius: 10, padding: 12, minHeight: 44, maxHeight: 100, color: palette.ink }} placeholder={selected?.commentsEnabled === false ? "Comments are turned off" : replyTo ? t(`Reply to ${replyTo.author}…`, `回复 ${replyTo.author}…`, `回覆 ${replyTo.author}…`) : t("Comment…", "评论…", "留言…")} placeholderTextColor="#8B98AD" /></View>
           <Pressable accessibilityRole="button" accessibilityLabel={t("Choose comment emoji", "选择评论表情", "選擇留言表情")} style={styles.chatToolButton} onPress={() => setCommentEmojiOpen((current) => !current)}><Ionicons name="happy-outline" size={26} color={palette.blue} /></Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel={t("Add comment photo", "添加评论照片", "新增留言相片")} disabled={commentPhotoBusy} style={styles.chatToolButton} onPress={pickCommentPhoto}><Ionicons name="image-outline" size={26} color={palette.blue} /></Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel={replyTo ? t("Post reply", "发布回复", "發佈回覆") : t("Post comment", "发布评论", "發佈留言")} disabled={commentPhotoBusy || (canInteract && !comment.trim() && !commentPhoto)} style={[styles.chatSend, (!comment.trim() && !commentPhoto) && styles.chatSendDisabled]} onPress={addComment}><Ionicons name="arrow-up" size={20} color="#FFFFFF" /></Pressable>
+          <Pressable accessibilityRole="button" accessibilityLabel={replyTo ? t("Post reply", "发布回复", "發佈回覆") : t("Post comment", "发布评论", "發佈留言")} disabled={selected?.commentsEnabled === false || commentPhotoBusy || (canInteract && !comment.trim() && !commentPhoto)} style={[styles.chatSend, (!comment.trim() && !commentPhoto) && styles.chatSendDisabled]} onPress={addComment}><Ionicons name="arrow-up" size={20} color="#FFFFFF" /></Pressable>
         </View>
       </View>
     </Sheet>
@@ -9424,7 +9479,8 @@ const forumSourceLabels: Record<string, ForumCopy> = {
   "UKCISA · Healthcare": ["UKCISA · Healthcare", "UKCISA · 医疗服务", "UKCISA · 醫療服務"],
 };
 
-function StudentFaqForum({ momentsNavigation, profilePhoto, language, translationLanguage, onTranslationLanguageChange, accountName, canInteract, onVerify, posts, onPostsChange, comments, onCommentsChange, likedIds, onLikedIdsChange, followedForums, onToggleFollow, entry }: {
+function StudentFaqForum({ acceptedFriends, onShareForum, momentsNavigation, profilePhoto, language, translationLanguage, onTranslationLanguageChange, accountName, canInteract, onVerify, posts, onPostsChange, comments, onCommentsChange, likedIds, onLikedIdsChange, followedForums, onToggleFollow, entry }: {
+  acceptedFriends: string[]; onShareForum: (id: string, username: string) => void;
   momentsNavigation?: React.ReactNode;
   profilePhoto: string;
   onTranslationLanguageChange: (language: Language) => void;
@@ -9437,10 +9493,27 @@ function StudentFaqForum({ momentsNavigation, profilePhoto, language, translatio
 }) {
   const [section, setSection] = useState<"all" | "guides" | "community" | "following" | "popular_forums" | "popular_posts" | "saved">("all");
   const [myPostsOpen, setMyPostsOpen] = useState(false);
+  const [shareForumId, setShareForumId] = useState<string | null>(null);
+  const shareForumButton = (id: string) => <Pressable accessibilityRole="button" accessibilityLabel={tr(language, "Forward forum post", "转发论坛帖子", "轉發論壇帖子")} style={styles.faqAction} onPress={() => { if (!canInteract) { onVerify(); return; } setSelectedId(null); setShareForumId(id); }}><Ionicons name="paper-plane-outline" size={20} color={palette.blue} /></Pressable>;
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [deletePostId, setDeletePostId] = useState<string | null>(null);
   const savedForum = useSavedPosts("forum", accountName);
   const forumBookmarkCount = (id: string) => Math.max(0, (posts.find((post) => post.id === id) || forumGuides.find((post) => post.id === id))?.bookmarkCount || 0) + Number(savedForum.ids.includes(id));
+  const forumRepostButton = (id: string) => {
+    const post = posts.find(item => item.id === id);
+    const sourceId = post?.repostOf || id;
+    const source = posts.find(item => item.id === sourceId);
+    const sourceGuide = forumGuides.find(item => item.id === sourceId);
+    if ((!source && !sourceGuide) || source?.archived || source?.repostsEnabled === false || post?.repostsEnabled === false) return null;
+    const existing = posts.find(item => item.isOwn && item.repostOf === sourceId);
+    return <Pressable accessibilityRole="button" accessibilityLabel={existing ? "Undo forum repost" : "Repost forum post"} accessibilityState={{ selected: !!existing }} style={styles.forumCardAction} onPress={() => {
+      if (!canInteract) { onVerify(); return; }
+      if (existing) { onPostsChange(current => current.filter(item => item.id !== existing.id)); return; }
+      const title = source?.title || tr(language, ...sourceGuide!.title);
+      const body = source?.body || tr(language, ...sourceGuide!.summary);
+      onPostsChange(current => current.some(item => item.isOwn && item.repostOf === sourceId) ? current : [{ ...(source || {}), id: `forum-repost-${Date.now()}`, title, body, repostOf: sourceId, originalAuthor: source?.author || "UniMate team", author: accountName.trim() || "Sophie C", authorPhoto: profilePhoto, isOwn: true, archived: false, createdAt: new Date().toISOString(), likes: 0, bookmarkCount: 0 }, ...current]);
+    }}><RepostIcon size={20} reposted={!!existing} color={existing ? palette.green : palette.blue} /><Text style={styles.forumCardActionCount}>{posts.filter(item => item.repostOf === sourceId).length}</Text></Pressable>;
+  };
   const saveForumButton = (id: string, compact = false) => <Pressable accessibilityRole="button" accessibilityLabel={savedForum.ids.includes(id) ? tr(language, "Unsave post", "取消收藏帖子", "取消收藏帖子") : tr(language, "Save post", "收藏帖子", "收藏帖子")} accessibilityState={{ selected: savedForum.ids.includes(id) }} onPress={() => savedForum.toggle(id)} accessibilityHint={tr(language, `${forumBookmarkCount(id)} bookmarks · local preview count`, `${forumBookmarkCount(id)} 次收藏 · 本机演示计数`, `${forumBookmarkCount(id)} 次收藏 · 本機示範計數`)} style={compact ? styles.forumCardAction : [styles.faqAction, { minWidth: 36, minHeight: 44 }]}><Ionicons name={savedForum.ids.includes(id) ? "bookmark" : "bookmark-outline"} size={18} color={savedForum.ids.includes(id) ? palette.blue : compact ? palette.muted : palette.blue} /><Text style={compact ? [styles.forumCardActionCount, savedForum.ids.includes(id) && { color: palette.blue }] : styles.faqActionText}>{forumBookmarkCount(id)}</Text></Pressable>;
   const [category, setCategory] = useState<ForumCategory | "all">("all");
   const [query, setQuery] = useState("");
@@ -9448,6 +9521,8 @@ function StudentFaqForum({ momentsNavigation, profilePhoto, language, translatio
   useEffect(() => { if (entry) setSelectedId(entry.id); }, [entry]);
   const [composeOpen, setComposeOpen] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
+  const [commentsEnabled, setCommentsEnabled] = useState(true);
+  const [repostsEnabled, setRepostsEnabled] = useState(true);
   const [draftLinks, setDraftLinks] = useState<{ label: string; url: string }[]>([{ label: "", url: "" }]);
   const [draftPhotos, setDraftPhotos] = useState<string[]>([]);
   const draftCover = draftPhotos[0] || null;
@@ -9483,7 +9558,7 @@ function StudentFaqForum({ momentsNavigation, profilePhoto, language, translatio
   };
   const [formError, setFormError] = useState("");
   const guide = forumGuides.find((item) => item.id === selectedId);
-  const studentPost = posts.find((item) => item.id === selectedId);
+  const studentPost = posts.find((item) => !item.archived && (!item.repostOf || posts.some(source => source.id === item.repostOf && !source.archived) || forumGuides.some(source => source.id === item.repostOf)) && item.id === selectedId);
   const selectedTitle = guide ? tr(contentLanguage, ...guide.title) : studentPost?.title || "";
   const selectedBody = guide ? guide.paragraphs.map((paragraph) => tr(contentLanguage, ...paragraph)) : studentPost ? [studentPost.body] : [];
   const [bodyExpanded, setBodyExpanded] = useState(false);
@@ -9493,12 +9568,13 @@ function StudentFaqForum({ momentsNavigation, profilePhoto, language, translatio
   const selectedCategory = guide?.category || studentPost?.category;
   const authorName = accountName.trim() || "Sophie C";
   const ownsPost = (post: ForumPost) => post.isOwn === true || (post.author === authorName && !initialForumPosts.some((sample) => sample.id === post.id));
-  const myPosts = posts.filter(ownsPost);
+  const myPosts = posts.filter(post => !post.archived && ownsPost(post));
   const startForumDraft = (post?: ForumPost) => {
     if (!canInteract) { onVerify(); return; }
     if (post && !ownsPost(post)) return;
     setEditingPostId(post?.id || null);
     setDraftTitle(post?.title || ""); setDraftBody(post?.body || "");
+    setCommentsEnabled(post?.commentsEnabled !== false); setRepostsEnabled(post?.repostsEnabled !== false);
     setDraftCategory(post?.category); setDraftTags((post?.tags || []).map((tag) => `#${tag}`).join(" "));
     setDraftPhotos(post?.photos?.length ? [...post.photos] : post?.coverPhoto ? [post.coverPhoto] : []);
     setDraftLinks(post?.links?.length ? post.links.map((link) => ({ ...link })) : [{ label: "", url: "" }]);
@@ -9509,10 +9585,10 @@ function StudentFaqForum({ momentsNavigation, profilePhoto, language, translatio
   const popularity = (item: { id: string; likes: number }) => item.likes + (likedIds.includes(item.id) ? 1 : 0) + (comments[item.id] || []).length;
   const popularView = section === "popular_forums" || section === "popular_posts";
   const visibleGuides = section === "community" || section === "popular_posts" ? [] : forumGuides.filter((item) => (section !== "following" || !!followedForums[item.id]) && (section !== "saved" || savedForum.ids.includes(item.id)) && matches(tr(contentLanguage, ...item.title), tr(contentLanguage, ...item.summary), item.category, forumGuideTags[item.id] || [])).sort((a, b) => popularView ? popularity(b) - popularity(a) : 0);
-  const visiblePosts = section === "guides" ? [] : posts.filter((item) => (section !== "following" || !!followedForums[item.id]) && (section !== "saved" || savedForum.ids.includes(item.id)) && matches(item.title, item.body, item.category, forumPostTags(item))).sort((a, b) => popularView ? popularity(b) - popularity(a) || Date.parse(b.createdAt) - Date.parse(a.createdAt) : 0);
+  const visiblePosts = section === "guides" ? [] : posts.filter((item) => !item.archived && (!item.repostOf || posts.some(source => source.id === item.repostOf && !source.archived) || forumGuides.some(source => source.id === item.repostOf)) && (section !== "following" || !!followedForums[item.id]) && (section !== "saved" || savedForum.ids.includes(item.id)) && matches(item.title, `${item.body} ${item.author} ${item.authorUsername || ""} ${friends.find((friend) => friend.fullName === item.author)?.username || ""}`, item.category, forumPostTags(item))).sort((a, b) => popularView ? popularity(b) - popularity(a) || Date.parse(b.createdAt) - Date.parse(a.createdAt) : 0);
   const discoveryCards = [
     ...visibleGuides.map((item) => ({ id: item.id, title: tr(language, ...item.title), summary: tr(language, ...item.summary), category: item.category, author: tr(language, "UniMate team", "优你伴团队", "優你伴團隊"), likes: item.likes, official: true, coverPhoto: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=600", icon: item.icon })),
-    ...visiblePosts.map((item) => ({ id: item.id, title: item.title, summary: item.body, category: item.category, author: item.author, likes: item.likes, official: false, coverPhoto: item.coverPhoto, icon: "chatbubbles-outline" })),
+    ...visiblePosts.map((item) => ({ id: item.id, title: item.title, summary: item.body, category: item.category, author: item.originalAuthor ? `${item.author} · Reposted from ${item.originalAuthor}` : item.author, likes: item.likes, official: false, coverPhoto: item.coverPhoto, icon: "chatbubbles-outline" })),
   ].sort((a, b) => popularView ? popularity(b) - popularity(a) : 0);
   const rankedTopics = (["arrival", "money", "travel", "post", "daily"] as ForumCategory[]).map((topic) => ({ topic, score: [...forumGuides, ...posts].filter((item) => item.category === topic).reduce((total, item) => total + popularity(item), 0) })).sort((a, b) => b.score - a.score);
   const hashtagChips = (tags: string[]) => tags.length ? <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7, marginTop: 10, marginBottom: 8 }}>{tags.map((tag) => <Pressable key={tag.toLowerCase()} accessibilityRole="button" accessibilityLabel={tr(language, `Search #${tag}`, `搜索 #${tag}`, `搜尋 #${tag}`)} style={styles.faqTopicChip} onPress={(event) => { event.stopPropagation(); setQuery("#" + tag); setCategory("all"); setSection("all"); setSelectedId(null); }}><Text style={[styles.faqTopicText, { color: palette.blue }]}>#{tag}</Text></Pressable>)}</View> : null;
@@ -9530,7 +9606,7 @@ function StudentFaqForum({ momentsNavigation, profilePhoto, language, translatio
     const links = enteredLinks.map((link) => ({ url: safeForumUrl(link.url)!, label: link.label.trim() || new URL(link.url.trim()).hostname }));
     if (title.length < 8 || body.length < 20) { setFormError(tr(language, "Add a title of at least 8 characters and details of at least 20 characters.", "标题至少 8 个字，内容至少 20 个字。", "標題至少 8 個字，內容至少 20 個字。")); return; }
     const id = editingPostId || `forum-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const changes = { title, body, links, coverPhoto: draftCover || undefined, photos: draftPhotos, category: draftCategory, tags: extractForumHashtags(draftTags + " " + title + " " + body) };
+    const changes = { title, body, commentsEnabled, repostsEnabled, links, coverPhoto: draftCover || undefined, photos: draftPhotos, category: draftCategory, tags: extractForumHashtags(draftTags + " " + title + " " + body) };
     if (editingPostId) {
       if (!posts.some((post) => post.id === editingPostId && ownsPost(post))) return;
       onPostsChange((current) => current.map((post) => post.id === editingPostId && ownsPost(post) ? { ...post, ...changes } : post));
@@ -9542,6 +9618,7 @@ function StudentFaqForum({ momentsNavigation, profilePhoto, language, translatio
   };
   const addComment = () => {
     if (!selectedId) return;
+    if (studentPost?.commentsEnabled === false) return;
     if (!canInteract) { onVerify(); return; }
     const text = commentDraft.trim(); if ((!text && !forumCommentPhoto) || forumPhotoBusy) return;
     onCommentsChange((current) => ({ ...current, [selectedId]: [...(current[selectedId] || []), { id: `comment-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, author: authorName, text, photo: forumCommentPhoto || undefined, replyTo: replyToComment ? { id: replyToComment.id, author: replyToComment.author } : undefined, timestamp: Date.now(), likes: 0, dislikes: 0, vote: null, createdAt: new Date().toISOString() }] }));
@@ -9572,7 +9649,7 @@ function StudentFaqForum({ momentsNavigation, profilePhoto, language, translatio
         {myPosts.map((post) => <View key={post.id} style={{ borderWidth: 1, borderColor: palette.line, borderRadius: 14, padding: 16, marginBottom: 12, gap: 10 }}>
           <Pressable accessibilityRole="button" accessibilityLabel={post.title} onPress={() => { setMyPostsOpen(false); setSelectedId(post.id); }}><Text style={styles.faqCardAuthor}>{post.title}</Text><Text numberOfLines={3} style={[styles.faqCardSummary, { marginTop: 8 }]}>{post.body}</Text></Pressable>
           <Text style={styles.faqMeta}>{postDate(post)} · {post.likes + Number(likedIds.includes(post.id))} {tr(language, "likes", "赞", "讚")} · {(comments[post.id] || []).length} {tr(language, "comments", "评论", "留言")}</Text>
-          <View style={{ flexDirection: "row", gap: 24 }}><Pressable accessibilityRole="button" style={styles.momentAction} onPress={() => startForumDraft(post)}><Ionicons name="pencil-outline" size={18} color={palette.blue} /><Text style={styles.faqActionText}>{tr(language, "Edit post", "编辑帖子", "編輯帖子")}</Text></Pressable><Pressable accessibilityRole="button" style={styles.momentAction} onPress={() => { if (!canInteract) { onVerify(); return; } setMyPostsOpen(false); setDeletePostId(post.id); }}><Ionicons name="trash-outline" size={18} color={palette.coral} /><Text style={[styles.faqActionText, { color: palette.coral }]}>{tr(language, "Delete post", "删除帖子", "刪除帖子")}</Text></Pressable></View>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 24 }}><Pressable accessibilityRole="button" style={styles.momentAction} onPress={() => { if (!canInteract) { onVerify(); return; } onPostsChange(current => current.map(item => item.id === post.id && ownsPost(item) ? { ...item, archived: true } : item)); }}><Ionicons name="archive-outline" size={18} color={palette.blue} /><Text style={styles.faqActionText}>Archive post</Text></Pressable><Pressable accessibilityRole="button" style={styles.momentAction} onPress={() => startForumDraft(post)}><Ionicons name="pencil-outline" size={18} color={palette.blue} /><Text style={styles.faqActionText}>{tr(language, "Edit post", "编辑帖子", "編輯帖子")}</Text></Pressable><Pressable accessibilityRole="button" style={styles.momentAction} onPress={() => { if (!canInteract) { onVerify(); return; } setMyPostsOpen(false); setDeletePostId(post.id); }}><Ionicons name="trash-outline" size={18} color={palette.coral} /><Text style={[styles.faqActionText, { color: palette.coral }]}>{tr(language, "Delete post", "删除帖子", "刪除帖子")}</Text></Pressable></View>
         </View>)}
         <Pressable accessibilityRole="button" style={styles.primaryButton} onPress={() => startForumDraft()}><Text style={styles.primaryButtonText}>{tr(language, "Ask the community", "向社区提问", "向社區提問")}</Text></Pressable>
         <Text style={[styles.faqDisclaimer, { marginTop: 16 }]}>{tr(language, "Preview posts stay in this session and reset on reload.", "预览帖子保留在当前会话，刷新后重置。", "預覽帖子保留在目前工作階段，重新載入後重設。")}</Text>
@@ -9592,10 +9669,10 @@ function StudentFaqForum({ momentsNavigation, profilePhoto, language, translatio
       <View style={styles.modalBody}><Text style={styles.formDesc}>{tr(language, "Choose a language. This also updates your translation preference.", "选择语言，同时更新你的翻译偏好。", "選擇語言，同時更新你的翻譯偏好。")}</Text>{(["EN", "简体", "繁體"] as Language[]).map((target) => <Pressable key={target} accessibilityRole="button" style={styles.momentSettingsRow} onPress={() => { onTranslationLanguageChange(target); setTranslated(true); setTranslatePickerOpen(false); }}><Text style={styles.faqActionText}>{target === "EN" ? "English" : target === "简体" ? "简体中文" : "繁體中文"}</Text><Ionicons name="chevron-forward" size={18} color={palette.blue} /></Pressable>)}</View>
     </Sheet>
     <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}><View style={{ flex: 1 }}><Text style={styles.pageTitle}>{momentsNavigation ? tr(language, "Moments", "朋友圈", "朋友圈") : tr(language, "Forum", "社区论坛", "社區論壇")}</Text><Text style={styles.faqCardSummary}>{tr(language, "Good questions. Shared experiences.", "分享经验，一起寻找答案。", "分享經驗，一起尋找答案。")}</Text></View><Pressable accessibilityRole="button" accessibilityLabel={tr(language, "Ask the community", "向社区提问", "向社區提問")} style={styles.headerPostButton} onPress={() => startForumDraft()}><Ionicons name="add" size={20} color="#FFFFFF" /><Text style={{ color: "#FFFFFF", fontWeight: "800", fontSize: 13 }}>{tr(language, "Ask", "提问", "提問")}</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel={tr(language, "My forum posts", "我的论坛帖子", "我的論壇帖子")} accessibilityHint={tr(language, "View and manage posts you have published", "查看和管理你发布的帖子", "查看和管理你發佈的帖子")} onPress={() => setMyPostsOpen(true)} style={{ minWidth: 54, minHeight: 48, alignItems: "center", justifyContent: "center", gap: 3 }}><Ionicons name="documents-outline" size={23} color={palette.blue} /><Text style={{ color: palette.blue, fontSize: 10, fontWeight: "700" }}>{tr(language, "My posts", "我的帖子", "我的帖子")}</Text></Pressable></View>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 14 }}><View style={{ flex: 1 }}><Text style={styles.pageTitle}>{momentsNavigation ? tr(language, "Moments", "朋友圈", "朋友圈") : tr(language, "Forum", "社区论坛", "社區論壇")}</Text><Text style={styles.faqCardSummary}>{tr(language, "Good questions. Shared experiences.", "分享经验，一起寻找答案。", "分享經驗，一起尋找答案。")}</Text></View><Pressable accessibilityRole="button" accessibilityLabel={tr(language, "Ask the community", "向社区提问", "向社區提問")} hitSlop={5} style={styles.headerPostButton} onPress={() => startForumDraft()}><Ionicons name="add-outline" size={17} color={palette.blue} /><Text style={{ color: palette.blue, fontWeight: "600", fontSize: 12 }}>{tr(language, "Ask", "提问", "提問")}</Text></Pressable><Pressable accessibilityRole="button" accessibilityLabel={tr(language, "My forum posts", "我的论坛帖子", "我的論壇帖子")} accessibilityHint={tr(language, "View and manage posts you have published", "查看和管理你发布的帖子", "查看和管理你發佈的帖子")} onPress={() => setMyPostsOpen(true)} style={{ minWidth: 54, minHeight: 48, alignItems: "center", justifyContent: "center", gap: 3 }}><Ionicons name="documents-outline" size={23} color={palette.blue} /><Text style={{ color: palette.blue, fontSize: 10, fontWeight: "700" }}>{tr(language, "My posts", "我的帖子", "我的帖子")}</Text></Pressable></View>
       {momentsNavigation}
-      <View style={styles.search}><Ionicons name="search-outline" size={18} color={palette.muted} /><TextInput style={styles.searchInput} value={query} onChangeText={setQuery} placeholder={tr(language, "Search questions, guides or #hashtags…", "搜索问题、指南或 #话题…", "搜尋問題、指南或 #話題…")} placeholderTextColor="#8B98AD" />{!!query && <Pressable accessibilityRole="button" accessibilityLabel={tr(language, "Clear search", "清除搜索", "清除搜尋")} onPress={() => setQuery("")}><Ionicons name="close-circle" size={20} color={palette.muted} /></Pressable>}</View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.faqChipRow}>{(["all", "following", "saved", "popular_posts", "popular_forums", "guides", "community"] as const).map((item) => <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: section === item }} style={{ paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 3, borderBottomColor: section === item ? palette.blue : "transparent" }} onPress={() => setSection(item)}><Text style={{ fontSize: 15, fontWeight: "800", color: section === item ? palette.blue : palette.muted }}>{item === "saved" ? tr(language, "Saved", "收藏", "收藏") : item === "all" ? tr(language, "Explore", "发现", "探索") : item === "popular_forums" ? tr(language, "Popular forums", "热门话题", "熱門話題") : item === "popular_posts" ? tr(language, "Popular posts", "热门帖子", "熱門帖子") : item === "guides" ? tr(language, "Official guides", "官方指南", "官方指南") : item === "community" ? tr(language, "Student posts", "学生帖子", "學生帖子") : tr(language, "Following", "已关注", "已關注")}</Text></Pressable>)}</ScrollView>
+      <View style={styles.search}><Ionicons name="search-outline" size={18} color={palette.muted} /><TextInput style={styles.searchInput} value={query} onChangeText={setQuery} placeholder={tr(language, "Search names, usernames, posts or hashtags", "搜索问题、指南或 #话题…", "搜尋問題、指南或 #話題…")} placeholderTextColor="#8B98AD" />{!!query && <Pressable accessibilityRole="button" accessibilityLabel={tr(language, "Clear search", "清除搜索", "清除搜尋")} onPress={() => setQuery("")}><Ionicons name="close-circle" size={20} color={palette.muted} /></Pressable>}</View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.faqChipRow}>{(["all", "following", "popular_posts", "popular_forums", "guides", "community"] as const).map((item) => <Pressable key={item} accessibilityRole="tab" accessibilityState={{ selected: section === item }} style={{ paddingHorizontal: 12, paddingVertical: 12, borderBottomWidth: 3, borderBottomColor: section === item ? palette.blue : "transparent" }} onPress={() => setSection(item)}><Text style={{ fontSize: 15, fontWeight: "800", color: section === item ? palette.blue : palette.muted }}>{item === "all" ? tr(language, "Explore", "发现", "探索") : item === "popular_forums" ? tr(language, "Popular forums", "热门话题", "熱門話題") : item === "popular_posts" ? tr(language, "Popular posts", "热门帖子", "熱門帖子") : item === "guides" ? tr(language, "Official guides", "官方指南", "官方指南") : item === "community" ? tr(language, "Student posts", "学生帖子", "學生帖子") : tr(language, "Following", "已关注", "已關注")}</Text></Pressable>)}</ScrollView>
       {section === "saved" && <Text style={[styles.faqCardSummary, { marginVertical: 8 }]}>{tr(language, "Your bookmarks · saved on this browser, not synced between devices. Preview posts still reset on reload.", "你的收藏 · 保存在此浏览器，不跨设备同步。演示帖子仍会在刷新后重置。", "你的收藏 · 儲存在此瀏覽器，不跨裝置同步。示範帖子仍會在重新載入後重設。")}</Text>}
       {popularView && <Text style={[styles.faqCardSummary, { marginVertical: 8 }]}>{section === "popular_forums" ? tr(language, "Explore the most active topics, ranked by likes and comments.", "按点赞和评论探索最活跃的话题。", "按讚好及留言探索最活躍的話題。") : tr(language, "Student posts ranked by likes and comments.", "学生帖子按点赞和评论排序。", "學生帖子按讚好及留言排序。")}</Text>}
       {section === "popular_forums" && <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>{rankedTopics.map(({ topic, score }, index) => <Pressable key={topic} accessibilityRole="button" accessibilityState={{ selected: category === topic }} style={[styles.faqTopicChip, category === topic && styles.faqTopicChipActive]} onPress={() => setCategory((current) => current === topic ? "all" : topic)}><Text style={styles.faqActionText}>{index + 1}. {forumCategoryLabel(language, topic)}</Text><Text style={styles.faqMeta}>{score} {tr(language, "likes & comments", "点赞和评论", "讚好及留言")}</Text></Pressable>)}</View>}
@@ -9605,24 +9682,24 @@ function StudentFaqForum({ momentsNavigation, profilePhoto, language, translatio
           {item.coverPhoto && <Image source={{ uri: item.coverPhoto }} accessibilityLabel={tr(language, "Forum cover photo", "论坛封面照片", "論壇封面相片")} style={{ width: "100%", aspectRatio: (index + column) % 2 === 0 ? 0.95 : 1.2 }} />}
           <View style={{ backgroundColor: item.official ? "#EAF4FF" : "#ECF9F2", padding: 13, minHeight: item.coverPhoto ? 0 : (index + column) % 2 === 0 ? 174 : 146, justifyContent: "space-between", gap: 12 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}><Ionicons name={item.icon as any} size={20} color={palette.blue} /><Text numberOfLines={2} style={[styles.faqMeta, { flex: 1, color: palette.blue }]}>{forumCategoryLabel(language, item.category)}</Text></View>
-            <Text numberOfLines={5} style={{ fontSize: 17, lineHeight: 23, fontWeight: "800", color: palette.navy }}>{item.title}</Text>
+            <Text numberOfLines={3} style={{ fontSize: 15, lineHeight: 21, fontWeight: "700", color: palette.navy }}>{item.title}</Text>
             <Text style={[styles.faqMeta, { color: palette.blue }]}>{item.official ? tr(language, "OFFICIAL GUIDE", "官方指南", "官方指南") : tr(language, "COMMUNITY QUESTION", "同学提问", "同學提問")}</Text>
           </View>
-          <View style={{ paddingHorizontal: 12, paddingTop: 10, paddingBottom: 12 }}><Text numberOfLines={3} ellipsizeMode="tail" style={[styles.faqCardSummary, { color: palette.ink }]}>{item.summary}</Text></View>
         </Pressable>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10 }}><ChatPersonAvatar name={item.author} photo={posts.find((post) => post.id === item.id)?.authorPhoto || (item.author === authorName ? profilePhoto : undefined)} size={22} /><Text numberOfLines={1} style={[styles.faqMeta, { flex: 1 }]}>{item.author}</Text></View>
-        <View style={styles.forumCardActionRow}>{likeButton(item.id, item.likes, true)}<Pressable accessibilityRole="button" accessibilityLabel={tr(language, `Comments on ${item.title}`, `查看评论：${item.title}`, `查看留言：${item.title}`)} style={styles.forumCardAction} onPress={() => { setSelectedId(item.id); setCommentDraft(""); }}><Ionicons name="chatbubble-outline" size={18} color={palette.muted} /><Text style={styles.forumCardActionCount}>{(comments[item.id] || []).length}</Text></Pressable>{saveForumButton(item.id, true)}</View>
+        <View style={styles.forumCardActionRow}>{likeButton(item.id, item.likes, true)}<Pressable accessibilityRole="button" accessibilityLabel={tr(language, `Comments on ${item.title}`, `查看评论：${item.title}`, `查看留言：${item.title}`)} style={styles.forumCardAction} onPress={() => { setSelectedId(item.id); setCommentDraft(""); }}><Ionicons name="chatbubble-outline" size={18} color={palette.muted} /><Text style={styles.forumCardActionCount}>{(comments[item.id] || []).length}</Text></Pressable>{forumRepostButton(item.id)}{saveForumButton(item.id, true)}{shareForumButton(item.id)}</View>
       </View>)}</View>)}</View>
       {!visibleGuides.length && !visiblePosts.length && <View style={styles.marketEmpty}><Ionicons name="search-outline" size={32} color={palette.blue} /><Text style={styles.marketEmptyTitle}>{section === "saved" ? tr(language, "No saved posts here yet", "暂无收藏帖子", "暫無收藏帖子") : tr(language, "No matching discussions yet", "暂无匹配的讨论", "暫無相符的討論")}</Text><Text style={styles.formDesc}>{section === "saved" ? tr(language, "Tap the bookmark on a post to find it here later. Check your filters if a saved post is missing.", "点击帖子的书签即可收藏。若找不到已收藏帖子，请检查筛选条件。", "點按帖子的書籤即可收藏。若找不到已收藏帖子，請檢查篩選條件。") : tr(language, "Try another topic or ask the community.", "换个话题搜索，或向社区提问。", "換個話題搜尋，或向社區提問。")}</Text></View>}
       <Text style={styles.faqDisclaimer}>{tr(language, "Forum posts and reactions are local demo data. Official guides link to primary sources; check them for changes before acting.", "帖子和互动仅为本机演示数据。官方指南附有原始资料链接，办理事项前请确认最新要求。", "帖子及互動只屬本機示範資料。官方指南附有原始資料連結，辦理事項前請確認最新要求。")}</Text>
     </ScrollView>
-    <Sheet visible={selectedId !== null} title={tr(contentLanguage, "FAQ Forum", "留英问答", "留英問答")} onClose={() => setSelectedId(null)}>{selectedId && (guide || studentPost) && <><ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 20 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}><View style={styles.faqDetailHead}><Text style={styles.faqCategory}>{forumCategoryLabel(contentLanguage, selectedCategory)}</Text>{guide && <Text style={styles.faqOfficialBadge}>{tr(contentLanguage, "UNIMATE OFFICIAL", "优你伴官方", "優你伴官方")}</Text>}</View>{guide && <Image source={{ uri: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=600" }} style={{ width: "100%", aspectRatio: 4 / 3, borderRadius: 12, marginBottom: 14 }} />}{guide ? <Text style={styles.faqDetailTitle}>{selectedTitle}</Text> : <><PostPhotoCarousel key={studentPost?.id} photos={studentPost?.photos?.length ? studentPost.photos : studentPost?.coverPhoto ? [studentPost.coverPhoto] : []} language={language} onOpen={setForumPhotoPreview} /><ForumTranslatedText original={selectedTitle} style={styles.faqDetailTitle} /></>}{guide ? <Text style={styles.faqDetailParagraph} numberOfLines={longBody && !bodyExpanded ? 6 : undefined}>{fullBody}</Text> : <ForumTranslatedText original={fullBody} style={styles.faqDetailParagraph} numberOfLines={longBody && !bodyExpanded ? 6 : undefined} />}{longBody && <Pressable accessibilityRole="button" accessibilityState={{ expanded: bodyExpanded }} style={[styles.momentAction, { marginTop: 10, alignSelf: "flex-start", paddingVertical: 8 }]} onPress={() => setBodyExpanded((current) => !current)}><Text style={styles.faqActionText}>{bodyExpanded ? tr(contentLanguage, "Show less", "收起", "收起") : tr(contentLanguage, "Read more", "展开全文", "展開全文")}</Text><Ionicons name={bodyExpanded ? "chevron-up" : "chevron-down"} size={16} color={palette.blue} /></Pressable>}{hashtagChips(guide ? forumGuideTags[guide.id] || [] : studentPost ? forumPostTags(studentPost) : [])}{guide && <View style={styles.faqSourceCard}><Text style={styles.faqSourceTitle}>{tr(contentLanguage, "Check the official source", "查看官方资料", "查閱官方資料")}</Text>{guide.sources.map((source) => <Pressable key={source.url} accessibilityRole="link" onPress={() => Linking.openURL(source.url).catch(() => Alert.alert(tr(contentLanguage, "Could not open link", "无法打开链接", "無法開啟連結")))} style={styles.faqSourceLink}><Ionicons name="open-outline" size={16} color={palette.blue} /><Text style={styles.faqSourceText}>{tr(contentLanguage, ...(forumSourceLabels[source.label] || [source.label, source.label, source.label] as ForumCopy))}</Text></Pressable>)}</View>}{!!studentPost?.links?.length && <View style={styles.faqSourceCard}><Text style={styles.faqSourceTitle}>{tr(contentLanguage, "Useful links", "实用链接", "實用連結")}</Text><Text style={[styles.faqMeta, { marginBottom: 8 }]}>{tr(contentLanguage, "Shared by the author · not verified by UniMate", "作者分享 · 未经优你伴核实", "作者分享 · 未經優你伴核實")}</Text>{studentPost.links.filter((link) => safeForumUrl(link.url)).map((link, index) => <Pressable key={index} accessibilityRole="link" accessibilityLabel={`${link.label} · ${new URL(link.url).hostname}`} style={styles.faqSourceLink} onPress={() => Linking.openURL(safeForumUrl(link.url)!).catch(() => Alert.alert(tr(contentLanguage, "Could not open link", "无法打开链接", "無法開啟連結")))}><Ionicons name="open-outline" size={16} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.faqSourceText}>{link.label}</Text><Text style={styles.faqMeta}>{new URL(link.url).hostname}</Text></View></Pressable>)}</View>}<View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 18, paddingVertical: 14, borderTopWidth: 1, borderColor: palette.line }}><ChatPersonAvatar name={guide ? "UniMate team" : studentPost?.author || ""} photo={studentPost?.authorPhoto || (studentPost?.author === authorName ? profilePhoto : undefined)} size={38} /><View style={{ flex: 1 }}><Text style={styles.faqCardAuthor}>{guide ? tr(contentLanguage, "UniMate team", "优你伴团队", "優你伴團隊") : studentPost?.author}</Text><Text style={[styles.faqMeta, { marginTop: 3 }]}>{guide ? tr(contentLanguage, "Reviewed 25 Sep 2026", "2026 年 9 月 25 日核对", "2026 年 9 月 25 日核對") : studentPost ? formatForumDate(studentPost.createdAt, contentLanguage) : ""}</Text></View></View><View style={[styles.faqDetailActions, { gap: 8, marginTop: 0, marginBottom: 20, paddingVertical: 8 }]}>{likeButton(selectedId, guide?.likes || studentPost?.likes || 0)}<View accessible accessibilityLabel={tr(contentLanguage, `${(comments[selectedId] || []).length} comments`, `${(comments[selectedId] || []).length} 条评论`, `${(comments[selectedId] || []).length} 則留言`)} style={styles.faqAction}><Ionicons name="chatbubble-outline" size={18} color={palette.blue} /><Text style={styles.faqActionText}>{(comments[selectedId] || []).length}</Text></View>{saveForumButton(selectedId)}<Pressable accessibilityRole="button" accessibilityState={{ selected: !!followedForums[selectedId] }} style={[styles.momentAction, { gap: 4, minHeight: 44, flexShrink: 1 }]} onPress={() => canInteract ? onToggleFollow(selectedId) : onVerify()}><Ionicons name={followedForums[selectedId] ? "notifications" : "notifications-outline"} size={16} color={palette.blue} /><Text style={[styles.faqActionText, { fontSize: 11, flexShrink: 1 }]}>{followedForums[selectedId] ? tr(contentLanguage, "Following", "已关注", "已關注") : tr(contentLanguage, "Follow discussion", "关注讨论", "關注討論")}</Text></Pressable>{translateButton}</View><Text style={styles.faqCommentsTitle}>{tr(contentLanguage, "Comments", "评论", "留言")}</Text><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>{(["liked", "newest", "oldest"] as const).map((sort) => <Pressable key={sort} accessibilityRole="button" accessibilityState={{ selected: commentSort === sort }} style={[styles.faqChip, commentSort === sort && styles.faqChipActive]} onPress={() => setCommentSort(sort)}><Text style={[styles.faqChipText, commentSort === sort && styles.faqChipTextActive]}>{sort === "liked" ? tr(contentLanguage, "Most liked", "最多点赞", "最多讚好") : sort === "newest" ? tr(contentLanguage, "Newest", "最新", "最新") : tr(contentLanguage, "Oldest", "最早", "最早")}</Text></Pressable>)}</View>{sortedComments.length ? sortedComments.map((comment) => <View key={comment.id} style={styles.faqComment}><View style={[styles.faqCommentTop, { flexWrap: "wrap", gap: 5 }]}><Text style={styles.faqCardAuthor}>{comment.author}</Text><Text style={styles.faqMeta}>{formatForumDate(comment.createdAt, contentLanguage)}</Text></View>{comment.replyTo && <Text style={styles.faqActionText}>@{comment.replyTo.author}</Text>}<ForumCommentContent comment={comment} language={contentLanguage} translationLanguage={translationLanguage} onReply={() => setReplyToComment(comment)} onPhoto={setForumPhotoPreview} /><View style={{ flexDirection: "row", gap: 20 }}>{(["like", "dislike"] as const).map((vote) => <Pressable key={vote} accessibilityRole="button" accessibilityLabel={vote === "like" ? tr(contentLanguage, "Like comment", "赞同评论", "讚好留言") : tr(contentLanguage, "Dislike comment", "不赞同评论", "不讚好留言")} accessibilityState={{ selected: comment.vote === vote }} style={styles.momentAction} onPress={() => voteOnComment(comment.id, vote)}><Ionicons name={(vote === "like" ? comment.vote === vote ? "thumbs-up" : "thumbs-up-outline" : comment.vote === vote ? "thumbs-down" : "thumbs-down-outline")} size={18} color={comment.vote === vote ? palette.blue : palette.muted} />{vote === "like" && <Text style={styles.faqActionText}>{(comment.likes || 0) + (comment.vote === "like" ? 1 : 0)}</Text>}</Pressable>)}</View></View>) : <View style={{ backgroundColor: "#F2F6FB", borderRadius: 14, padding: 18, gap: 7 }}><Text style={styles.faqCardAuthor}>{tr(contentLanguage, "Be the first to share your experience", "分享你的经验，开启讨论", "分享你的經驗，開啟討論")}</Text><Text style={styles.faqCardSummary}>{tr(contentLanguage, "Ask a follow-up question or share a useful tip. You can add a photo or @mention someone below.", "可以追问、分享实用建议，也可以在下方添加照片或 @提及朋友。", "可以追問、分享實用建議，也可以在下方新增相片或 @提及朋友。")}</Text></View>}</ScrollView>
+    <Sheet visible={shareForumId !== null} title={tr(language, "Forward post", "转发帖子", "轉發帖子")} onClose={() => setShareForumId(null)}><ScrollView contentContainerStyle={styles.modalBody}><Text style={styles.formDesc}>{tr(language, "Choose a friend. Forwarding stays in this preview; no real message is sent.", "选择好友。转发仅保存在预览中，不会发送真实消息。", "選擇好友。轉發只儲存在預覽中，不會傳送真實訊息。")}</Text>{friends.filter(friend => acceptedFriends.includes(friend.username)).map(friend => <Pressable key={friend.username} accessibilityRole="button" accessibilityLabel={`Forward to ${friend.fullName}`} style={styles.momentSettingsRow} onPress={() => { if (shareForumId) onShareForum(shareForumId, friend.username); setShareForumId(null); }}><ChatPersonAvatar name={friend.fullName} size={38} /><Text style={[styles.faqCardAuthor, { flex: 1 }]}>{friend.fullName}</Text><Ionicons name="paper-plane-outline" size={20} color={palette.blue} /></Pressable>)}{!acceptedFriends.length && <Text style={styles.formDesc}>{tr(language, "Add a friend first to forward posts.", "先添加好友再转发帖子。", "先新增好友再轉發帖子。")}</Text>}</ScrollView></Sheet>
+    <Sheet visible={selectedId !== null} title={tr(contentLanguage, "FAQ Forum", "留英问答", "留英問答")} onClose={() => setSelectedId(null)}>{selectedId && (guide || studentPost) && <><ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 20, paddingBottom: 20 }} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}><View style={styles.faqDetailHead}><Text style={styles.faqCategory}>{forumCategoryLabel(contentLanguage, selectedCategory)}</Text><Pressable accessibilityRole="button" accessibilityState={{ selected: !!followedForums[selectedId] }} style={[styles.momentAction, { gap: 4, minHeight: 44, flexShrink: 1, marginLeft: "auto" }]} onPress={() => canInteract ? onToggleFollow(selectedId) : onVerify()}><Ionicons name={followedForums[selectedId] ? "notifications" : "notifications-outline"} size={16} color={palette.blue} /><Text style={[styles.faqActionText, { fontSize: 11, flexShrink: 1 }]}>{followedForums[selectedId] ? tr(contentLanguage, "Following", "已关注", "已關注") : tr(contentLanguage, "Follow discussion", "关注讨论", "關注討論")}</Text></Pressable></View>{guide && <Image source={{ uri: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=600" }} style={{ width: "100%", aspectRatio: 4 / 3, borderRadius: 12, marginBottom: 14 }} />}{guide ? <Text style={styles.faqDetailTitle}>{selectedTitle}</Text> : <><PostPhotoCarousel key={studentPost?.id} photos={studentPost?.photos?.length ? studentPost.photos : studentPost?.coverPhoto ? [studentPost.coverPhoto] : []} language={language} onOpen={setForumPhotoPreview} /><ForumTranslatedText original={selectedTitle} style={styles.faqDetailTitle} /></>}{guide ? <Text style={styles.faqDetailParagraph} numberOfLines={longBody && !bodyExpanded ? 6 : undefined}>{fullBody}</Text> : <ForumTranslatedText original={fullBody} style={styles.faqDetailParagraph} numberOfLines={longBody && !bodyExpanded ? 6 : undefined} />}{longBody && <Pressable accessibilityRole="button" accessibilityState={{ expanded: bodyExpanded }} style={[styles.momentAction, { marginTop: 10, alignSelf: "flex-start", paddingVertical: 8 }]} onPress={() => setBodyExpanded((current) => !current)}><Text style={styles.faqActionText}>{bodyExpanded ? tr(contentLanguage, "Show less", "收起", "收起") : tr(contentLanguage, "Read more", "展开全文", "展開全文")}</Text><Ionicons name={bodyExpanded ? "chevron-up" : "chevron-down"} size={16} color={palette.blue} /></Pressable>}{hashtagChips(guide ? forumGuideTags[guide.id] || [] : studentPost ? forumPostTags(studentPost) : [])}{guide && <View style={styles.faqSourceCard}><Text style={styles.faqSourceTitle}>{tr(contentLanguage, "Check the official source", "查看官方资料", "查閱官方資料")}</Text>{guide.sources.map((source) => <Pressable key={source.url} accessibilityRole="link" onPress={() => Linking.openURL(source.url).catch(() => Alert.alert(tr(contentLanguage, "Could not open link", "无法打开链接", "無法開啟連結")))} style={styles.faqSourceLink}><Ionicons name="open-outline" size={16} color={palette.blue} /><Text style={styles.faqSourceText}>{tr(contentLanguage, ...(forumSourceLabels[source.label] || [source.label, source.label, source.label] as ForumCopy))}</Text></Pressable>)}</View>}{!!studentPost?.links?.length && <View style={styles.faqSourceCard}><Text style={styles.faqSourceTitle}>{tr(contentLanguage, "Useful links", "实用链接", "實用連結")}</Text><Text style={[styles.faqMeta, { marginBottom: 8 }]}>{tr(contentLanguage, "Shared by the author · not verified by UniMate", "作者分享 · 未经优你伴核实", "作者分享 · 未經優你伴核實")}</Text>{studentPost.links.filter((link) => safeForumUrl(link.url)).map((link, index) => <Pressable key={index} accessibilityRole="link" accessibilityLabel={`${link.label} · ${new URL(link.url).hostname}`} style={styles.faqSourceLink} onPress={() => Linking.openURL(safeForumUrl(link.url)!).catch(() => Alert.alert(tr(contentLanguage, "Could not open link", "无法打开链接", "無法開啟連結")))}><Ionicons name="open-outline" size={16} color={palette.blue} /><View style={{ flex: 1 }}><Text style={styles.faqSourceText}>{link.label}</Text><Text style={styles.faqMeta}>{new URL(link.url).hostname}</Text></View></Pressable>)}</View>}<View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 18, paddingVertical: 14, borderTopWidth: 1, borderColor: palette.line }}><ChatPersonAvatar name={guide ? "UniMate Official" : studentPost?.author || ""} photo={studentPost?.authorPhoto || (studentPost?.author === authorName ? profilePhoto : undefined)} size={38} /><View style={{ flex: 1 }}><Text style={styles.faqCardAuthor}>{guide ? tr(contentLanguage, "UniMate Official", "优你伴官方", "優你伴官方") : studentPost?.author}</Text><Text style={[styles.faqMeta, { marginTop: 3 }]}>{guide ? tr(contentLanguage, "Reviewed 25 Sep 2026", "2026 年 9 月 25 日核对", "2026 年 9 月 25 日核對") : studentPost ? formatForumDate(studentPost.createdAt, contentLanguage) : ""}</Text></View></View><View style={[styles.faqDetailActions, { gap: 8, marginTop: 0, marginBottom: 20, paddingVertical: 8 }]}>{likeButton(selectedId, guide?.likes || studentPost?.likes || 0)}<View accessible accessibilityLabel={tr(contentLanguage, `${(comments[selectedId] || []).length} comments`, `${(comments[selectedId] || []).length} 条评论`, `${(comments[selectedId] || []).length} 則留言`)} style={styles.faqAction}><Ionicons name="chatbubble-outline" size={18} color={palette.blue} /><Text style={styles.faqActionText}>{(comments[selectedId] || []).length}</Text></View>{forumRepostButton(selectedId)}{saveForumButton(selectedId)}{shareForumButton(selectedId)}{translateButton}</View><Text style={styles.faqCommentsTitle}>{tr(contentLanguage, "Comments", "评论", "留言")}</Text><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>{(["liked", "newest", "oldest"] as const).map((sort) => <Pressable key={sort} accessibilityRole="button" accessibilityState={{ selected: commentSort === sort }} style={[styles.faqChip, commentSort === sort && styles.faqChipActive]} onPress={() => setCommentSort(sort)}><Text style={[styles.faqChipText, commentSort === sort && styles.faqChipTextActive]}>{sort === "liked" ? tr(contentLanguage, "Most liked", "最多点赞", "最多讚好") : sort === "newest" ? tr(contentLanguage, "Newest", "最新", "最新") : tr(contentLanguage, "Oldest", "最早", "最早")}</Text></Pressable>)}</View>{sortedComments.length ? sortedComments.map((comment) => <View key={comment.id} style={styles.faqComment}><View style={[styles.faqCommentTop, { flexWrap: "wrap", gap: 5 }]}><Text style={styles.faqCardAuthor}>{comment.author}</Text><Text style={styles.faqMeta}>{formatForumDate(comment.createdAt, contentLanguage)}</Text></View>{comment.replyTo && <Text style={styles.faqActionText}>@{comment.replyTo.author}</Text>}<ForumCommentContent comment={comment} language={contentLanguage} translationLanguage={translationLanguage} onReply={() => setReplyToComment(comment)} onPhoto={setForumPhotoPreview} /><View style={{ flexDirection: "row", gap: 20 }}>{(["like", "dislike"] as const).map((vote) => <Pressable key={vote} accessibilityRole="button" accessibilityLabel={vote === "like" ? tr(contentLanguage, "Like comment", "赞同评论", "讚好留言") : tr(contentLanguage, "Dislike comment", "不赞同评论", "不讚好留言")} accessibilityState={{ selected: comment.vote === vote }} style={styles.momentAction} onPress={() => voteOnComment(comment.id, vote)}><Ionicons name={(vote === "like" ? comment.vote === vote ? "thumbs-up" : "thumbs-up-outline" : comment.vote === vote ? "thumbs-down" : "thumbs-down-outline")} size={18} color={comment.vote === vote ? palette.blue : palette.muted} />{vote === "like" && <Text style={styles.faqActionText}>{(comment.likes || 0) + (comment.vote === "like" ? 1 : 0)}</Text>}</Pressable>)}</View></View>) : <View style={{ backgroundColor: "#F2F6FB", borderRadius: 14, padding: 18, gap: 7 }}><Text style={styles.faqCardAuthor}>{tr(contentLanguage, "Be the first to share your experience", "分享你的经验，开启讨论", "分享你的經驗，開啟討論")}</Text><Text style={styles.faqCardSummary}>{tr(contentLanguage, "Ask a follow-up question or share a useful tip. You can add a photo or @mention someone below.", "可以追问、分享实用建议，也可以在下方添加照片或 @提及朋友。", "可以追問、分享實用建議，也可以在下方新增相片或 @提及朋友。")}</Text></View>}</ScrollView>
       {forumCommentPhoto && <View style={{ paddingHorizontal: 12 }}><ChatAttachmentPreview attachment={{ uri: forumCommentPhoto, name: tr(contentLanguage, "Photo", "照片", "相片"), type: "image" }} onRemove={() => setForumCommentPhoto(null)} /></View>}
       {!!forumPhotoError && <Text style={{ color: palette.coral, paddingHorizontal: 12 }}>{forumPhotoError}</Text>}
-      <SharedChatComposer key={selectedId} language={contentLanguage} people={friends} inputLabel={tr(contentLanguage, "Forum comment", "论坛评论", "論壇留言")} sendLabel={tr(contentLanguage, "Post comment", "发布评论", "發佈留言")} value={commentDraft} onChange={setCommentDraft} onSend={addComment} onAttach={addForumPhoto} attachDisabled={forumPhotoBusy} canSend={!forumPhotoBusy && (!canInteract || !!commentDraft.trim() || !!forumCommentPhoto)} editable={canInteract} maxLength={500} replyName={replyToComment?.author} onCancelReply={() => setReplyToComment(null)} placeholder={replyToComment ? tr(contentLanguage, `Reply to ${replyToComment.author}…`, `回复 ${replyToComment.author}…`, `回覆 ${replyToComment.author}…`) : tr(contentLanguage, "Comment…", "评论…", "留言…")} />
+      {studentPost?.commentsEnabled === false ? <Text style={styles.formDesc}>Comments are turned off for this post.</Text> : <SharedChatComposer key={selectedId} language={contentLanguage} people={friends} inputLabel={tr(contentLanguage, "Forum comment", "论坛评论", "論壇留言")} sendLabel={tr(contentLanguage, "Post comment", "发布评论", "發佈留言")} value={commentDraft} onChange={setCommentDraft} onSend={addComment} onAttach={addForumPhoto} attachDisabled={forumPhotoBusy} canSend={!forumPhotoBusy && (!canInteract || !!commentDraft.trim() || !!forumCommentPhoto)} editable={canInteract} maxLength={500} replyName={replyToComment?.author} onCancelReply={() => setReplyToComment(null)} placeholder={replyToComment ? tr(contentLanguage, `Reply to ${replyToComment.author}…`, `回复 ${replyToComment.author}…`, `回覆 ${replyToComment.author}…`) : tr(contentLanguage, "Comment…", "评论…", "留言…")} />}
     </>}</Sheet>
     <Sheet visible={!!forumPhotoPreview} title={tr(language, "Photo", "照片", "相片")} onClose={() => setForumPhotoPreview(null)}>{forumPhotoPreview && <Image source={{ uri: forumPhotoPreview }} style={{ width: "100%", height: 400 }} resizeMode="contain" />}</Sheet>
-    <Sheet visible={composeOpen} title={editingPostId ? tr(language, "Edit post", "编辑帖子", "編輯帖子") : tr(language, "Ask the community", "向社区提问", "向社區提問")} onClose={() => { setComposeOpen(false); setFormError(""); if (editingPostId) setMyPostsOpen(true); setEditingPostId(null); }}><ScrollView contentContainerStyle={styles.modalBody} showsVerticalScrollIndicator={false}><Text style={styles.faqCardSummary}>{tr(language, "Share your question and what you have already tried. Topics are optional. Do not post passwords, account numbers or your full address.", "分享你的问题和已尝试的方法。话题为选填。请勿发布密码、账户号码或完整住址。", "分享你的問題和已嘗試的方法。話題為選填。請勿發佈密碼、帳戶號碼或完整住址。")}</Text><Text style={styles.formSectionTitle}>{tr(language, "Recommended topics (optional)", "推荐话题（选填）", "推薦話題（選填）")}</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.faqChipRow}>{(["arrival", "money", "travel", "post", "daily"] as ForumCategory[]).map((item) => <Pressable key={item} accessibilityRole="button" accessibilityState={{ selected: draftCategory === item }} style={[styles.faqTopicChip, draftCategory === item && styles.faqTopicChipActive]} onPress={() => setDraftCategory((current) => current === item ? undefined : item)}><Text style={[styles.faqTopicText, draftCategory === item && styles.faqTopicTextActive]}>{forumCategoryLabel(language, item)}</Text></Pressable>)}</ScrollView><Text style={styles.formSectionTitle}>{tr(language, "Forum title", "帖子标题", "帖子標題")}</Text><TextInput style={styles.faqInput} value={draftTitle} onChangeText={setDraftTitle} maxLength={120} placeholder={tr(language, "What would you like to know?", "你想了解什么？", "你想了解甚麼？")} placeholderTextColor="#8B98AD" /><Text style={styles.formSectionTitle}>{tr(language, "Photo cover (optional)", "照片封面（选填）", "相片封面（選填）")}</Text><Text style={styles.faqCardSummary}>{tr(language, "Up to 9 photos. The first photo is your cover. Swipe to browse.", "最多9张照片，第一张作为封面，可左右滑动浏览。", "最多9張相片，第一張作為封面，可左右滑動瀏覽。")}</Text><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>{draftPhotos.map((uri, index) => <View key={index} style={{ width: "30%" }}><Image source={{ uri }} style={{ width: "100%", aspectRatio: 1, borderRadius: 8 }} /><Pressable accessibilityRole="button" accessibilityLabel={tr(language, `Remove photo ${index + 1}`, `移除照片 ${index + 1}`, `移除相片 ${index + 1}`)} onPress={() => setDraftPhotos((current) => current.filter((_, i) => i !== index))} style={styles.momentAction}><Ionicons name="close-circle-outline" size={20} color={palette.blue} /><Text style={styles.faqMeta}>{index === 0 ? tr(language, "Cover", "封面", "封面") : index + 1}</Text></Pressable></View>)}</View><Pressable accessibilityRole="button" disabled={coverPicking || draftPhotos.length >= 9} style={[styles.momentAction, draftPhotos.length >= 9 && { opacity: 0.5 }]} onPress={pickForumCover}><Ionicons name="images-outline" size={22} color={palette.blue} /><Text style={styles.faqActionText}>{coverPicking ? tr(language, "Opening photos…", "正在打开照片…", "正在開啟相片…") : tr(language, `Add photos (${draftPhotos.length}/9)`, `添加照片（${draftPhotos.length}/9）`, `新增相片（${draftPhotos.length}/9）`)}</Text></Pressable><Text style={styles.formSectionTitle}>{tr(language, "Details", "详细情况", "詳細情況")}</Text><MentionInput language={language} accessibilityLabel={tr(language, "Question details", "问题详情", "問題詳情")} style={[styles.faqInput, styles.faqBodyInput]} multiline value={draftBody} onChangeText={setDraftBody} maxLength={2000} placeholder={tr(language, "Add context so other students can help…", "补充背景，方便其他同学帮助你…", "補充背景，方便其他同學幫助你…")} placeholderTextColor="#8B98AD" /><Text style={styles.formSectionTitle}>{tr(language, "Hashtags (optional)", "话题标签（选填）", "話題標籤（選填）")}</Text><TextInput accessibilityLabel={tr(language, "Hashtags", "话题标签", "話題標籤")} style={styles.faqInput} value={draftTags} onChangeText={setDraftTags} maxLength={200} autoCapitalize="none" placeholder={tr(language, "#UKLife #StudentBanking", "#英国生活 #学生银行", "#英國生活 #學生銀行")} placeholderTextColor="#8B98AD" /><Text style={[styles.faqCardSummary, { marginBottom: 12 }]}>{tr(language, "Add #hashtags here or in your question. Tap a tag on any post to find related discussions.", "可在这里或问题中添加 #话题。点击帖子标签即可查找相关讨论。", "可在這裡或問題中新增 #話題。點按帖子標籤即可尋找相關討論。")}</Text><Text style={styles.formSectionTitle}>{tr(language, "Useful links (optional)", "实用链接（选填）", "實用連結（選填）")}</Text><Text style={styles.faqCardSummary}>{tr(language, "Link directly to a helpful page, such as TfL. Use a full https:// URL. Links are shared by you, not endorsed by UniMate.", "可添加TfL等实用网页，请输入完整的 https:// 网址。链接由你分享，不代表优你伴认可。", "可新增TfL等實用網頁，請輸入完整的 https:// 網址。連結由你分享，不代表優你伴認可。")}</Text>{draftLinks.map((link, index) => <View key={index} style={{ marginTop: 10, gap: 6 }}><TextInput accessibilityLabel={tr(language, `Link title ${index + 1}`, `链接标题 ${index + 1}`, `連結標題 ${index + 1}`)} style={styles.faqInput} value={link.label} maxLength={100} placeholder={tr(language, "e.g. TfL Oyster information", "例如：TfL 牡蛎卡指南", "例如：TfL Oyster 卡指南")} onChangeText={(label) => setDraftLinks((current) => current.map((item, i) => i === index ? { ...item, label } : item))} /><TextInput accessibilityLabel={tr(language, `Website URL ${index + 1}`, `网址 ${index + 1}`, `網址 ${index + 1}`)} style={styles.faqInput} value={link.url} maxLength={2000} autoCapitalize="none" autoCorrect={false} keyboardType="url" placeholder="https://" onChangeText={(url) => setDraftLinks((current) => current.map((item, i) => i === index ? { ...item, url } : item))} /><Pressable accessibilityRole="button" accessibilityLabel={tr(language, `Remove link ${index + 1}`, `移除链接 ${index + 1}`, `移除連結 ${index + 1}`)} onPress={() => setDraftLinks((current) => current.filter((_, i) => i !== index))}><Text style={styles.faqActionText}>{tr(language, "Remove link", "移除链接", "移除連結")}</Text></Pressable></View>)}{draftLinks.length < 3 && <Pressable accessibilityRole="button" style={styles.momentAction} onPress={() => setDraftLinks((current) => [...current, { label: "", url: "" }])}><Ionicons name="link-outline" size={19} color={palette.blue} /><Text style={styles.faqActionText}>{tr(language, "Add another link", "添加链接", "新增連結")}</Text></Pressable>}{formError ? <Text style={{ color: palette.coral, fontSize: 12, marginBottom: 10 }}>{formError}</Text> : null}<Pressable accessibilityRole="button" disabled={coverPicking} style={[styles.primaryButton, coverPicking && { opacity: 0.5 }]} onPress={publishPost}><Text style={styles.primaryButtonText}>{editingPostId ? tr(language, "Save changes", "保存修改", "儲存修改") : tr(language, "Publish question", "发布问题", "發佈問題")}</Text></Pressable></ScrollView></Sheet>
+    <Sheet visible={composeOpen} title={editingPostId ? tr(language, "Edit post", "编辑帖子", "編輯帖子") : tr(language, "Ask the community", "向社区提问", "向社區提問")} onClose={() => { setComposeOpen(false); setFormError(""); if (editingPostId) setMyPostsOpen(true); setEditingPostId(null); }}><ScrollView contentContainerStyle={styles.modalBody} showsVerticalScrollIndicator={false}><PostInteractionOptions comments={commentsEnabled} reposts={repostsEnabled} onComments={setCommentsEnabled} onReposts={setRepostsEnabled} /><Text style={styles.faqCardSummary}>{tr(language, "Share your question and what you have already tried. Topics are optional. Do not post passwords, account numbers or your full address.", "分享你的问题和已尝试的方法。话题为选填。请勿发布密码、账户号码或完整住址。", "分享你的問題和已嘗試的方法。話題為選填。請勿發佈密碼、帳戶號碼或完整住址。")}</Text><Text style={styles.formSectionTitle}>{tr(language, "Recommended topics (optional)", "推荐话题（选填）", "推薦話題（選填）")}</Text><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.faqChipRow}>{(["arrival", "money", "travel", "post", "daily"] as ForumCategory[]).map((item) => <Pressable key={item} accessibilityRole="button" accessibilityState={{ selected: draftCategory === item }} style={[styles.faqTopicChip, draftCategory === item && styles.faqTopicChipActive]} onPress={() => setDraftCategory((current) => current === item ? undefined : item)}><Text style={[styles.faqTopicText, draftCategory === item && styles.faqTopicTextActive]}>{forumCategoryLabel(language, item)}</Text></Pressable>)}</ScrollView><Text style={styles.formSectionTitle}>{tr(language, "Forum title", "帖子标题", "帖子標題")}</Text><TextInput style={styles.faqInput} value={draftTitle} onChangeText={setDraftTitle} maxLength={120} placeholder={tr(language, "What would you like to know?", "你想了解什么？", "你想了解甚麼？")} placeholderTextColor="#8B98AD" /><Text style={styles.formSectionTitle}>{tr(language, "Photo cover (optional)", "照片封面（选填）", "相片封面（選填）")}</Text><Text style={styles.faqCardSummary}>{tr(language, "Up to 9 photos. The first photo is your cover. Swipe to browse.", "最多9张照片，第一张作为封面，可左右滑动浏览。", "最多9張相片，第一張作為封面，可左右滑動瀏覽。")}</Text><View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>{draftPhotos.map((uri, index) => <View key={index} style={{ width: "30%" }}><Image source={{ uri }} style={{ width: "100%", aspectRatio: 1, borderRadius: 8 }} /><Pressable accessibilityRole="button" accessibilityLabel={tr(language, `Remove photo ${index + 1}`, `移除照片 ${index + 1}`, `移除相片 ${index + 1}`)} onPress={() => setDraftPhotos((current) => current.filter((_, i) => i !== index))} style={styles.momentAction}><Ionicons name="close-circle-outline" size={20} color={palette.blue} /><Text style={styles.faqMeta}>{index === 0 ? tr(language, "Cover", "封面", "封面") : index + 1}</Text></Pressable></View>)}</View><Pressable accessibilityRole="button" disabled={coverPicking || draftPhotos.length >= 9} style={[styles.momentAction, draftPhotos.length >= 9 && { opacity: 0.5 }]} onPress={pickForumCover}><Ionicons name="images-outline" size={22} color={palette.blue} /><Text style={styles.faqActionText}>{coverPicking ? tr(language, "Opening photos…", "正在打开照片…", "正在開啟相片…") : tr(language, `Add photos (${draftPhotos.length}/9)`, `添加照片（${draftPhotos.length}/9）`, `新增相片（${draftPhotos.length}/9）`)}</Text></Pressable><Text style={styles.formSectionTitle}>{tr(language, "Details", "详细情况", "詳細情況")}</Text><MentionInput language={language} accessibilityLabel={tr(language, "Question details", "问题详情", "問題詳情")} style={[styles.faqInput, styles.faqBodyInput]} multiline value={draftBody} onChangeText={setDraftBody} maxLength={2000} placeholder={tr(language, "Add context so other students can help…", "补充背景，方便其他同学帮助你…", "補充背景，方便其他同學幫助你…")} placeholderTextColor="#8B98AD" /><Text style={styles.formSectionTitle}>{tr(language, "Hashtags (optional)", "话题标签（选填）", "話題標籤（選填）")}</Text><TextInput accessibilityLabel={tr(language, "Hashtags", "话题标签", "話題標籤")} style={styles.faqInput} value={draftTags} onChangeText={setDraftTags} maxLength={200} autoCapitalize="none" placeholder={tr(language, "#UKLife #StudentBanking", "#英国生活 #学生银行", "#英國生活 #學生銀行")} placeholderTextColor="#8B98AD" /><Text style={[styles.faqCardSummary, { marginBottom: 12 }]}>{tr(language, "Add #hashtags here or in your question. Tap a tag on any post to find related discussions.", "可在这里或问题中添加 #话题。点击帖子标签即可查找相关讨论。", "可在這裡或問題中新增 #話題。點按帖子標籤即可尋找相關討論。")}</Text><Text style={styles.formSectionTitle}>{tr(language, "Useful links (optional)", "实用链接（选填）", "實用連結（選填）")}</Text><Text style={styles.faqCardSummary}>{tr(language, "Link directly to a helpful page, such as TfL. Use a full https:// URL. Links are shared by you, not endorsed by UniMate.", "可添加TfL等实用网页，请输入完整的 https:// 网址。链接由你分享，不代表优你伴认可。", "可新增TfL等實用網頁，請輸入完整的 https:// 網址。連結由你分享，不代表優你伴認可。")}</Text>{draftLinks.map((link, index) => <View key={index} style={{ marginTop: 10, gap: 6 }}><TextInput accessibilityLabel={tr(language, `Link title ${index + 1}`, `链接标题 ${index + 1}`, `連結標題 ${index + 1}`)} style={styles.faqInput} value={link.label} maxLength={100} placeholder={tr(language, "e.g. TfL Oyster information", "例如：TfL 牡蛎卡指南", "例如：TfL Oyster 卡指南")} onChangeText={(label) => setDraftLinks((current) => current.map((item, i) => i === index ? { ...item, label } : item))} /><TextInput accessibilityLabel={tr(language, `Website URL ${index + 1}`, `网址 ${index + 1}`, `網址 ${index + 1}`)} style={styles.faqInput} value={link.url} maxLength={2000} autoCapitalize="none" autoCorrect={false} keyboardType="url" placeholder="https://" onChangeText={(url) => setDraftLinks((current) => current.map((item, i) => i === index ? { ...item, url } : item))} /><Pressable accessibilityRole="button" accessibilityLabel={tr(language, `Remove link ${index + 1}`, `移除链接 ${index + 1}`, `移除連結 ${index + 1}`)} onPress={() => setDraftLinks((current) => current.filter((_, i) => i !== index))}><Text style={styles.faqActionText}>{tr(language, "Remove link", "移除链接", "移除連結")}</Text></Pressable></View>)}{draftLinks.length < 3 && <Pressable accessibilityRole="button" style={styles.momentAction} onPress={() => setDraftLinks((current) => [...current, { label: "", url: "" }])}><Ionicons name="link-outline" size={19} color={palette.blue} /><Text style={styles.faqActionText}>{tr(language, "Add another link", "添加链接", "新增連結")}</Text></Pressable>}{formError ? <Text style={{ color: palette.coral, fontSize: 12, marginBottom: 10 }}>{formError}</Text> : null}<Pressable accessibilityRole="button" disabled={coverPicking} style={[styles.primaryButton, coverPicking && { opacity: 0.5 }]} onPress={publishPost}><Text style={styles.primaryButtonText}>{editingPostId ? tr(language, "Save changes", "保存修改", "儲存修改") : tr(language, "Publish question", "发布问题", "發佈問題")}</Text></Pressable></ScrollView></Sheet>
   </forumTranslationContext.Provider>;
 }
 
@@ -9788,7 +9865,9 @@ function SellItemForm({
       : fair === "caution"
         ? tr(language, "Slightly overpriced", "价格略高", "價格略高")
         : tr(language, "Overpriced", "价格过高", "價格過高");
-  const payout = selling * 0.85;
+  const itemPricePence = Math.round(selling * 100);
+  const split = marketplaceSplit(Number.isSafeInteger(itemPricePence) && itemPricePence >= 0 && itemPricePence <= 10000000 ? itemPricePence : 0);
+  const payout = split.sellerPence / 100;
   const scalePosition = Math.max(
     4,
     Math.min(
@@ -10204,13 +10283,13 @@ function SellItemForm({
               <Text style={styles.payoutLabel}>
                 {tr(
                   language,
-                  "UNIMATE commission (15%)",
-                  "UNIMATE佣金（15%）",
-                  "UNIMATE佣金（15%）",
+                  "UNIMATE commission (12%)",
+                  "UNIMATE佣金（12%）",
+                  "UNIMATE佣金（12%）",
                 )}
               </Text>
               <Text style={styles.payoutFee}>
-                −£{(selling * 0.15).toFixed(2)}
+                −£{(split.commissionPence / 100).toFixed(2)}
               </Text>
             </View>
             <View style={styles.payoutTotal}>
@@ -11186,6 +11265,7 @@ function SupportRequestFlow({
 }
 
 function BookingsPage({
+  initialView = "bookings",
   language,
   onOpenMessages,
   onOpenEvent,
@@ -11213,9 +11293,10 @@ function BookingsPage({
   staffTips: StaffTip[];
   onAddStaffTip: (tip: StaffTip) => void;
   reviewerName: string;
+  initialView?: "bookings" | "purchases";
 }) {
   const [filter, setFilter] = useState<"all" | "upcoming" | "completed">("all");
-  const [view, setView] = useState<"bookings" | "purchases">("bookings");
+  const [view, setView] = useState<"bookings" | "purchases">(initialView);
   const [supportBooking, setSupportBooking] =
     useState<BookingSupportItem | null>(null);
   const [supportFlow, setSupportFlow] = useState<
@@ -11571,7 +11652,7 @@ function BookingsPage({
         <Text style={styles.authFieldLabel}>{tr(language, "What happened?", "发生了什么？", "發生了甚麼事？")}</Text><TextInput style={[styles.authInput, { minHeight: 96 }]} multiline value={caseDetails} onChangeText={setCaseDetails} placeholder={tr(language, "Add the details UniMate needs to review", "填写优你伴审核所需详情", "填寫優你伴審核所需詳情")} />
         <Pressable accessibilityRole="button" disabled={!caseJob || !caseReason || !caseDetails.trim()} style={[styles.primaryButton, (!caseReason || !caseDetails.trim()) && { opacity: 0.45 }]} onPress={() => { if (!caseJob || !caseReason || !caseDetails.trim()) return; const id = caseJob.booking.id; onOpenServiceChatCase(caseJob, caseReason, "customer", caseDetails); setCaseJob(null); onOpenMessages(`case-${id}`); }}><Text style={styles.primaryButtonText}>{tr(language, "Open supported conversation", "开启支持对话", "開啟支援對話")}</Text></Pressable>
       </ScrollView></Sheet>
-      <Sheet visible={detailBooking !== null} title={tr(language, "Booking details", "预订详情", "預訂詳情")} onClose={() => setDetailBooking(null)}>{detailBooking && <ScrollView contentContainerStyle={styles.bookingDetailSheet} showsVerticalScrollIndicator={false}><View style={styles.bookingDetailHero}><View style={[styles.bookingDetailHeroIcon, { backgroundColor: detailBooking.color + "18" }]}><Ionicons name={detailBooking.icon as any} size={28} color={detailBooking.color} /></View><View style={{ flex: 1 }}><Text style={styles.bookingDetailType}>{detailBooking.type}</Text><Text style={styles.bookingDetailTitle}>{detailBooking.title}</Text><Text style={styles.bookingDetailStatus}>{detailBooking.statusLabel}</Text></View><Text style={styles.bookingDetailPrice}>{detailBooking.price}</Text></View><View style={styles.bookingDetailFacts}><View style={styles.bookingDetailFact}><Ionicons name="calendar-outline" size={18} color={palette.blue} /><View><Text style={styles.detailLabel}>{tr(language, "Schedule", "日期与时间", "日期及時間")}</Text><Text style={styles.detailValue}>{detailBooking.detail}</Text></View></View>{detailBooking.id === "airport" && <><View style={styles.bookingDetailFact}><Ionicons name="airplane-outline" size={18} color={palette.green} /><View><Text style={styles.detailLabel}>{tr(language, "Flight", "航班", "航班")}</Text><Text style={styles.detailValue}>BA 2836 · Terminal 2</Text></View></View><View style={styles.bookingDetailFact}><Ionicons name="location-outline" size={18} color={palette.coral} /><View><Text style={styles.detailLabel}>{tr(language, "Destination", "目的地", "目的地")}</Text><Text style={styles.detailValue}>UCL, Bloomsbury, London</Text></View></View></>}{detailBooking.id === "clean" && <><View style={styles.bookingDetailFact}><Ionicons name="home-outline" size={18} color="#F28A18" /><View><Text style={styles.detailLabel}>{tr(language, "Property", "房屋", "房屋")}</Text><Text style={styles.detailValue}>{tr(language, "1-bedroom student flat · End-of-tenancy clean", "一居室学生公寓 · 退租清洁", "一房學生公寓 · 退租清潔")}</Text></View></View><View style={styles.bookingDetailFact}><Ionicons name="person-circle-outline" size={18} color={palette.green} /><View><Text style={styles.detailLabel}>{tr(language, "Assigned professional", "已安排人员", "已安排人員")}</Text><Text style={styles.detailValue}>Maya Patel · UNIMATE approved</Text></View></View></>}{detailBooking.id === "move" && <><View style={styles.bookingDetailFact}><Ionicons name="navigate-outline" size={18} color="#00A1A7" /><View><Text style={styles.detailLabel}>{tr(language, "Route", "搬运路线", "搬運路線")}</Text><Text style={styles.detailValue}>Bloomsbury → Canary Wharf</Text></View></View><View style={styles.bookingDetailFact}><Ionicons name="cube-outline" size={18} color={palette.blue} /><View><Text style={styles.detailLabel}>{tr(language, "Inventory", "物品清单", "物品清單")}</Text><Text style={styles.detailValue}>{tr(language, "4 boxes · 1 suitcase · 1 mover", "4个箱子 · 1个行李箱 · 1名搬运人员", "4個箱 · 1個行李箱 · 1名搬運人員")}</Text></View></View></>}{detailBooking.id === "market" && <><View style={styles.bookingDetailFact}><Ionicons name="receipt-outline" size={18} color="#713CE0" /><View><Text style={styles.detailLabel}>{tr(language, "Order reference", "订单编号", "訂單編號")}</Text><Text style={styles.detailValue}>UM-1048</Text></View></View><View style={styles.bookingDetailFact}><Ionicons name="checkmark-circle-outline" size={18} color={palette.green} /><View><Text style={styles.detailLabel}>{tr(language, "Handover", "交付", "交收")}</Text><Text style={styles.detailValue}>{tr(language, "Collected from the seller", "已从卖家处取货", "已從賣家處取貨")}</Text></View></View></>}</View><View style={styles.bookingReferenceCard}><Ionicons name="shield-checkmark" size={20} color={palette.green} /><Text style={styles.bookingReferenceText}>{tr(language, "This booking is protected by UNIMATE support. Your reference is included automatically if you need help.", "此预订受UNIMATE客服保障。如需帮助，系统会自动附上预订编号。", "此預訂受UNIMATE客服保障。如需協助，系統會自動附上預訂編號。")}</Text></View><Pressable style={styles.primaryButton} onPress={() => { const selected = detailBooking; setDetailBooking(null); setSupportBooking(selected); }}><Text style={styles.primaryButtonText}>{tr(language, "Get help with this booking", "获取此预订的帮助", "取得此預訂的協助")}</Text></Pressable></ScrollView>}</Sheet>
+      <Sheet visible={detailBooking !== null} title={tr(language, "Booking details", "预订详情", "預訂詳情")} onClose={() => setDetailBooking(null)}>{detailBooking && <ScrollView contentContainerStyle={styles.bookingDetailSheet} showsVerticalScrollIndicator={false}><View style={styles.bookingDetailHero}><View style={[styles.bookingDetailHeroIcon, { backgroundColor: detailBooking.color + "18" }]}><Ionicons name={detailBooking.icon as any} size={28} color={detailBooking.color} /></View><View style={{ flex: 1 }}><Text style={styles.bookingDetailType}>{detailBooking.type}</Text><Text style={styles.bookingDetailTitle}>{detailBooking.title}</Text><Text style={styles.bookingDetailStatus}>{detailBooking.statusLabel}</Text></View><Text style={styles.bookingDetailPrice}>{detailBooking.price}</Text></View><View style={styles.bookingDetailFacts}><View style={styles.bookingDetailFact}><Ionicons name="calendar-outline" size={18} color={palette.blue} /><View><Text style={styles.detailLabel}>{tr(language, "Schedule", "日期与时间", "日期及時間")}</Text><Text style={styles.detailValue}>{detailBooking.detail}</Text></View></View>{detailBooking.id === "airport" && <><View style={styles.bookingDetailFact}><Ionicons name="airplane-outline" size={18} color={palette.green} /><View><Text style={styles.detailLabel}>{tr(language, "Flight", "航班", "航班")}</Text><Text style={styles.detailValue}>BA 2836 · Terminal 2</Text></View></View><View style={styles.bookingDetailFact}><Ionicons name="location-outline" size={18} color={palette.coral} /><View><Text style={styles.detailLabel}>{tr(language, "Destination", "目的地", "目的地")}</Text><Text style={styles.detailValue}>UCL, Bloomsbury, London</Text></View></View></>}{detailBooking.id === "clean" && <><View style={styles.bookingDetailFact}><Ionicons name="home-outline" size={18} color="#F28A18" /><View><Text style={styles.detailLabel}>{tr(language, "Property", "房屋", "房屋")}</Text><Text style={styles.detailValue}>{tr(language, "1-bedroom student flat · End-of-tenancy clean", "一居室学生公寓 · 退租清洁", "一房學生公寓 · 退租清潔")}</Text></View></View><View style={styles.bookingDetailFact}><Ionicons name="person-circle-outline" size={18} color={palette.green} /><View><Text style={styles.detailLabel}>{tr(language, "Assigned professional", "已安排人员", "已安排人員")}</Text><Text style={styles.detailValue}>{tr(language, "Maya Patel · UNIMATE approved", "Maya Patel · UNIMATE 已认证", "Maya Patel · UNIMATE 已認證")}</Text></View></View></>}{detailBooking.id === "move" && <><View style={styles.bookingDetailFact}><Ionicons name="navigate-outline" size={18} color="#00A1A7" /><View><Text style={styles.detailLabel}>{tr(language, "Route", "搬运路线", "搬運路線")}</Text><Text style={styles.detailValue}>Bloomsbury → Canary Wharf</Text></View></View><View style={styles.bookingDetailFact}><Ionicons name="cube-outline" size={18} color={palette.blue} /><View><Text style={styles.detailLabel}>{tr(language, "Inventory", "物品清单", "物品清單")}</Text><Text style={styles.detailValue}>{tr(language, "4 boxes · 1 suitcase · 1 mover", "4个箱子 · 1个行李箱 · 1名搬运人员", "4個箱 · 1個行李箱 · 1名搬運人員")}</Text></View></View></>}{detailBooking.id === "market" && <><View style={styles.bookingDetailFact}><Ionicons name="receipt-outline" size={18} color="#713CE0" /><View><Text style={styles.detailLabel}>{tr(language, "Order reference", "订单编号", "訂單編號")}</Text><Text style={styles.detailValue}>UM-1048</Text></View></View><View style={styles.bookingDetailFact}><Ionicons name="checkmark-circle-outline" size={18} color={palette.green} /><View><Text style={styles.detailLabel}>{tr(language, "Handover", "交付", "交收")}</Text><Text style={styles.detailValue}>{tr(language, "Collected from the seller", "已从卖家处取货", "已從賣家處取貨")}</Text></View></View></>}</View><View style={styles.bookingReferenceCard}><Ionicons name="shield-checkmark" size={20} color={palette.green} /><Text style={styles.bookingReferenceText}>{tr(language, "This booking is protected by UNIMATE support. Your reference is included automatically if you need help.", "此预订受UNIMATE客服保障。如需帮助，系统会自动附上预订编号。", "此預訂受UNIMATE客服保障。如需協助，系統會自動附上預訂編號。")}</Text></View><Pressable style={styles.primaryButton} onPress={() => { const selected = detailBooking; setDetailBooking(null); setSupportBooking(selected); }}><Text style={styles.primaryButtonText}>{tr(language, "Get help with this booking", "获取此预订的帮助", "取得此預訂的協助")}</Text></Pressable></ScrollView>}</Sheet>
       <Sheet
         visible={supportBooking !== null}
         title={
@@ -12243,7 +12324,7 @@ function MessagesPage({
         </View>
         <Pressable style={styles.groupMemberRow} onPress={() => { setMembersOpen(false); setSelected("host"); setMessageDraft(""); }}>
           <View style={[styles.avatar, styles.groupMemberAvatar, { backgroundColor: "#DCEBFF" }]}><Text style={styles.avatarText}>U</Text></View>
-          <View style={{ flex: 1 }}><View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}><Text style={styles.friendName}>UniMate Events</Text><VerificationBadge kind="organisation" language={language} /></View><Text style={styles.friendUni}>{tr(language, "Event host", "活动主办方", "活動主辦方")}</Text><Text style={styles.friendInterests}>{tr(language, "Message privately about this event", "私信咨询此活动", "私訊查詢此活動")}</Text></View>
+          <View style={{ flex: 1 }}><View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}><Text style={styles.friendName}>{tr(language, "UniMate Events", "UniMate 活动", "UniMate 活動")}</Text><VerificationBadge kind="organisation" language={language} /></View><Text style={styles.friendUni}>{tr(language, "Event host", "活动主办方", "活動主辦方")}</Text><Text style={styles.friendInterests}>{tr(language, "Message privately about this event", "私信咨询此活动", "私訊查詢此活動")}</Text></View>
           <Ionicons name="chatbubble-ellipses-outline" size={21} color={palette.blue} />
         </Pressable>
         {groupMembers.map((member) => (
@@ -12341,7 +12422,7 @@ function MessagesPage({
           </View>
           {active.id === "group" && <Pressable accessibilityRole="button" style={styles.groupHostCard} onPress={() => { setSelected("host"); setMessageDraft(""); }}>
             <View style={styles.groupHostAvatar}><Text style={styles.groupHostInitial}>U</Text></View>
-            <View style={{ flex: 1 }}><Text style={styles.groupHostEyebrow}>{tr(language, "EVENT HOST", "活动主办方", "活動主辦方")}</Text><View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}><Text style={styles.groupHostName}>UniMate Events</Text><VerificationBadge kind="organisation" language={language} /></View><Text style={styles.groupHostHint}>{tr(language, "Contact privately about event details", "私信咨询活动详情", "私訊查詢活動詳情")}</Text></View>
+            <View style={{ flex: 1 }}><Text style={styles.groupHostEyebrow}>{tr(language, "EVENT HOST", "活动主办方", "活動主辦方")}</Text><View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}><Text style={styles.groupHostName}>{tr(language, "UniMate Events", "UniMate 活动", "UniMate 活動")}</Text><VerificationBadge kind="organisation" language={language} /></View><Text style={styles.groupHostHint}>{tr(language, "Contact privately about event details", "私信咨询活动详情", "私訊查詢活動詳情")}</Text></View>
             <View style={styles.groupHostMessage}><Ionicons name="chatbubble-ellipses-outline" size={19} color={palette.blue} /></View>
           </Pressable>}
           <View style={styles.chatSafety}>
@@ -12789,7 +12870,7 @@ function MessagesPage({
               </>
             )}
             {directServiceBookingId && statusUpdates.filter((update) => update.bookingId === directServiceBookingId).map((update, index) => <View key={`job-status-${index}`} style={{ flexDirection: "row", alignItems: "flex-end", gap: 7 }}><ChatPersonAvatar name={active.title} photo={activeStaffPhoto} /><View style={styles.incomingBubble}><Text style={styles.incomingText}>{update.text}</Text></View></View>)}
-            {sharedMomentMessages.filter((message) => (message.username === "@londonlatte" ? "friend" : message.username) === active.id).map((message) => { const moment = sharedMoments.find((item) => item.id === message.momentId && item.publicPost && item.audience !== "private" && item.audience !== "friends"); return <View key={message.id} style={{ alignItems: "flex-end" }}><Pressable accessibilityRole="button" accessibilityLabel={tr(language, "Open shared moment", "查看分享的动态", "查看分享的動態")} disabled={!moment} onPress={() => moment && onOpenSharedMoment?.(moment.id)} style={{ width: 240, padding: 12, borderRadius: 12, backgroundColor: "#EAF4FF", gap: 8 }}>{moment ? <>{!!moment.photos[0] && <Image source={{ uri: moment.photos[0] }} style={{ width: "100%", height: 120, borderRadius: 8 }} />}<Text style={styles.faqCardAuthor}>{moment.author}</Text><Text numberOfLines={3} style={styles.faqCardSummary}>{tr(language, ...moment.caption)}</Text><Text style={styles.faqActionText}>{tr(language, "Shared moment", "分享的动态", "分享的動態")}</Text></> : <Text style={styles.faqMeta}>{tr(language, "This moment is no longer available.", "该动态已不可用。", "此動態已無法查看。")}</Text>}</Pressable></View>; })}
+            {sharedMomentMessages.filter((message) => (message.username === "@londonlatte" ? "friend" : message.username) === active.id).map((message) => { const moment = sharedMoments.find((item) => !item.archived && item.id === message.momentId && item.publicPost && item.audience !== "private" && item.audience !== "friends"); return <View key={message.id} style={{ alignItems: "flex-end" }}><Pressable accessibilityRole="button" accessibilityLabel={tr(language, "Open shared post", "查看分享的帖子", "查看分享的帖子")} disabled={!moment} onPress={() => moment && onOpenSharedMoment?.(moment.id)} style={{ width: 240, padding: 12, borderRadius: 12, backgroundColor: "#EAF4FF", gap: 8 }}>{moment ? <>{moment.videoUris?.includes(moment.photos[0]) && <Ionicons name="play-circle" size={40} color={palette.blue} />}{!!moment.photos[0] && !moment.videoUris?.includes(moment.photos[0]) && <Image source={{ uri: moment.photos[0] }} style={{ width: "100%", height: 120, borderRadius: 8 }} />}<Text style={styles.faqCardAuthor}>{moment.author}</Text><Text numberOfLines={3} style={styles.faqCardSummary}>{tr(language, ...moment.caption)}</Text><Text style={styles.faqActionText}>{message.momentId.startsWith("event:") ? tr(language, "Shared event · View event", "分享的活动 · 查看活动", "分享的活動 · 查看活動") : message.momentId.startsWith("forum:") ? tr(language, "Shared forum post", "分享的论坛帖子", "分享的論壇帖子") : tr(language, "Shared moment", "分享的动态", "分享的動態")}</Text></> : <Text style={styles.faqMeta}>{tr(language, "This post is no longer available.", "该动态已不可用。", "此動態已無法查看。")}</Text>}</Pressable></View>; })}
             {sentMessages.filter((message) => message.threadId === active.id).map((message, index) => (
               <View key={`sent-${index}`} style={styles.sentMessageGroup}>
                 {message.attachments.length > 0 && (
@@ -13188,7 +13269,75 @@ function LocationPicker({
   );
 }
 
+function PostActivitySettings({ placement, onBlocked, blockedCount, language, name, moments, posts, comments, likedIds, onMoments, onPosts, onOpen, canInteract }: {
+  onBlocked: () => void; blockedCount: number;
+  placement: "profile" | "settings";
+  language: Language; name: string; moments: StudentMoment[]; posts: ForumPost[];
+  comments: Record<string, ForumComment[]>; likedIds: string[]; canInteract: boolean;
+  onMoments: React.Dispatch<React.SetStateAction<StudentMoment[]>>;
+  onPosts: React.Dispatch<React.SetStateAction<ForumPost[]>>;
+  onOpen: (kind: "moments" | "forum", id: string) => void;
+}) {
+  const [panel, setPanel] = useState<"Saved" | "Archive" | "Your activity" | null>(null);
+  const [filter, setFilter] = useState<string | null>(null);
+  const [oldestFirst, setOldestFirst] = useState(false);
+  const [kind, setKind] = useState<"moments" | "forum">("moments");
+  const savedMoments = useSavedPosts("moments", name);
+  const savedForum = useSavedPosts("forum", name);
+  const ownForum = (post: ForumPost) => post.isOwn === true || (post.author === name && !initialForumPosts.some(sample => sample.id === post.id));
+  const rows = kind === "moments" ? moments.map(post => ({ id: post.id, title: tr(language, ...post.caption) || "Photo / video post", author: post.author, own: post.username === "self", archived: !!post.archived, liked: !!post.liked, commented: post.comments.some(comment => comment.author === name), reposted: post.username === "self" && !!post.repostOf, saved: savedMoments.ids.includes(post.id), date: post.createdAt })) : [...posts.map(post => ({ id: post.id, title: post.title, author: post.author, own: ownForum(post), archived: !!post.archived, liked: likedIds.includes(post.id), commented: (comments[post.id] || []).some(comment => comment.author === name), reposted: !!post.repostOf && ownForum(post), saved: savedForum.ids.includes(post.id), date: Date.parse(post.createdAt) })), ...forumGuides.map(guide => ({ id: guide.id, title: tr(language, ...guide.title), author: "UniMate team", own: false, archived: false, liked: likedIds.includes(guide.id), commented: (comments[guide.id] || []).some(comment => comment.author === name), reposted: false, saved: savedForum.ids.includes(guide.id), date: 0 }))];
+  const visible = rows.filter(row => filter === "Archived" ? row.own && row.archived : !row.archived && (panel === "Saved" || filter === "Saved" && panel === "Your activity" ? row.saved : filter === "Liked" ? row.liked : filter === "Commented" ? row.commented : filter === "Reposted" ? row.reposted : row.own)).sort((a, b) => b.date - a.date);
+  const archive = (id: string, archived: boolean) => {
+    if (!canInteract) return;
+    if (kind === "moments") onMoments(current => current.map(post => post.id === id && post.username === "self" ? { ...post, archived } : post));
+    else onPosts(current => current.map(post => post.id === id && ownForum(post) ? { ...post, archived } : post));
+  };
+  return <>
+    {placement === "profile" && <Pressable accessibilityRole="button" onPress={() => { setPanel("Your activity"); setFilter(null); }} style={styles.menuItem}><Ionicons name="pulse-outline" size={22} color={palette.blue} /><Text style={styles.menuText}>Your activity</Text><Ionicons name="chevron-forward" size={18} color={palette.muted} /></Pressable>}
+    <Sheet visible={!!panel} title={filter === "Liked" ? "Likes" : filter === "Commented" ? "Comments" : filter === "Reposted" ? "Reposts" : filter || "Your activity"} onClose={() => filter ? setFilter(null) : setPanel(null)}><ScrollView contentContainerStyle={styles.modalBody}>
+      {!filter ? <>
+        <Text style={{ fontSize: 25, lineHeight: 33, fontWeight: "800", color: palette.navy, textAlign: "center", marginTop: 12, marginBottom: 14 }}>One place to manage your activity</Text>
+        <Text style={[styles.faqCardSummary, { textAlign: "center", marginBottom: 28 }]}>View and manage your interactions, posts and account activity.</Text>
+        {[
+          { title: "Interactions", items: [["Liked", "Likes", "heart-outline"], ["Commented", "Comments", "chatbubble-outline"], ["Reposted", "Reposts", "repeat-outline"], ["Saved", "Saved", "bookmark-outline"]] },
+          { title: "Your content", items: [["Your posts", "Your posts", "grid-outline"], ["Archived", "Archived", "archive-outline"]] },
+        ].map(group => <View key={group.title} style={{ marginBottom: 22 }}><Text style={styles.settingsSectionLabel}>{group.title}</Text>{group.items.map(([value, label, icon]) => <Pressable key={value} accessibilityRole="button" accessibilityLabel={label} style={[styles.menuItem, { minHeight: 62 }]} onPress={() => { setFilter(value); setKind("moments"); setOldestFirst(false); }}><Ionicons name={icon as any} size={26} color={palette.navy} /><Text style={[styles.menuText, { fontSize: 16, fontWeight: "600" }]}>{label}</Text><Ionicons name="chevron-forward" size={19} color={palette.muted} /></Pressable>)}</View>)}
+        <Text style={styles.settingsSectionLabel}>Account connections</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel="Blocked accounts" onPress={() => { setPanel(null); onBlocked(); }} style={[styles.menuItem, { minHeight: 62 }]}><Ionicons name="ban-outline" size={26} color={palette.navy} /><Text style={[styles.menuText, { fontSize: 16 }]}>Blocked accounts ({blockedCount})</Text><Ionicons name="chevron-forward" size={19} color={palette.muted} /></Pressable>
+      </> : <>
+        <Pressable accessibilityRole="button" accessibilityLabel="Back to Your activity" onPress={() => setFilter(null)} style={{ flexDirection: "row", gap: 6, alignItems: "center", minHeight: 44 }}><Ionicons name="chevron-back" size={20} color={palette.blue} /><Text style={styles.faqActionText}>Your activity</Text></Pressable>
+        {filter === "Archived" && <Text style={styles.faqCardSummary}>Only you can see archived posts. Restore them to their previous audience.</Text>}
+        <View style={{ flexDirection: "row", gap: 12, borderBottomWidth: 1, borderColor: palette.line, marginBottom: 14 }}>{(["moments", "forum"] as const).map(value => <Pressable key={value} accessibilityRole="tab" accessibilityState={{ selected: kind === value }} onPress={() => setKind(value)} style={{ flex: 1, minHeight: 48, alignItems: "center", justifyContent: "center", borderBottomWidth: 2, borderColor: kind === value ? palette.blue : "transparent" }}><Text style={[styles.faqActionText, { color: kind === value ? palette.blue : palette.muted }]}>{value === "moments" ? "Moments" : "Forum"}</Text></Pressable>)}</View>
+        <Pressable accessibilityRole="button" onPress={() => setOldestFirst(value => !value)} style={{ alignSelf: "flex-start", flexDirection: "row", gap: 8, padding: 10, borderRadius: 8, backgroundColor: "#F2F6FB", marginBottom: 18 }}><Text style={styles.faqCardSummary}>{oldestFirst ? "Oldest posts first" : "Newest posts first"}</Text><Ionicons name="swap-vertical" size={17} color={palette.muted} /></Pressable>
+        {!visible.length && <View style={{ alignItems: "center", paddingVertical: 50, gap: 12 }}><Ionicons name={filter === "Commented" ? "chatbubble-outline" : "images-outline"} size={38} color={palette.muted} /><Text style={styles.faqCardAuthor}>Nothing here yet</Text><Text style={styles.faqCardSummary}>Your {filter.toLowerCase()} {kind === "forum" ? "forum posts" : "moments"} will appear here.</Text></View>}
+        <View style={{ flexDirection: filter === "Commented" ? "column" : "row", flexWrap: "wrap", gap: 3 }}>
+        {(oldestFirst ? [...visible].reverse() : visible).map(row => {
+          const moment = kind === "moments" ? moments.find(post => post.id === row.id) : undefined;
+          const forum = kind === "forum" ? posts.find(post => post.id === row.id) : undefined;
+          const uri = moment?.photos[0] || forum?.coverPhoto || forum?.photos?.[0];
+          const video = !!uri && !!moment?.videoUris?.includes(uri);
+          const myComments = moment ? moment.comments.filter(comment => comment.author === name).map(comment => tr(language, ...comment.text)) : (comments[row.id] || []).filter(comment => comment.author === name).map(comment => comment.text);
+          return <View key={row.id} style={{ width: filter === "Commented" ? "100%" : "32.7%", marginBottom: filter === "Commented" ? 20 : 10 }}>
+            <Pressable accessibilityRole="button" accessibilityLabel={row.title} disabled={row.archived} onPress={() => { setPanel(null); onOpen(kind, row.id); }} style={filter === "Commented" ? { flexDirection: "row", gap: 10 } : {}}>
+              {filter === "Commented" && <View style={{ flex: 1 }}><Text style={styles.faqCardAuthor}>{row.author}</Text><Text numberOfLines={2} style={styles.faqCardSummary}>{row.title}</Text>{myComments.map((text, index) => <View key={index} style={{ marginTop: 12, paddingLeft: 12, borderLeftWidth: 2, borderColor: palette.line }}><Text style={styles.faqCardAuthor}>{name}</Text><Text style={styles.faqCardSummary}>{text}</Text></View>)}</View>}
+              <View style={filter === "Commented" ? { width: 64, height: 64, backgroundColor: "#EAF4FF", justifyContent: "center", alignItems: "center" } : { aspectRatio: 1, backgroundColor: "#EAF4FF", justifyContent: "center", alignItems: "center", overflow: "hidden" }}>
+                {uri && !video ? <Image source={{ uri }} style={{ width: "100%", height: "100%" }} /> : <><Ionicons name={video ? "play-circle-outline" : "document-text-outline"} size={26} color={palette.blue} />{filter !== "Commented" && <Text numberOfLines={3} style={[styles.faqMeta, { padding: 6, textAlign: "center" }]}>{row.title}</Text>}</>}
+                {!!moment && moment.photos.length > 1 && <View style={{ position: "absolute", top: 5, right: 5, backgroundColor: "#FFFFFF", borderRadius: 4, padding: 2 }}><Ionicons name="copy-outline" size={14} color={palette.blue} /></View>}
+              </View>
+            </Pressable>
+            {row.own && (filter === "Archived" || filter === "Your posts") && <Pressable accessibilityRole="button" disabled={!canInteract} onPress={() => archive(row.id, !row.archived)} style={{ minHeight: 44, justifyContent: "center", alignItems: "center" }}><Text style={styles.faqActionText}>{row.archived ? "Restore post" : "Archive post"}</Text></Pressable>}
+          </View>;
+        })}
+        </View>
+      </>}
+      <Text style={[styles.faqDisclaimer, { marginTop: 24 }]}>Local preview: posts and activity reset on reload. Saved bookmarks stay on this device.</Text>
+    </ScrollView></Sheet>
+  </>;
+}
+
 function Profile({
+  onBookingHistory,
+  activitySettings,
   openUnifiedProfile, coverUri, onCoverChange, renderMoments,
   language,
   onLanguage,
@@ -13216,6 +13365,8 @@ function Profile({
   profilePhoto,
   onProfilePhotoChange,
 }: {
+  activitySettings?: (placement: "profile" | "settings", onBlocked: () => void, blockedCount: number) => React.ReactNode;
+  onBookingHistory: (view: "bookings" | "purchases") => void;
   openUnifiedProfile?: number; coverUri: string; onCoverChange: (uri: string) => void;
   renderMoments: (audience: "owner" | "friend" | "public", name: string) => React.ReactNode;
   language: Language;
@@ -13286,6 +13437,7 @@ function Profile({
   const [studentPayoutError, setStudentPayoutError] = useState("");
   const [studentBillingMethod, setStudentBillingMethod] = useState<"invoice" | "card">("invoice");
   const [blockedOpen, setBlockedOpen] = useState(false);
+  const [passwordChangeOpen, setPasswordChangeOpen] = useState(false);
   const [blockedProfiles, setBlockedProfiles] = useState([friends[2].username]);
   const [activityNotifications, setActivityNotifications] = useState(true);
   const [previewOpen, setPreviewOpen] = useState(!!openUnifiedProfile);
@@ -13371,7 +13523,7 @@ function Profile({
   const usernameTaken =
     ["@londonlatte", "@danplays", "@citylily", "@techhoops"].includes(
       username.trim().toLowerCase(),
-    ) || !/^@[a-z0-9_]{3,20}$/i.test(username.trim());
+    ) || !validUsername(username);
   const usernameChangeDue = lastUsernameChange
     ? new Date(lastUsernameChange.getTime() + 90 * 24 * 60 * 60 * 1000)
     : null;
@@ -13390,6 +13542,7 @@ function Profile({
     setInterestDraft("");
   };
   const saveProfile = () => {
+    if (usernameChanged && (usernameLocked || usernameTaken)) return;
     if (usernameChanged && !usernameLocked) {
       setSavedUsername(username);
       setLastUsernameChange(new Date());
@@ -13403,53 +13556,26 @@ function Profile({
     setStudentPayoutAccount({ holder: studentPayoutHolder.trim(), lastFour: accountNumber.slice(-4) });
     setStudentPayoutSortCode(""); setStudentPayoutAccountNumber(""); setStudentPayoutError("");
   };
-  const menus =
-    language === "EN"
-      ? [
-          "Edit profile",
-          "My events",
-          "My marketplace",
-          "My bookings & purchase history",
-          "Payment methods",
-          "Manage your profile privacy",
-          "Settings",
-        ]
-      : language === "简体"
-        ? [
-            "编辑个人资料",
-            "我的活动",
-            "我的市场",
-            "我的预订与购买记录",
-            "付款方式",
-            "管理个人资料隐私",
-            "设置",
-          ]
-        : [
-            "編輯個人資料",
-            "我的活動",
-            "我的市場",
-            "我的預訂與購買紀錄",
-            "付款方式",
-            "管理個人資料私隱",
-            "設定",
-          ];
-  const menuIcons = [
-    "person-outline",
-    "calendar-outline",
-    "bag-outline",
-    "receipt-outline",
-    "card-outline",
-    "shield-checkmark-outline",
-    "settings-outline",
+  const menus = [
+    tr(language, "Edit profile", "编辑资料", "編輯資料"),
+    tr(language, "Manage profile privacy", "管理资料隐私", "管理資料私隱"),
+    tr(language, "My events", "我的活动", "我的活動"),
+    tr(language, "Marketplace listings", "市场商品", "市場商品"),
+    tr(language, "My bookings", "我的预订", "我的預訂"),
+    tr(language, "My purchase history", "我的购买记录", "我的購買紀錄"),
+    tr(language, "Payment methods", "付款方式", "付款方式"),
+    tr(language, "Settings", "设置", "設定"),
   ];
+  const menuIcons = ["person-outline", "shield-checkmark-outline", "calendar-outline", "bag-outline", "calendar-number-outline", "receipt-outline", "card-outline", "settings-outline"];
   const openProfileMenu = (index: number) => {
     if (index === 0) setEditOpen(true);
-    if (index === 1) onNavigate("events");
-    if (index === 2) { setStudentMarketplaceTab("listings"); setStudentMarketplaceOpen(true); }
-    if (index === 3) onNavigate("bookings");
-    if (index === 4) setPaymentOpen(true);
-    if (index === 5) setPrivacyOpen(true);
-    if (index === 6) setSettingsOpen(true);
+    if (index === 1) setPrivacyOpen(true);
+    if (index === 2) onNavigate("events");
+    if (index === 3) { setStudentMarketplaceTab("listings"); setStudentMarketplaceOpen(true); }
+    if (index === 4) onBookingHistory("bookings");
+    if (index === 5) onBookingHistory("purchases");
+    if (index === 6) setPaymentOpen(true);
+    if (index === 7) setSettingsOpen(true);
   };
   const pickProfilePhoto = async (source?: PhotoSource) => {
     if (!source) {
@@ -13494,21 +13620,23 @@ function Profile({
           </View>
           <Pressable
             style={styles.viewProfileButton}
-            onPress={() => setPreviewOpen(true)}
+            onPress={() => setEditOpen(true)}
           >
-            <Ionicons name="eye-outline" size={17} color={palette.blue} />
+            <Ionicons name="create-outline" size={17} color={palette.blue} />
             <Text style={styles.viewProfileButtonText}>
               {tr(
                 language,
-                "My profile & moments",
-                "我的资料与动态",
-                "我的資料與動態",
+                "Edit profile",
+                "编辑资料",
+                "編輯資料",
               )}
             </Text>
           </Pressable>
         </View>
         <View style={styles.profileMenuCard}>
           {menus.map((item, index) => (
+            <React.Fragment key={item}>
+            {index === 2 && activitySettings?.("profile", () => setBlockedOpen(true), blockedProfiles.length)}
             <Pressable
               key={item}
               style={styles.menuItem}
@@ -13522,6 +13650,7 @@ function Profile({
               <Text style={styles.menuText}>{item}</Text>
               <Ionicons name="chevron-forward" color={palette.muted} />
             </Pressable>
+            </React.Fragment>
           ))}
         </View>
       </ScrollView>
@@ -13541,10 +13670,9 @@ function Profile({
         >
           <View style={{ height: 180, borderRadius: 16, overflow: "hidden", marginBottom: -36 }}>
             <Image source={{ uri: coverUri || "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad?w=900" }} style={StyleSheet.absoluteFill} />
-            {previewAudience === "owner" && <Pressable accessibilityRole="button" accessibilityLabel={tr(language, "Change profile cover", "更换主页封面", "更換主頁封面")} disabled={coverPicking} style={styles.momentCoverButton} onPress={async () => { setCoverPicking(true); setProfilePhotoError(""); try { const photos = await selectPhotoUris(language, "library", { allowsEditing: true, aspect: [16, 9], limit: 1 }); if (photos[0]) onCoverChange(photos[0]); } catch { setProfilePhotoError(tr(language, "Could not change the cover. Please try again.", "封面更新失败，请重试。", "封面更新失敗，請重試。")); } finally { setCoverPicking(false); } }}><Ionicons name="camera" size={20} color="#FFFFFF" /></Pressable>}
           </View>
           <View style={styles.publicProfileHero}>
-            <Pressable accessibilityRole="button" accessibilityLabel={tr(language, "Change profile picture", "更换头像", "更換頭像")} disabled={previewAudience !== "owner"} onPress={() => setEditOpen(true)} style={[styles.publicProfilePhotoWrap, { borderWidth: 3, borderColor: "#FFFFFF", borderRadius: 48, backgroundColor: "#FFFFFF" }]}>
+            <Pressable  accessibilityLabel={tr(language, "Profile picture", "更换头像", "更換頭像")} disabled style={[styles.publicProfilePhotoWrap, { borderWidth: 3, borderColor: "#FFFFFF", borderRadius: 48, backgroundColor: "#FFFFFF" }]}>
             {profilePhoto ? (
               <Image
                 source={{ uri: profilePhoto }}
@@ -13564,7 +13692,7 @@ function Profile({
               <View style={styles.profileAvatarBadge}><VerificationBadge kind={accountRole === "student" && studentVerified ? "student" : "unverified"} language={language} /></View>
             </Pressable>
             <Text style={styles.publicProfileName}>{displayName}</Text>
-            <Text style={styles.friendUsername}>{username}</Text>
+            <Text style={styles.friendUsername}>{displayUsername(username)}</Text>
             <Text style={styles.profileUni}>
               {accountRole === "student" ? studentVerified ? tr(language, "University College London · Verified student", "伦敦大学学院 · 已认证学生", "倫敦大學學院 · 已認證學生") : studentStatus === "pending" ? tr(language, "Student · Verification pending", "学生 · 待审核", "學生 · 待審核") : tr(language, "Student · Verification needed", "学生 · 尚未认证", "學生 · 尚未認證") : accountRole === "staff" ? tr(language, "Staff account · Verification pending", "员工账号 · 待认证", "員工帳戶 · 待認證") : tr(language, "Organisation account · Verification pending", "机构账号 · 待认证", "機構帳戶 · 待認證")}
             </Text>
@@ -13688,6 +13816,7 @@ function Profile({
         onClose={() => setEditOpen(false)}
       >
         <ScrollView contentContainerStyle={styles.modalBody}>
+          <Pressable accessibilityRole="button" accessibilityLabel={tr(language, "Change profile cover", "更换主页封面", "更換主頁封面")} disabled={coverPicking} style={[styles.viewProfileButton, { marginBottom: 16 }]} onPress={async () => { setCoverPicking(true); setProfilePhotoError(""); try { const photos = await selectPhotoUris(language, "library", { allowsEditing: true, aspect: [16, 9], limit: 1 }); if (photos[0]) onCoverChange(photos[0]); } catch { setProfilePhotoError(tr(language, "Could not change the cover. Please try again.", "封面更新失败，请重试。", "封面更新失敗，請重試。")); } finally { setCoverPicking(false); } }}><Ionicons name="image-outline" size={20} color={palette.blue} /><Text style={styles.viewProfileButtonText}>{tr(language, "Change profile banner", "更换主页封面", "更換主頁封面")}</Text></Pressable>
           <View style={styles.editPhotoButton}>
             {profilePhoto ? (
               <Image
@@ -13735,13 +13864,15 @@ function Profile({
               {tr(language, "Username", "用户名", "用戶名稱")}
             </Text>
             <TextInput
-              value={username}
+              value={displayUsername(username)}
               editable={!usernameLocked}
               onChangeText={(value) =>
-                setUsername(value.startsWith("@") ? value : `@${value}`)
+                setUsername(`@${displayUsername(value)}`)
               }
               autoCapitalize="none"
-              placeholder="@username"
+              placeholder="jenney.he"
+              autoCorrect={false}
+              maxLength={30}
               placeholderTextColor="#A1ADBE"
             />
             <View style={styles.usernameStatus}>
@@ -13767,7 +13898,7 @@ function Profile({
                     )
                   : tr(
                       language,
-                      "Username is available",
+                      "Valid username · availability is preview-only",
                       "用户名可用",
                       "用戶名稱可用",
                     )}
@@ -14064,6 +14195,13 @@ function Profile({
           </View>
         </ScrollView>
       </Sheet>
+      <Sheet visible={passwordChangeOpen} title={tr(language, "Change password", "修改密码", "更改密碼")} onClose={() => setPasswordChangeOpen(false)}>
+        <ScrollView contentContainerStyle={styles.modalBody}>
+          <Text accessibilityRole="alert" style={styles.formDesc}>{tr(language, "This is a sample account. Password changes are unavailable until secure account sign-in is connected. Do not enter a real password here.", "这是示例账号。接入安全登录后才能修改密码，请勿在此输入真实密码。", "這是範例帳戶。接入安全登入後才能更改密碼，請勿在此輸入真實密碼。")}</Text>
+          {[tr(language, "Current password", "当前密码", "目前密碼"), tr(language, "New password", "新密码", "新密碼"), tr(language, "Confirm new password", "确认新密码", "確認新密碼")].map(label => <View key={label} style={styles.field}><Text style={styles.fieldLabel}>{label}</Text><TextInput accessibilityLabel={label} editable={false} secureTextEntry placeholder="Unavailable in preview" /></View>)}
+          <Pressable accessibilityRole="button" disabled style={[styles.primaryButton, { opacity: 0.45 }]}><Text style={styles.primaryButtonText}>{tr(language, "Change password", "修改密码", "更改密碼")}</Text></Pressable>
+        </ScrollView>
+      </Sheet>
       <Sheet
         visible={blockedOpen}
         title={tr(language, "Blocked people", "已屏蔽用户", "已封鎖用戶")}
@@ -14138,16 +14276,6 @@ function Profile({
         onClose={() => setSettingsOpen(false)}
       >
         <ScrollView contentContainerStyle={styles.settingsBody}>
-          <Text style={[styles.settingsSectionLabel, styles.settingsFirstSectionLabel]}>{tr(language, "Blocked accounts", "已屏蔽账号", "已封鎖帳號")}</Text>
-          <Pressable style={styles.settingsBlockedLink} onPress={() => { setSettingsOpen(false); setBlockedOpen(true); }}>
-            <View style={styles.settingsBlockedIcon}><Ionicons name="ban-outline" size={23} color={palette.coral} /></View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.settingsRowTitle}>{tr(language, "Blocked people", "已屏蔽用户", "已封鎖用戶")}</Text>
-              <Text style={styles.settingsRowText}>{tr(language, `${blockedProfiles.length} blocked · Review or unblock accounts`, `${blockedProfiles.length}名已屏蔽用户 · 查看或解除屏蔽`, `${blockedProfiles.length}名已封鎖用戶 · 查看或解除封鎖`)}</Text>
-            </View>
-            <View style={styles.settingsBlockedCount}><Text style={styles.settingsBlockedCountText}>{blockedProfiles.length}</Text></View>
-            <Ionicons name="chevron-forward" size={18} color={palette.muted} />
-          </Pressable>
           <Text style={styles.settingsSectionLabel}>{tr(language, "App preferences", "应用偏好", "應用程式偏好")}</Text>
           <View style={styles.settingsCard}>
             <View style={styles.settingsRow}><View style={styles.settingsIcon}><Ionicons name={darkMode ? "moon" : "sunny-outline"} size={20} color={palette.blue} /></View><View style={{ flex: 1 }}><Text style={styles.settingsRowTitle}>{tr(language, "Appearance", "外观", "外觀")}</Text><Text style={styles.settingsRowText}>{darkMode ? tr(language, "Dark mode", "深色模式", "深色模式") : tr(language, "Light mode", "浅色模式", "淺色模式")}</Text></View><Pressable accessibilityRole="switch" accessibilityState={{ checked: darkMode }} style={[styles.toggle, darkMode && styles.toggleOn]} onPress={onToggleDarkMode}><SwitchThumb on={darkMode} /></Pressable></View>
@@ -14159,6 +14287,7 @@ function Profile({
           <Text style={[styles.settingsRowText, { marginBottom: 12 }]}>{tr(language, "Choose the language used by the Forum Translate button.", "选择论坛翻译按钮使用的目标语言。", "選擇論壇翻譯按鈕使用的目標語言。")}</Text>
           <View style={styles.settingsLanguageRow}>{(["EN", "简体", "繁體"] as Language[]).map((item) => <Pressable key={item} accessibilityRole="button" accessibilityLabel={`Translate to ${({ EN: "English", 简体: "简体中文", 繁體: "繁體中文" })[item]}`} accessibilityState={{ selected: translationLanguage === item }} style={[styles.settingsLanguageButton, translationLanguage === item && styles.settingsLanguageButtonActive]} onPress={() => onTranslationLanguage(item)}><Text style={[styles.settingsLanguageText, translationLanguage === item && styles.settingsLanguageTextActive]}>{({ EN: "English", 简体: "简体中文", 繁體: "繁體中文" })[item]}</Text>{translationLanguage === item && <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />}</Pressable>)}</View>
           <Text style={styles.settingsSectionLabel}>{tr(language, "Account", "账户", "帳戶")}</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Change password" style={styles.menuItem} onPress={() => { setSettingsOpen(false); setPasswordChangeOpen(true); }}><Ionicons name="key-outline" size={22} color={palette.blue} /><Text style={styles.menuText}>{tr(language, "Change password", "修改密码", "更改密碼")}</Text><Ionicons name="chevron-forward" size={18} color={palette.muted} /></Pressable>
           <Pressable style={styles.logoutButton} onPress={() => { setSettingsOpen(false); setLogoutConfirmOpen(true); }}><Ionicons name="log-out-outline" size={20} color={palette.blue} /><Text style={styles.logoutButtonText}>{tr(language, "Log out", "退出登录", "登出")}</Text></Pressable>
           <View style={styles.dangerZone}><Text style={styles.dangerZoneTitle}>{tr(language, "Danger zone", "危险操作", "危險操作")}</Text><Text style={styles.dangerZoneText}>{tr(language, "Deleting your account permanently removes your profile, reviews and activity history.", "删除账户将永久移除你的资料、评价和活动记录。", "刪除帳戶將永久移除你的資料、評價及活動記錄。")}</Text><Pressable style={styles.deleteAccountButton} onPress={() => Alert.alert(tr(language, "Delete your account?", "删除账户？", "刪除帳戶？"), tr(language, "This cannot be undone. Continue only if you want to permanently delete all account data.", "此操作无法撤销。仅在你确定要永久删除所有账户数据时继续。", "此操作無法撤銷。只有在你確定要永久刪除所有帳戶資料時繼續。"), [{ text: tr(language, "Cancel", "取消", "取消"), style: "cancel" }, { text: tr(language, "Continue", "继续", "繼續"), style: "destructive", onPress: () => Alert.alert(tr(language, "Final confirmation", "最终确认", "最終確認"), tr(language, "Are you absolutely sure? Your account and data will be scheduled for permanent deletion.", "你确定吗？你的账户和数据将安排永久删除。", "你確定嗎？你的帳戶及資料將安排永久刪除。"), [{ text: tr(language, "Keep my account", "保留账户", "保留帳戶"), style: "cancel" }, { text: tr(language, "Delete permanently", "永久删除", "永久刪除"), style: "destructive", onPress: () => Alert.alert(tr(language, "Deletion requested", "已申请删除", "已申請刪除"), tr(language, "Your request has been sent to the UNIMATE team for secure processing.", "你的申请已发送给UNIMATE团队进行安全处理。", "你的申請已傳送給UNIMATE團隊進行安全處理。")) }]) }])}><Ionicons name="trash-outline" size={19} color={palette.coral} /><Text style={styles.deleteAccountText}>{tr(language, "Delete account", "删除账户", "刪除帳戶")}</Text></Pressable></View>
         </ScrollView>
@@ -14217,7 +14346,7 @@ function EventDateField({ language, value, onChange, label }: { language: Langua
   );
 }
 
-function EventTimeField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function EventTimeField({ label, value, onChange, language }: { language: Language; label: string; value: string; onChange: (value: string) => void }) {
   const [open, setOpen] = useState(false);
   const [hour, minute] = value.split(":").map(Number);
   const updateHour = (amount: number) => onChange(`${String((hour + amount + 24) % 24).padStart(2, "0")}:${String(minute).padStart(2, "0")}`);
@@ -14225,13 +14354,13 @@ function EventTimeField({ label, value, onChange }: { label: string; value: stri
   return <View style={styles.eventTimeField}>
     <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value}`} accessibilityState={{ expanded: open }} style={[styles.eventDateButton, open && styles.eventDateButtonOpen]} onPress={() => setOpen(!open)}><View style={styles.eventScheduleIcon}><Ionicons name="time-outline" size={19} color={palette.blue} /></View><View style={styles.eventDateButtonCopy}><Text style={styles.eventScheduleLabel}>{label}</Text><Text style={styles.eventTimeValue}>{value}</Text></View><Ionicons name={open ? "chevron-up" : "chevron-down"} size={17} color={palette.blue} /></Pressable>
     {open && <View style={styles.eventTimePanel}>
-      <View style={styles.eventTimeHeader}><Text style={styles.eventTimePanelTitle}>Set time</Text><Text style={styles.eventTimePanelHint}>24-hour clock · 5-minute intervals</Text></View>
+      <View style={styles.eventTimeHeader}><Text style={styles.eventTimePanelTitle}>{tr(language, "Set time", "设置时间", "設置時間")}</Text><Text style={styles.eventTimePanelHint}>{tr(language, "24-hour clock · 5-minute intervals", "24小时制 · 每5分钟一档", "24小時制 · 每5分鐘一檔")}</Text></View>
       <View style={styles.eventTimeStepperRow}>
-        <View style={styles.eventTimeSegment}><Text style={styles.eventTimeSegmentLabel}>Hour</Text><View style={styles.eventTimeStepper}><Pressable accessibilityLabel="Previous hour" style={styles.eventTimeStepButton} onPress={() => updateHour(-1)}><Ionicons name="remove" size={19} color={palette.blue} /></Pressable><Text style={styles.eventTimeStepValue}>{String(hour).padStart(2, "0")}</Text><Pressable accessibilityLabel="Next hour" style={styles.eventTimeStepButton} onPress={() => updateHour(1)}><Ionicons name="add" size={19} color={palette.blue} /></Pressable></View></View>
+        <View style={styles.eventTimeSegment}><Text style={styles.eventTimeSegmentLabel}>{tr(language, "Hour", "小时", "小時")}</Text><View style={styles.eventTimeStepper}><Pressable accessibilityLabel={tr(language, "Previous hour", "上一小时", "上一小時")} style={styles.eventTimeStepButton} onPress={() => updateHour(-1)}><Ionicons name="remove" size={19} color={palette.blue} /></Pressable><Text style={styles.eventTimeStepValue}>{String(hour).padStart(2, "0")}</Text><Pressable accessibilityLabel={tr(language, "Next hour", "下一小时", "下一小時")} style={styles.eventTimeStepButton} onPress={() => updateHour(1)}><Ionicons name="add" size={19} color={palette.blue} /></Pressable></View></View>
         <Text style={styles.eventTimeColon}>:</Text>
-        <View style={styles.eventTimeSegment}><Text style={styles.eventTimeSegmentLabel}>Minute</Text><View style={styles.eventTimeStepper}><Pressable accessibilityLabel="Previous five minutes" style={styles.eventTimeStepButton} onPress={() => updateMinute(-5)}><Ionicons name="remove" size={19} color={palette.blue} /></Pressable><Text style={styles.eventTimeStepValue}>{String(minute).padStart(2, "0")}</Text><Pressable accessibilityLabel="Next five minutes" style={styles.eventTimeStepButton} onPress={() => updateMinute(5)}><Ionicons name="add" size={19} color={palette.blue} /></Pressable></View></View>
+        <View style={styles.eventTimeSegment}><Text style={styles.eventTimeSegmentLabel}>{tr(language, "Minute", "分钟", "分鐘")}</Text><View style={styles.eventTimeStepper}><Pressable accessibilityLabel={tr(language, "Previous five minutes", "前5分钟", "前5分鐘")} style={styles.eventTimeStepButton} onPress={() => updateMinute(-5)}><Ionicons name="remove" size={19} color={palette.blue} /></Pressable><Text style={styles.eventTimeStepValue}>{String(minute).padStart(2, "0")}</Text><Pressable accessibilityLabel={tr(language, "Next five minutes", "后5分钟", "後5分鐘")} style={styles.eventTimeStepButton} onPress={() => updateMinute(5)}><Ionicons name="add" size={19} color={palette.blue} /></Pressable></View></View>
       </View>
-      <Pressable style={styles.eventTimeDone} onPress={() => setOpen(false)}><Ionicons name="checkmark" size={16} color="white" /><Text style={styles.eventTimeDoneText}>Use {value}</Text></Pressable>
+      <Pressable style={styles.eventTimeDone} onPress={() => setOpen(false)}><Ionicons name="checkmark" size={16} color="white" /><Text style={styles.eventTimeDoneText}>{tr(language, "Use", "使用", "使用")} {value}</Text></Pressable>
     </View>}
   </View>;
 }
@@ -14582,11 +14711,11 @@ function EventModal({
               index === 1 ? (
                 <EventDateField key={field} language={language} value={eventDate} onChange={setEventDate} />
               ) : index === 2 ? (
-                <EventTimeField key={field} label={field} value={startTime} onChange={setStartTime} />
+                <EventTimeField language={language} key={field} label={field} value={startTime} onChange={setStartTime} />
               ) : index === 3 ? (
-                <EventTimeField key={field} label={field} value={endTime} onChange={setEndTime} />
+                <EventTimeField language={language} key={field} label={field} value={endTime} onChange={setEndTime} />
               ) : index === 7 ? (
-                <EventTimeField key={field} label={field} value={lastEntryTime} onChange={setLastEntryTime} />
+                <EventTimeField language={language} key={field} label={field} value={lastEntryTime} onChange={setLastEntryTime} />
               ) : (
                 <View
                   key={field}
@@ -14847,6 +14976,7 @@ function AppContent({
   onOpenMarketplaceIssue: (id: string, reason: MarketplaceIssueReason, details: string, openedBy: "buyer" | "seller") => void;
 }) {
   const [tab, setTab] = useState<Tab>("home");
+  const [bookingHistoryView, setBookingHistoryView] = useState<"bookings" | "purchases">("bookings");
   const [eventView, setEventView] = useState<"browse" | "going" | "mine">("browse");
   const setLanguage = onLanguage;
   const [eventModal, setEventModal] = useState(false);
@@ -14923,6 +15053,22 @@ function AppContent({
   const [momentsDiscoveryTab, setMomentsDiscoveryTab] = useState<"explore" | "foryou" | "following">("foryou");
   const [studentMoments, setStudentMoments] = useState<StudentMoment[]>(initialStudentMoments);
   const [sharedMomentMessages, setSharedMomentMessages] = useState<{ id: string; username: string; momentId: string }[]>([]);
+  // Adapt forum content for the existing local shared-post chat cards.
+  const sharedForumCards: StudentMoment[] = [
+    ...forumGuides.map((guide): StudentMoment => ({ id: `forum:${guide.id}`, username: "@unimate", author: "UniMate Official", publicPost: true, audience: "public", caption: guide.title, photos: [], location: ["", "", ""], createdAt: 0, likes: 0, liked: false, comments: [] })),
+    ...forumPosts.filter(post => !post.archived && (!post.repostOf || forumGuides.some(guide => guide.id === post.repostOf) || forumPosts.some(source => source.id === post.repostOf && !source.archived))).map((post): StudentMoment => ({ id: `forum:${post.id}`, username: post.author, author: post.author, publicPost: true, audience: "public", caption: [post.title, post.title, post.title], photos: post.photos || (post.coverPhoto ? [post.coverPhoto] : []), location: ["", "", ""], createdAt: Date.parse(post.createdAt) || 0, likes: post.likes, liked: false, comments: [] })),
+  ];
+  const shareForumToFriend = (id: string, username: string) => {
+    if (!acceptedFriends.includes(username) || !sharedForumCards.some(post => post.id === `forum:${id}`)) return;
+    setSharedMomentMessages(current => [...current, { id: `share-${Date.now()}`, username, momentId: `forum:${id}` }]);
+    setMessageDeepLink(username === "@londonlatte" ? "friend" : username); setFriendsArea("moments"); setTab("messages");
+  };
+  const sharedEventCards: StudentMoment[] = events.map(event => ({ id: `event:${event.title}`, username: "@unimate", author: "UniMate Events", publicPost: true, audience: "public", caption: [`${event.title}\n${event.date} · ${event.place}`, `${event.zh}\n${event.date} · ${event.place}`, `${event.zh}\n${event.date} · ${event.place}`], photos: [event.image], location: [event.place, event.place, event.place], createdAt: 0, likes: 0, liked: false, comments: [] }));
+  const shareEventToFriend = (title: string, username: string) => {
+    if (!acceptedFriends.includes(username) || !events.some(event => event.title === title)) return;
+    setSharedMomentMessages(current => [...current, { id: `share-event-${Date.now()}`, username, momentId: `event:${title}` }]);
+    setMessageDeepLink(username === "@londonlatte" ? "friend" : username); setFriendsArea("moments"); setTab("messages");
+  };
   const shareMomentToFriend = (momentId: string, username: string) => {
     const moment = studentMoments.find((item) => item.id === momentId);
     if (!acceptedFriends.includes(username) || !moment?.publicPost || moment.audience === "private" || moment.audience === "friends") return;
@@ -14964,7 +15110,7 @@ function AppContent({
   const mentionHandle = accountName ? "@new_student_demo" : "@studybuddy_uk";
   const mentionOwnName = accountName?.trim() || "Sophie C";
   const mentionNotifications: MentionNotice[] = [
-    ...forumPosts.filter((post) => post.author !== mentionOwnName && hasMention(`${post.title} ${post.body}`, mentionHandle)).map((post): MentionNotice => ({ id: `mention-post-${post.id}`, source: "forum", target: post.id, author: post.author, text: post.body })),
+    ...forumPosts.filter((post) => !post.archived && post.author !== mentionOwnName && hasMention(`${post.title} ${post.body}`, mentionHandle)).map((post): MentionNotice => ({ id: `mention-post-${post.id}`, source: "forum", target: post.id, author: post.author, text: post.body })),
     ...Object.entries(forumComments).flatMap(([id, replies]) => replies.filter((reply) => reply.author !== mentionOwnName && hasMention(reply.text, mentionHandle)).map((reply): MentionNotice => ({ id: `mention-forum-${reply.id}`, source: "forum", target: id, author: reply.author, text: reply.text }))),
     ...studentMoments.filter((moment) => moment.username === "self" || (acceptedFriends.includes(moment.username) && !momentsSettings.hideTheirPosts.includes(moment.username) && moment.audience !== "private")).flatMap((moment): MentionNotice[] => [
       ...(moment.username !== "self" && hasMention(tr(language, ...moment.caption), mentionHandle) ? [{ id: `mention-moment-${moment.id}`, source: "moment" as const, target: moment.id, author: moment.author, text: tr(language, ...moment.caption) }] : []),
@@ -15025,6 +15171,7 @@ function AppContent({
       ) : tab === "events" ? (
         <EventsForum
           key={eventView}
+          onShareEvent={shareEventToFriend}
           language={language}
           initialEvent={eventDeepLink}
           onClearInitialEvent={() => setEventDeepLink(null)}
@@ -15050,13 +15197,14 @@ function AppContent({
       ) : tab === "food" ? (
         <FoodForum language={language} visitedPlaces={visitedPlaces} setVisitedPlaces={setVisitedPlaces} submittedReviews={submittedReviews} setSubmittedReviews={setSubmittedReviews} reviewerName={accountName || "Sophie Chen"} reviewReplies={restaurantReviewReplies} restaurantProfile={restaurantProfile} />
       ) : tab === "forum" ? (
-        <StudentFaqForum momentsNavigation={<MomentsNavigation language={language} selected="forum" onSelect={(next) => { if (next !== "forum") { setMomentsDiscoveryTab(next); setMomentAuthor(null); setTab("friends"); } }} />} profilePhoto={studentProfilePhoto} onTranslationLanguageChange={setTranslationLanguage} language={language} followedForums={followedForums} onToggleFollow={toggleFollowForum} entry={forumEntry} translationLanguage={translationLanguage} accountName={accountName || "Sophie C"} canInteract={!studentFeaturesLocked} onVerify={() => setVerificationOpen(true)} posts={forumPosts} onPostsChange={setForumPosts} comments={forumComments} onCommentsChange={setForumComments} likedIds={forumLikedIds} onLikedIdsChange={setForumLikedIds} />
+        <StudentFaqForum acceptedFriends={acceptedFriends} onShareForum={shareForumToFriend} momentsNavigation={<MomentsNavigation language={language} selected="forum" onSelect={(next) => { if (next !== "forum") { setMomentsDiscoveryTab(next); setMomentAuthor(null); setTab("friends"); } }} />} profilePhoto={studentProfilePhoto} onTranslationLanguageChange={setTranslationLanguage} language={language} followedForums={followedForums} onToggleFollow={toggleFollowForum} entry={forumEntry} translationLanguage={translationLanguage} accountName={accountName || "Sophie C"} canInteract={!studentFeaturesLocked} onVerify={() => setVerificationOpen(true)} posts={forumPosts} onPostsChange={setForumPosts} comments={forumComments} onCommentsChange={setForumComments} likedIds={forumLikedIds} onLikedIdsChange={setForumLikedIds} />
       ) : tab === "friends" ? (
         <View style={{ flex: 1, minHeight: 0 }}>
-          <StudentMoments onOpenForum={() => setTab("forum")} initialDiscoveryTab={momentsDiscoveryTab} onDiscoveryTabChange={setMomentsDiscoveryTab} onShareMoment={shareMomentToFriend} followedPublishers={followedOrganisations} onTogglePublisher={toggleOrganisationFollow} entry={momentEntry} settings={momentsSettings} onSettingsChange={setMomentsSettings} profilePhoto={studentProfilePhoto} selectedAuthor={momentAuthor} onSelectAuthor={(username) => { if (username === "self") { setUnifiedProfileEntry(Date.now()); setTab("profile"); } else if (username && friends.some((friend) => friend.username === username)) { setFriendProfileEntry(username); setFriendsArea("friends"); setTab("connections"); } else setMomentAuthor(username); }} onOpenEvent={(title) => { setEventDeepLink(title); setTab("events"); }} language={language} accountName={accountName || "Sophie C"} canInteract={!studentFeaturesLocked} onVerify={() => setVerificationOpen(true)} acceptedFriends={acceptedFriends} moments={studentMoments} onMomentsChange={setStudentMoments} onFindFriends={() => { setFriendProfileEntry(null); setFriendsArea("friends"); setTab("connections"); }} />
+          <StudentMoments discoveryCity={location} myEventTitles={reservedEvents} ownUniversity={accountName ? "" : "UCL"} onOpenForum={() => setTab("forum")} initialDiscoveryTab={momentsDiscoveryTab} onDiscoveryTabChange={setMomentsDiscoveryTab} onShareMoment={shareMomentToFriend} followedPublishers={followedOrganisations} onTogglePublisher={toggleOrganisationFollow} entry={momentEntry} settings={momentsSettings} onSettingsChange={setMomentsSettings} profilePhoto={studentProfilePhoto} selectedAuthor={momentAuthor} onSelectAuthor={(username) => { if (username === "self") { setUnifiedProfileEntry(Date.now()); setTab("profile"); } else if (username && friends.some((friend) => friend.username === username)) { setFriendProfileEntry(username); setFriendsArea("friends"); setTab("connections"); } else setMomentAuthor(username); }} onOpenEvent={(title) => { setEventDeepLink(title); setTab("events"); }} language={language} accountName={accountName || "Sophie C"} canInteract={!studentFeaturesLocked} onVerify={() => setVerificationOpen(true)} acceptedFriends={acceptedFriends} moments={studentMoments} onMomentsChange={setStudentMoments} onFindFriends={() => { setFriendProfileEntry(null); setFriendsArea("friends"); setTab("connections"); }} />
         </View>
       ) : tab === "bookings" ? (
         <BookingsPage
+          key={bookingHistoryView} initialView={bookingHistoryView}
           language={language}
           previewBookings={previewBookings}
           completedJobs={completedJobs}
@@ -15080,7 +15228,7 @@ function AppContent({
       ) : tab === "messages" || tab === "connections" ? (
         tab === "connections" ? <View style={{ flex: 1 }}><View style={{ paddingHorizontal: 20, paddingTop: 18 }}><Text style={[styles.pageTitle, { marginBottom: 14 }]}>{tr(language, "Friends", "好友", "好友")}</Text></View>{studentFeaturesLocked ? <StudentFeatureLocked language={language} status={localStudentStatus} feature="friends" onVerify={() => setVerificationOpen(true)} /> : <FriendsHub renderMoments={(username) => (<StudentMoments onShareMoment={shareMomentToFriend} embedded key={username} followedPublishers={followedOrganisations} onTogglePublisher={toggleOrganisationFollow}  settings={momentsSettings} onSettingsChange={setMomentsSettings} profilePhoto={studentProfilePhoto} selectedAuthor={username} onSelectAuthor={(username) => { if (username === "self") { setUnifiedProfileEntry(Date.now()); setTab("profile"); } else if (username && friends.some((friend) => friend.username === username)) { setFriendProfileEntry(username); setFriendsArea("friends"); setTab("connections"); } else setMomentAuthor(username); }} onOpenEvent={(title) => { setEventDeepLink(title); setTab("events"); }} language={language} accountName={accountName || "Sophie C"} canInteract={!studentFeaturesLocked} onVerify={() => setVerificationOpen(true)} acceptedFriends={acceptedFriends} moments={studentMoments} onMomentsChange={setStudentMoments} onFindFriends={() => { setFriendProfileEntry(null); setFriendsArea("friends"); setTab("connections"); }} />)} initialProfile={friendProfileEntry} onMessage={(username) => { setMessageDeepLink(username === "@londonlatte" ? "friend" : username); setFriendsArea("moments"); setTab("messages"); }} onViewMoments={(username) => { setMomentAuthor(username); setTab("friends"); }} language={language} acceptedFriends={acceptedFriends} setAcceptedFriends={setAcceptedFriends} followedOrganisations={followedOrganisations} onToggleOrganisationFollow={toggleOrganisationFollow} />}</View> :
         <MessagesPage
-          sharedMomentMessages={sharedMomentMessages} sharedMoments={studentMoments} onOpenSharedMoment={(id) => { setMomentAuthor(null); setMomentEntry({ id, nonce: Date.now() }); setTab("friends"); }}
+          sharedMomentMessages={sharedMomentMessages} sharedMoments={[...studentMoments, ...sharedForumCards, ...sharedEventCards]} onOpenSharedMoment={(id) => { if (id.startsWith("event:")) { setEventDeepLink(id.slice(6)); setTab("events"); return; } if (id.startsWith("forum:")) { setForumEntry({ id: id.slice(6), nonce: Date.now() }); setTab("forum"); return; } setMomentAuthor(null); setMomentEntry({ id, nonce: Date.now() }); setTab("friends"); }}
           onViewFriendProfile={(username) => { setFriendProfileEntry(username); setFriendsArea("friends"); setTab("connections"); }}
           language={language}
           previewBookings={previewBookings}
@@ -15104,6 +15252,8 @@ function AppContent({
         />
       ) : (
         <Profile
+          onBookingHistory={(view) => { setBookingHistoryView(view); setTab("bookings"); }}
+          activitySettings={(placement, onBlocked, blockedCount) => <PostActivitySettings placement={placement} onBlocked={onBlocked} blockedCount={blockedCount} language={language} name={accountName || "Sophie C"} moments={studentMoments.filter(post => post.username === "self" || (!post.archived && !momentsSettings.hideTheirPosts.includes(post.username) && post.audience !== "private" && (post.publicPost || acceptedFriends.includes(post.username))))} posts={forumPosts} comments={forumComments} likedIds={forumLikedIds} onMoments={setStudentMoments} onPosts={setForumPosts} canInteract={!studentFeaturesLocked} onOpen={(kind, id) => { if (kind === "moments") { setMomentAuthor(null); setMomentEntry({ id, nonce: Date.now() }); setTab("friends"); } else { setForumEntry({ id, nonce: Date.now() }); setTab("forum"); } }} />}
           openUnifiedProfile={unifiedProfileEntry}
           coverUri={momentsSettings.coverUri}
           onCoverChange={(coverUri) => setMomentsSettings((current) => ({ ...current, coverUri }))}
@@ -15138,7 +15288,7 @@ function AppContent({
           onToggleDarkMode={onToggleDarkMode}
         />
       ),
-    [tab, momentsDiscoveryTab, unifiedProfileEntry, friendProfileEntry, language, eventDeepLink, favourites, acceptedFriends, followedOrganisations, reservedEvents, pendingCancellation, messageDeepLink, darkMode, eventView, eventAnnouncements, paymentMethods, defaultPaymentId, visitedPlaces, forumPosts, forumComments, forumLikedIds, followedForums, forumEntry, friendsArea, translationLanguage, studentMoments, momentAuthor, momentEntry, momentsSettings, studentProfilePhoto, submittedReviews, restaurantReviewReplies, restaurantProfile, marketplaceConversations, studentDemoRequestStatus, pendingMarketListings, accountRole, onLogout, localStudentStatus, studentFeaturesLocked, accountName, onLanguage],
+    [tab, location, sharedMomentMessages, bookingHistoryView, momentsDiscoveryTab, unifiedProfileEntry, friendProfileEntry, language, eventDeepLink, favourites, acceptedFriends, followedOrganisations, reservedEvents, pendingCancellation, messageDeepLink, darkMode, eventView, eventAnnouncements, paymentMethods, defaultPaymentId, visitedPlaces, forumPosts, forumComments, forumLikedIds, followedForums, forumEntry, friendsArea, translationLanguage, studentMoments, momentAuthor, momentEntry, momentsSettings, studentProfilePhoto, submittedReviews, restaurantReviewReplies, restaurantProfile, marketplaceConversations, studentDemoRequestStatus, pendingMarketListings, accountRole, onLogout, localStudentStatus, studentFeaturesLocked, accountName, onLanguage],
   );
   const tabs = [
     { id: "home" as const, icon: "home", color: "#1683DF", label: words[language].home },
@@ -16668,17 +16818,17 @@ function OrganisationWorkspace({ kind, language, onLanguage, darkMode, onToggleD
         <PhotoSourceActions language={language} onCamera={async () => { const uris = await selectPhotoUris(language, "camera", { allowsEditing: true, aspect: [16, 9], quality: .8 }); if (uris[0]) setEventCover(uris[0]); }} onLibrary={async () => { const uris = await selectPhotoUris(language, "library", { allowsEditing: true, aspect: [16, 9], quality: .8 }); if (uris[0]) setEventCover(uris[0]); }} />
         <View style={styles.field}><Text style={styles.fieldLabel}>{t("Event name", "活动名称", "活動名稱")}</Text><TextInput value={eventTitle} onChangeText={setEventTitle} placeholder={t("Enter event name", "输入活动名称", "輸入活動名稱")} placeholderTextColor="#A1ADBE" /></View>
         <EventDateField language={language} value={eventDate} onChange={setEventDate} />
-        <EventTimeField label={t("Start time", "开始时间", "開始時間")} value={eventStartTime} onChange={setEventStartTime} />
-        <EventTimeField label={t("End time", "结束时间", "結束時間")} value={eventEndTime} onChange={setEventEndTime} />
+        <EventTimeField language={language} label={t("Start time", "开始时间", "開始時間")} value={eventStartTime} onChange={setEventStartTime} />
+        <EventTimeField language={language} label={t("End time", "结束时间", "結束時間")} value={eventEndTime} onChange={setEventEndTime} />
         <View style={styles.field}><Text style={styles.fieldLabel}>{t("Location / full address", "地点 / 完整地址", "地點 / 完整地址")}</Text><TextInput value={eventVenue} onChangeText={setEventVenue} placeholder={t("Enter location / full address", "输入地点及完整地址", "輸入地點及完整地址")} placeholderTextColor="#A1ADBE" /></View>
         <View style={[styles.field, { minHeight: 100 }]}><Text style={styles.fieldLabel}>{t("Summary of the event", "活动简介", "活動簡介")}</Text><TextInput multiline value={eventSummary} onChangeText={setEventSummary} placeholder={t("Describe the experience for students", "为学生介绍活动内容", "向學生介紹活動內容")} placeholderTextColor="#A1ADBE" /></View>
         <View style={styles.field}><Text style={styles.fieldLabel}>{t("Ticket price · £0 for free sign-up", "门票价格 · £0 表示免费报名", "門票價格 · £0 表示免費報名")}</Text><View style={styles.currencyInputRow}><Text style={styles.currencyPrefix}>£</Text><TextInput value={eventPrice} onChangeText={setEventPrice} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor="#A1ADBE" style={styles.currencyInput} /></View></View>
-        <EventTimeField label={t("Last entry time", "最晚入场时间", "最晚入場時間")} value={eventLastEntry} onChange={setEventLastEntry} />
+        <EventTimeField language={language} label={t("Last entry time", "最晚入场时间", "最晚入場時間")} value={eventLastEntry} onChange={setEventLastEntry} />
         <Text style={[styles.formSectionLabel, { marginTop: 8 }]}>{t("BOOKING RELEASE PLAN", "报名开放计划", "報名開放計劃")}</Text>
         <Text style={styles.workspaceHint}>{t("Choose when paid tickets or free sign-up should open after UniMate approval. Saving a draft does not publish the event.", "选择优你伴审核通过后购票或免费报名开放的时间。保存草稿不会发布活动。", "選擇優你伴審核通過後購票或免費報名開放的時間。儲存草稿不會發佈活動。")}</Text>
         <Text style={styles.fieldLabel}>{t("Booking opens on", "报名开放日期", "報名開放日期")}</Text>
         <EventDateField language={language} value={eventReleaseDate} onChange={setEventReleaseDate} />
-        <EventTimeField label={t("Ticket release time", "门票开售时间", "門票發售時間")} value={eventReleaseTime} onChange={setEventReleaseTime} />
+        <EventTimeField language={language} label={t("Ticket release time", "门票开售时间", "門票發售時間")} value={eventReleaseTime} onChange={setEventReleaseTime} />
         <View style={styles.eventCapacityField}><View style={styles.eventCapacityHead}><View style={styles.eventCapacityIcon}><Ionicons name="people-outline" size={20} color={palette.blue} /></View><View style={{ flex: 1 }}><Text style={styles.fieldLabel}>{t("Event capacity", "活动人数上限", "活動人數上限")}</Text><Text style={styles.eventCapacityHint}>{t("Organisation event drafts are limited to 20–350 people. Discuss larger or festival-scale events with UniMate first.", "机构活动草稿限 20–350 人。更大型或节庆规模活动须先与优你伴商议。", "機構活動草稿限 20–350 人。更大型或節慶規模活動須先與優你伴商議。")}</Text></View></View><View style={styles.eventCapacityControl}><Pressable accessibilityRole="button" accessibilityLabel={t("Reduce capacity", "减少人数", "減少人數")} disabled={Number(eventCapacity) <= 20} style={[styles.eventCapacityButton, Number(eventCapacity) <= 20 && styles.eventCapacityButtonDisabled]} onPress={() => setEventCapacity(String(Math.max(20, Number(eventCapacity || 20) - 1)))}><Ionicons name="remove" size={20} color={Number(eventCapacity) <= 20 ? "#AAB7C5" : palette.blue} /></Pressable><View style={styles.eventCapacityValueWrap}><TextInput accessibilityLabel={t("Event capacity", "活动人数上限", "活動人數上限")} value={eventCapacity} onChangeText={(value) => { const digits = value.replace(/\D/g, ""); setEventCapacity(digits ? String(Math.min(350, Number(digits))) : ""); }} keyboardType="number-pad" style={[styles.eventCapacityValue, { width: 96, height: 30, padding: 0, textAlign: "center" }]} /><Text style={styles.eventCapacityUnit}>{t("spots", "个名额", "個名額")}</Text></View><Pressable accessibilityRole="button" accessibilityLabel={t("Increase capacity", "增加人数", "增加人數")} disabled={Number(eventCapacity) >= 350} style={[styles.eventCapacityButton, Number(eventCapacity) >= 350 && styles.eventCapacityButtonDisabled]} onPress={() => setEventCapacity(String(Math.min(350, Number(eventCapacity || 20) + 1)))}><Ionicons name="add" size={20} color={Number(eventCapacity) >= 350 ? "#AAB7C5" : palette.blue} /></Pressable></View><View style={styles.eventCapacityPresets}>{[20, 100, 200, 350].map((value) => <Pressable key={value} accessibilityRole="button" style={[styles.eventCapacityPreset, eventCapacity === String(value) && styles.eventCapacityPresetActive]} onPress={() => setEventCapacity(String(value))}><Text style={[styles.eventCapacityPresetText, eventCapacity === String(value) && styles.eventCapacityPresetTextActive]}>{value}</Text></Pressable>)}</View></View>
         <Pressable accessibilityRole="button" style={styles.reviewCountAction} onPress={() => { setShowEventForm(false); setTab("messages"); setSelectedMessage("UniMate operations"); setMessageDraft(t(`I'd like to discuss an event for more than 350 people. Event: ${eventTitle.trim() || "[event name]"}. Venue: ${eventVenue.trim() || "[venue]"}.`, `我想商议超过 350 人的活动。活动：${eventTitle.trim() || "[活动名称]"}。场地：${eventVenue.trim() || "[场地]"}。`, `我想商議超過 350 人的活動。活動：${eventTitle.trim() || "[活動名稱]"}。場地：${eventVenue.trim() || "[場地]"}。`)); }}><Text style={styles.reviewCountActionText}>{t("Discuss more than 350 places with UniMate", "与优你伴商议超过 350 人的活动", "與優你伴商議超過 350 人的活動")}</Text><Ionicons name="chevron-forward" size={17} color={palette.blue} /></Pressable>
         <View style={styles.field}><Text style={styles.fieldLabel}>{t("Voucher code (optional)", "优惠码（选填）", "優惠碼（選填）")}</Text><TextInput value={eventVoucher} onChangeText={setEventVoucher} autoCapitalize="characters" placeholder={t("e.g. STUDENT15", "例如 STUDENT15", "例如 STUDENT15")} placeholderTextColor="#A1ADBE" /></View>
@@ -16919,7 +17069,7 @@ export default function App() {
 }
 
 const styles = StyleSheet.create({
-  headerPostButton: { width: 110, height: 44, flexShrink: 0, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, paddingHorizontal: 12, borderRadius: 22, backgroundColor: palette.blue },
+  headerPostButton: { height: 34, flexShrink: 0, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, paddingHorizontal: 10, borderRadius: 9, borderWidth: 1, borderColor: "#CFE2F8", backgroundColor: "#F4F9FF" },
   appFrame: { flex: 1, backgroundColor: "#F4F7FB" },
   demoSwitchButton: { position: "absolute", right: 18, bottom: 82, zIndex: 20, flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 18, backgroundColor: "#184D94", shadowColor: "#092B5B", shadowOpacity: 0.18, shadowRadius: 7, elevation: 4 },
   demoSwitchText: { color: "#FFFFFF", fontSize: 10, fontWeight: "800" },
