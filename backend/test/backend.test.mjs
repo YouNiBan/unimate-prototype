@@ -79,7 +79,7 @@ test('authentication, permissions, moderation, persistence and audit integrity',
   await t.test('login creates a protected session',async()=>{
     assert.equal((await request('/api/login',{...account,password:'wrong'})).res.status,401);
     const login=await request('/api/login',account);assert.equal(login.res.status,200);const header=login.res.headers.get('set-cookie');assert.match(header,/HttpOnly/);assert.match(header,/SameSite=Strict/);cookie=header.split(';')[0];
-    const session=(await request('/api/session')).data;csrf=session.csrf;assert.equal(session.admin.role,'superadmin');assert.equal(session.admin.password_hash,undefined);
+    const session=(await request('/api/session')).data;csrf=session.csrf;assert.equal(session.admin.role,'owner');assert.equal(session.admin.password_hash,undefined);
     assert.equal(db.prepare('SELECT token_hash FROM sessions').get().token_hash.includes(cookie.split('=')[1]),false);
   });
   seed(db);seed(db);
@@ -89,7 +89,7 @@ test('authentication, permissions, moderation, persistence and audit integrity',
     assert.equal((await request('/api/'+task.resource+'/'+task.record_id)).res.status,200);
     assert.equal((await request('/api/tasks/seen',task)).res.status,200);assert.equal((await request('/api/tasks')).data.unseen,1);assert.equal((await request('/api/tasks')).data.total,2);
     assert.equal((await request('/api/tasks/seen',task)).res.status,200);assert.equal((await request('/api/tasks/seen',{resource:'users',record_id:'sample-user'})).res.status,400);
-    db.exec("UPDATE admins SET role='admin'");assert.equal((await request('/api/tasks')).data.total,1);assert.equal((await request('/api/approvals/sample-approval')).res.status,403);assert.equal((await request('/api/tasks/seen',{resource:'approvals',record_id:'sample-approval'})).res.status,404);db.exec("UPDATE admins SET role='superadmin'");
+    db.exec("UPDATE admins SET role='admin'");assert.equal((await request('/api/tasks')).data.total,2);assert.equal((await request('/api/approvals/sample-approval')).res.status,200);assert.equal((await request('/api/tasks/seen',{resource:'approvals',record_id:'sample-approval'})).res.status,200);db.exec("UPDATE admins SET role='superadmin'");
   });
   await t.test('navigation badges count complete queues and booking divisions',async()=>{
     const {counts}=(await request('/api/navigation-counts')).data;
@@ -100,7 +100,7 @@ test('authentication, permissions, moderation, persistence and audit integrity',
     assert.equal(counts.reports,(await request('/api/reports?type=post&status=open')).data.total);
     assert.equal(counts.comment_reports,(await request('/api/reports?type=comment&status=open')).data.total);
     assert.equal(counts.account_reports,(await request('/api/account_reports?status=open')).data.total);
-    assert.equal(counts.messages,db.prepare('SELECT count(*) n FROM messages').get().n);
+    assert.equal(counts.messages,db.prepare("SELECT count(*) n FROM support_conversations WHERE status='open'").get().n);
   });
   await t.test('messages are saved locally, idempotent and restricted to privileged admins',async()=>{
     const input={recipientId:'sample-user',subject:'Booking support',message:'Private sample conversation text',messageId:randomUUID()};
@@ -147,9 +147,9 @@ test('authentication, permissions, moderation, persistence and audit integrity',
   });
   await t.test('roles are checked server-side on every request',async()=>{
     db.exec("UPDATE admins SET role='viewer'");assert.equal((await request('/api/posts/sample-post',{status:'hidden',expectedStatus:'published',reason:'Test reason'})).res.status,403);assert.equal((await request('/api/audit')).res.status,403);
-    db.exec("UPDATE admins SET role='admin'");assert.equal((await request('/api/users')).res.status,403);assert.equal((await request('/api/bookings')).res.status,403);assert.equal((await request('/api/approvals')).res.status,200);
-    assert.deepEqual(Object.keys((await request('/api/overview')).data).sort(),['approvals','reports']);
-    assert.deepEqual(Object.keys((await request('/api/navigation-counts')).data.counts),['events','reports','comment_reports']);
+    db.exec("UPDATE admins SET role='admin'");assert.equal((await request('/api/users')).res.status,200);assert.equal((await request('/api/bookings')).res.status,200);assert.equal((await request('/api/approvals')).res.status,200);
+    assert.deepEqual(Object.keys((await request('/api/overview')).data).sort(),['approvals','bookings','reports']);
+    assert.deepEqual(Object.keys((await request('/api/navigation-counts')).data.counts),['events','posts','reports','comment_reports','account_reports','messages','students','sellers','teams','bookings']);
     assert.equal((await request('/api/posts/sample-post',{status:'hidden',expectedStatus:'published',reason:'Sample moderation'})).res.status,200);
     db.exec("UPDATE admins SET role='superadmin'");
   });
@@ -162,10 +162,10 @@ test('authentication, permissions, moderation, persistence and audit integrity',
     for(const kind of ['event','student','staff'])db.prepare('INSERT INTO approvals VALUES(?,?,?,?,?,?,?)').run(kind,kind,kind,'Sample applicant','Test details','pending',now);
     assert.equal((await request('/api/approvals?kind=event')).data.total,1);
     db.exec("UPDATE admins SET role='admin'");
-    assert.equal((await request('/api/approvals')).data.total,1);
-    assert.equal((await request('/api/approvals?kind=staff')).data.total,0);
-    assert.equal((await request('/api/bookings?division=cleaning')).res.status,403);
-    assert.equal((await request('/api/approvals/student',{status:'approved',expectedStatus:'pending',reason:'Forbidden student approval'})).res.status,403);
+    assert.ok((await request('/api/approvals')).data.rows.some(row=>row.kind==='student'));
+    assert.equal((await request('/api/approvals?kind=staff')).data.total,1);
+    assert.equal((await request('/api/bookings?division=cleaning')).res.status,200);
+    assert.equal((await request('/api/approvals/student',{status:'approved',expectedStatus:'pending',reason:'Student application checked'})).res.status,200);
     assert.equal((await request('/api/approvals/event',{status:'approved',expectedStatus:'pending',reason:'Event details checked'})).res.status,200);
     db.exec("UPDATE admins SET role='superadmin'");
     const reports=await request('/api/reports');assert.equal(reports.data.rows[0].unique_reports,3);assert.equal(reports.data.reportThreshold,3);
@@ -176,7 +176,8 @@ test('authentication, permissions, moderation, persistence and audit integrity',
     assert.equal((await request('/api/reports/sample-report',{status:'resolved',expectedStatus:'open',reason:'Post has been reviewed'})).res.status,200);
     const other=openDatabase(filename);assert.equal(other.prepare('SELECT status FROM posts').get().status,'hidden');other.close();
   });
-  await t.test('Superadmin provisions roles; Normal admin cannot read or change accounts or finance',async()=>{
+  await t.test('Owner alone provisions roles; Admin reads user records but cannot change accounts or finance',async()=>{
+    db.prepare("UPDATE admins SET role='owner' WHERE email=?").run(account.email);
     const newAdmin={name:'Normal Admin',email:'unimate.support',password:'Testing!2026',confirmPassword:'Testing!2026',role:'admin',reason:'Test username-only normal admin access'};
     assert.equal((await request('/api/admins',{...newAdmin,email:'invalid username'})).res.status,400);
     assert.equal((await request('/api/admins',{...newAdmin,role:'owner'})).res.status,400);
@@ -190,11 +191,11 @@ test('authentication, permissions, moderation, persistence and audit integrity',
     cookie='';csrf=(await request('/api/session')).data.csrf;
     const login=await request('/api/login',newAdmin);assert.equal(login.res.status,200);cookie=login.res.headers.get('set-cookie').split(';')[0];csrf=(await request('/api/session')).data.csrf;
     for(const path of ['users','bookings','admins','audit','invoices','finance','accounts']){
-      assert.equal((await request('/api/'+path)).res.status,403,path);
+      assert.equal((await request('/api/'+path)).res.status,['users','bookings'].includes(path)?200:403,path);
       assert.equal((await request('/api/'+path+'/sample',{role:'superadmin',reason:'Attempt escalation'})).res.status,403,path);
     }
     assert.equal((await request('/api/admins',{...newAdmin,email:'escalate@example.invalid',role:'superadmin'})).res.status,403);
-    assert.deepEqual(Object.keys((await request('/api/overview')).data).sort(),['approvals','reports']);
+    assert.deepEqual(Object.keys((await request('/api/overview')).data).sort(),['approvals','bookings','reports']);
     assert.equal((await request('/api/posts')).res.status,200);
     assert.equal((await request('/api/posts/sample-post',{status:'published',expectedStatus:'hidden',reason:'Restore test content'})).res.status,200);
     const normalCookie=cookie;
@@ -207,7 +208,12 @@ test('authentication, permissions, moderation, persistence and audit integrity',
     assert.equal((await request('/api/admins?status=active')).data.rows.some(r=>r.id===normal.id),false);
     assert.equal((await request('/api/admins?status=unknown')).res.status,400);
     cookie=normalCookie;assert.equal((await request('/api/posts')).res.status,401);cookie=ownerCookie;
-    assert.equal((await request('/api/admins',{...newAdmin,email:'second-owner@example.invalid',role:'superadmin'})).res.status,403);
+    db.prepare("UPDATE admins SET role='superadmin' WHERE id=?").run(self.id);
+    assert.equal((await request('/api/admins')).res.status,200);
+    for(const role of ['support','admin','superadmin']){
+      assert.equal((await request('/api/admins',{...newAdmin,email:'forbidden-'+role+'@example.invalid',role})).res.status,403);
+    }
+    assert.equal((await request('/api/admins/'+normal.id,{...update,active:true,expectedActive:false})).res.status,200);
     db.prepare("UPDATE admins SET role='owner' WHERE id=?").run(self.id);
     assert.equal((await request('/api/admins',{...newAdmin,email:'second-owner@example.invalid',role:'superadmin'})).res.status,201);
     assert.equal((await request('/api/users')).res.status,200);

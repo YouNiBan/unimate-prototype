@@ -1,0 +1,2 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {parseMenuText} from '../public/menu-parser.mjs';
+test('menu OCR only suggests readable item and explicit decimal price pairs for human review',()=>{assert.deepEqual(parseMenuText('MENU\nNoodles .... £12.95\n饺子 8.50\nSoup price unclear\n£9.99\nTea 2,50'),[{name:'Noodles',category:'',description:'',pricePence:1295},{name:'饺子',category:'',description:'',pricePence:850},{name:'Tea',category:'',description:'',pricePence:250}]);});

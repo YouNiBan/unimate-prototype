@@ -1,0 +1,21 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createApplication} from '../server.mjs';
+import {setAdminUsername} from '../admin-usernames.mjs';
+import {hashPassword} from '../security.mjs';
+test('username sign-in keeps email, respects suspension, rejects collisions and targets only the signed-in account',async t=>{
+ const app=await createApplication({filename:':memory:'});await new Promise(r=>app.server.listen(0,'127.0.0.1',r));t.after(async()=>{await new Promise(r=>app.server.close(r));app.db.close();});
+ const password='Fixture!12345',hash=await hashPassword(password),origin='http://127.0.0.1:'+app.server.address().port;
+ for(const [id,email,role]of [['owner','owner@example.invalid','owner'],['admin','legacyname','admin']])app.db.prepare('INSERT INTO admins VALUES(?,?,?,?,?,1)').run(id,email,id,hash,role);
+ const actor={id:'owner'};setAdminUsername(app.db,actor,'UniMate');
+ for(const value of ['ab','@invalid','name space','legacyname'])assert.throws(()=>setAdminUsername(app.db,actor,value));
+ assert.throws(()=>setAdminUsername(app.db,{id:'admin'},'unimate'),{status:409});
+ const request=async(path,data,cookie='',csrf='')=>{const r=await fetch(origin+'/api/'+path,{method:data?'POST':'GET',headers:{Cookie:cookie,...(data?{Origin:origin,'Content-Type':'application/json','X-CSRF-Token':csrf}:{})},body:data?JSON.stringify(data):undefined});return {status:r.status,body:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0]};};
+ const csrf=(await request('session')).body.csrf;
+ for(const email of ['UniMate','UNIMATE','owner@example.invalid'])assert.equal((await request('login',{email,password},'',csrf)).status,200);
+ const login=await request('login',{email:'legacyname',password},'',csrf),session=(await request('session',null,login.cookie)).body;
+ assert.equal((await request('settings/username',{username:'AdminDemo',id:'owner'},login.cookie,'wrong')).status,403);
+ assert.equal((await request('settings/username',{username:'AdminDemo',id:'owner'},login.cookie,session.csrf)).status,200);
+ assert.equal(app.db.prepare("SELECT username FROM admin_usernames WHERE admin_id='owner'").get().username,'UniMate');
+ app.db.prepare("UPDATE admins SET active=0 WHERE id='owner'").run();assert.equal((await request('login',{email:'unimate',password},'',csrf)).status,401);
+});

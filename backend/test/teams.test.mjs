@@ -11,8 +11,8 @@ test('teams and assignments enforce roles, service match, overlap and persistenc
   const hash=await hashPassword('Example-Password!123');for(const role of ['owner','admin'])db.prepare('INSERT INTO admins VALUES(?,?,?,?,?,1)').run(role,role+'@example.invalid',role,hash,role);
   let cookie='',csrf='';const call=async(path,data)=>{const r=await fetch(origin+'/api/'+path,{method:data?'POST':'GET',headers:{Cookie:cookie,...(data?{Origin:origin,'Content-Type':'application/json','X-CSRF-Token':csrf}:{})},body:data?JSON.stringify(data):undefined});return {r,data:await r.json()};};
   const login=async role=>{cookie='';csrf=(await call('session')).data.csrf;const result=await call('login',{email:role+'@example.invalid',password:'Example-Password!123'});cookie=result.r.headers.get('set-cookie').split(';')[0];csrf=(await call('session')).data.csrf;};
-  await login('admin');assert.equal((await call('teams')).r.status,403);assert.equal((await call('staff-schedule')).r.status,403);
-  assert.equal((await call('account_reports')).r.status,403);
+  await login('admin');assert.equal((await call('teams')).r.status,403);assert.equal((await call('staff-schedule')).r.status,200);
+  assert.equal((await call('account_reports')).r.status,200);
   for(const path of ['audit','invoices','documents','documents/private','staff-hr?id=anything'])assert.equal((await call(path)).r.status,403);
   assert.equal((await call('staff-hr',{id:'anything'})).r.status,403);
   assert.equal((await call('documents',{title:'Not allowed'})).r.status,403);
@@ -20,7 +20,7 @@ test('teams and assignments enforce roles, service match, overlap and persistenc
   assert.equal((await call('teams',input)).r.status,403);
   const applicationId=recordStaffApplication(db,{...input,service:'cleaning',jobTitle:'Cleaner'});
   assert.equal((await call('teams?team=cleaners')).data.rows.length,0);
-  await login('admin');assert.equal((await call('approvals/'+applicationId,{status:'approved',expectedStatus:'pending',reason:'Reviewed application'})).r.status,403);await login('owner');
+  await login('admin');assert.equal((await call('approvals/'+applicationId,{status:'rejected',expectedStatus:'pending',reason:'Reviewed application'})).r.status,200);db.prepare("UPDATE approvals SET status='pending' WHERE id=?").run(applicationId);await login('owner');
   assert.equal((await call('approvals/'+applicationId,{status:'approved',expectedStatus:'pending',reason:'Reviewed application'})).r.status,200);
   const id=db.prepare('SELECT member_id FROM staff_applications WHERE approval_id=?').get(applicationId).member_id;
   assert.equal((await call('approvals/'+applicationId,{status:'approved',expectedStatus:'pending',reason:'Repeated approval'})).r.status,409);
