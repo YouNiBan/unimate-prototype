@@ -42,7 +42,7 @@ async function fixture(t, options = {}) {
   };
   const anonymous = await call('session');
   const csrf = anonymous.data.csrf;
-  const signup = (email, extra = {}) => call('signup', { email, name: 'Example Student', password, confirmPassword: password, ...extra }, { csrf });
+  const signup = (email, extra = {}) => call('signup', { email, username:'member_'+email.trim().split('@')[0].replace(/[^a-z0-9]/gi,'').toLowerCase(), name: 'Example Student', password, confirmPassword: password, ...extra }, { csrf });
   const mailToken = (index = sent.length - 1) => new URL(sent[index].text.match(/https:\/\/[^\s]+/)[0]).searchParams.get('token');
   const verify = (raw = mailToken()) => call('verify', { token: raw }, { csrf });
   const login = async (email, value = password) => {
@@ -98,7 +98,7 @@ test('email confirmation is explicit, single-use and cannot grant client-supplie
   assert.equal((await f.verify(raw)).status, 400);
   const login = await f.login('member@example.invalid');
   assert.equal(login.status, 200);
-  assert.deepEqual(Object.keys(login.data.user).sort(), ['badge','email','id','name','permissions','profileComplete','role','staffTeams','studentVerified']);
+  assert.deepEqual(Object.keys(login.data.user).sort(), ['badge','email','id','name','ownerTester','permissions','profileComplete','role','staffTeams','studentVerified','username','verificationSource']);
   assert.equal(login.data.user.role, 'student');
   assert.deepEqual(login.data.user.staffTeams, []);
   assert.equal(f.db.prepare('SELECT kind FROM users').get().kind, 'student');

@@ -82,7 +82,7 @@ async function fixture(t, { hosted = true, mailbox = false, ...options } = {}) {
   const member = async email => {
     const session = await call('/api/member/session');
     const headers = { 'X-CSRF-Token': session.data.csrf };
-    assert.equal((await call('/api/member/signup', { name: 'Test Member', email, password, confirmPassword: password }, { headers })).status, 202);
+    assert.equal((await call('/api/member/signup', { name: 'Test Member', email, username:'member_'+email.split('@')[0].replace(/[^a-z0-9]/gi,'').toLowerCase(), password, confirmPassword: password }, { headers })).status, 202);
     const messages = localMailbox ? localMailbox.rows() : sent;
     const message = messages.find(item => item.to === email);
     const token = new URL(message.text.match(/https?:\/\/[^\s]+/)[0]).searchParams.get('token');

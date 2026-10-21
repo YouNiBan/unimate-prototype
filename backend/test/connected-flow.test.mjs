@@ -55,7 +55,7 @@ test('connected local flow shares real owned bookings, staff progress and privat
   ok(await call('/api/dev-mail'), 401, 'mailbox is protected');
 
   async function register(name, email) {
-    ok(await call('/api/member/signup', { name, email, password, confirmPassword: password, role: 'owner', verified_at: 'forged' }, { csrf: anonymous.csrf }), 202, 'member signup');
+    ok(await call('/api/member/signup', { name, email, username:'member_'+email.split('@')[0].replace(/[^a-z0-9]/gi,'').toLowerCase(), password, confirmPassword: password, role: 'owner', verified_at: 'forged' }, { csrf: anonymous.csrf }), 202, 'member signup');
     ok(await call('/api/member/login', { email, password }, { csrf: anonymous.csrf }), 401, 'unconfirmed account cannot log in');
     const mail = sent.findLast(message => message.to === email);
     assert.ok(mail, 'confirmation recorded only by injected sender');
