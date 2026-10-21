@@ -1,4 +1,5 @@
 // SMTP remains server-only. No credentials or verification links are logged.
+import { readFile } from 'node:fs/promises';
 export async function createMailer(env = process.env) {
   const keys = ['UNIMATE_SMTP_HOST', 'UNIMATE_SMTP_USER', 'UNIMATE_SMTP_PASSWORD', 'UNIMATE_MAIL_FROM'];
   if (!keys.some(key => env[key])) return null;
@@ -14,10 +15,11 @@ export async function createMailer(env = process.env) {
     connectionTimeout: 10000, greetingTimeout: 10000, socketTimeout: 15000,
     disableFileAccess: true, disableUrlAccess: true, logger: false, debug: false,
   });
-  const send = async ({to, subject, text}) => {
+  const logo = await readFile(new URL('./public/unimate-logo.png', import.meta.url));
+  const send = async ({to, subject, text, html}) => {
     const result = await transport.sendMail({
       from: {name:'UniMate', address:env.UNIMATE_MAIL_FROM},
-      to, subject, text, disableFileAccess:true, disableUrlAccess:true,
+      to, subject, text, ...(html ? {html, attachments:[{filename:'unimate-logo.png',content:logo,cid:'unimate-logo@hellounimate.com',contentDisposition:'inline',contentType:'image/png'}]} : {}), disableFileAccess:true, disableUrlAccess:true,
     });
     if (!result.accepted?.length || result.rejected?.length) throw new Error('Account email could not be delivered.');
   };
