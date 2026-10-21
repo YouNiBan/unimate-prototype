@@ -9,8 +9,11 @@ export function openDatabase(filename) {
   if (filename !== ':memory:') chmodSync(filename, 0o600);
   db.exec(`PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
     CREATE TABLE IF NOT EXISTS admins(id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
-      password_hash TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('owner','superadmin','admin','viewer')), active INTEGER NOT NULL DEFAULT 1);
+      password_hash TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('owner','superadmin','admin','support','viewer')), active INTEGER NOT NULL DEFAULT 1);
     CREATE TABLE IF NOT EXISTS sessions(token_hash TEXT PRIMARY KEY, admin_id TEXT NOT NULL REFERENCES admins(id), csrf TEXT NOT NULL, expires INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS admin_usernames(admin_id TEXT PRIMARY KEY REFERENCES admins(id),username TEXT NOT NULL UNIQUE COLLATE NOCASE);
+    CREATE TABLE IF NOT EXISTS reference_counters(key TEXT PRIMARY KEY,number INTEGER NOT NULL);
+    CREATE TABLE IF NOT EXISTS record_references(kind TEXT NOT NULL,record_id TEXT NOT NULL,reference TEXT NOT NULL UNIQUE,PRIMARY KEY(kind,record_id));
     CREATE TABLE IF NOT EXISTS login_limits(key TEXT PRIMARY KEY, count INTEGER NOT NULL, expires INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, name TEXT NOT NULL, email TEXT NOT NULL UNIQUE, kind TEXT NOT NULL,
       status TEXT NOT NULL CHECK(status IN ('active','suspended')), created_at TEXT NOT NULL);
@@ -62,16 +65,16 @@ export function openDatabase(filename) {
     CREATE INDEX IF NOT EXISTS sessions_expiry_idx ON sessions(expires);
     `);
   // Preserve existing accounts and sessions while migrating the original role constraint.
-  if (!db.prepare("SELECT sql FROM sqlite_master WHERE name='admins'").get().sql.includes("'owner'")) {
+  if (!db.prepare("SELECT sql FROM sqlite_master WHERE name='admins'").get().sql.includes("'support'")) {
     db.exec('PRAGMA foreign_keys=OFF');
     try {
       transaction(db,()=>db.exec(`CREATE TABLE admins_v2(id TEXT PRIMARY KEY, email TEXT NOT NULL UNIQUE, name TEXT NOT NULL,
-        password_hash TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('owner','superadmin','admin','viewer')), active INTEGER NOT NULL DEFAULT 1);
+        password_hash TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('owner','superadmin','admin','support','viewer')), active INTEGER NOT NULL DEFAULT 1);
         INSERT INTO admins_v2 SELECT id,email,name,password_hash,CASE WHEN role='moderator' THEN 'admin' ELSE role END,active FROM admins;
         DROP TABLE admins; ALTER TABLE admins_v2 RENAME TO admins;`));
     } finally { db.exec('PRAGMA foreign_keys=ON'); }
   }
-  db.exec("CREATE INDEX IF NOT EXISTS admins_name_idx ON admins(name,id); CREATE UNIQUE INDEX IF NOT EXISTS single_owner_idx ON admins(role) WHERE role='owner'; PRAGMA user_version=3");
+  db.exec("CREATE INDEX IF NOT EXISTS admins_name_idx ON admins(name,id); CREATE UNIQUE INDEX IF NOT EXISTS single_owner_idx ON admins(role) WHERE role='owner'; PRAGMA user_version=4");
   if (!db.prepare('PRAGMA table_info(conversations)').all().some(column=>column.name==='status')) {
     db.exec("ALTER TABLE conversations ADD COLUMN status TEXT NOT NULL DEFAULT 'open' CHECK(status IN ('request','open','closed'))");
   }

@@ -1,8 +1,25 @@
 {
   "name": "unimate-administration",
-  "description": "UNIMATE 优你伴 Administration",
+  "description": "UNIMATE \u4f18\u4f60\u4f34 Administration",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=24.0.0" },
-  "scripts": { "start": "node server.mjs", "test": "node --test test/*.test.mjs", "seed": "node seed.mjs" }
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test test/*.test.mjs",
+    "seed": "node seed.mjs"
+  },
+  "dependencies": {
+    "nodemailer": "10.1.7",
+    "qrcode": "1.5.4",
+    "stripe": "23.0.0",
+    "tesseract.js": "7.0.0"
+  },
+  "pnpm": {
+    "ignoredBuiltDependencies": [
+      "tesseract.js"
+    ]
+  }
 }
