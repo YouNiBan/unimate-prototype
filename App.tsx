@@ -1,3 +1,4 @@
+import { marketplaceSplit } from "./marketplace-fees.mjs";
 import React, { useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
@@ -581,7 +582,7 @@ const words = {
     addReview: "Add review",
     book: "Book service",
     sell: "Sell an item",
-    commission: "UNIMATE receives a 15% commission only when your item sells.",
+    commission: "UniMate takes 12% of the item price when it sells, including Stripe processing. Delivery is excluded.",
   },
   简体: {
     home: "首页",
@@ -605,7 +606,7 @@ const words = {
     addReview: "写点评",
     book: "预约服务",
     sell: "出售物品",
-    commission: "物品成功售出后，UNIMATE 收取15%佣金。",
+    commission: "物品售出后，UniMate 收取商品价格的12%作为佣金，已包含Stripe支付手续费，不含配送费。",
   },
   繁體: {
     home: "首頁",
@@ -629,7 +630,7 @@ const words = {
     addReview: "寫點評",
     book: "預約服務",
     sell: "出售物品",
-    commission: "物品成功售出後，UNIMATE 收取15%佣金。",
+    commission: "物品售出後，UniMate 收取商品價格的12%作為佣金，已包含Stripe支付手續費，不含配送費。",
   },
 };
 
@@ -1146,25 +1147,7 @@ function Header({
         style={[styles.headerControls, compact && styles.headerControlsCompact]}
       >
         <Pressable
-          accessibilityLabel={
-            darkMode
-              ? tr(language, "Use light mode", "使用浅色模式", "使用淺色模式")
-              : tr(language, "Use dark mode", "使用深色模式", "使用深色模式")
-          }
-          style={[
-            styles.headerIconButton,
-            compact && styles.headerIconButtonCompact,
-          ]}
-          onPress={onToggleTheme}
-        >
-          <Ionicons
-            name={darkMode ? "sunny-outline" : "moon-outline"}
-            size={compact ? 18 : 20}
-            color={darkMode ? "#FFD166" : palette.navy}
-          />
-        </Pressable>
-        <Pressable
-          accessibilityLabel="Notifications"
+          accessibilityLabel={tr(language, "Notifications", "通知", "通知")}
           style={[
             styles.headerIconButton,
             compact && styles.headerIconButtonCompact,
@@ -1183,17 +1166,21 @@ function Header({
           )}
         </Pressable>
         <Pressable
-          accessibilityLabel={`Location: ${locationLabel}`}
+          accessibilityLabel={
+            darkMode
+              ? tr(language, "Use light mode", "使用浅色模式", "使用淺色模式")
+              : tr(language, "Use dark mode", "使用深色模式", "使用深色模式")
+          }
           style={[
             styles.headerIconButton,
             compact && styles.headerIconButtonCompact,
           ]}
-          onPress={onLocation}
+          onPress={onToggleTheme}
         >
           <Ionicons
-            name="location-outline"
+            name={darkMode ? "sunny-outline" : "moon-outline"}
             size={compact ? 18 : 20}
-            color={palette.navy}
+            color={darkMode ? "#FFD166" : palette.navy}
           />
         </Pressable>
         <Pressable
@@ -1214,6 +1201,20 @@ function Header({
             name={languageOpen ? "chevron-up" : "chevron-down"}
             size={11}
             color={palette.blue}
+          />
+        </Pressable>
+        <Pressable
+          accessibilityLabel={`Location: ${locationLabel}`}
+          style={[
+            styles.headerIconButton,
+            compact && styles.headerIconButtonCompact,
+          ]}
+          onPress={onLocation}
+        >
+          <Ionicons
+            name="location-outline"
+            size={compact ? 18 : 20}
+            color={palette.navy}
           />
         </Pressable>
       </View>
@@ -3091,7 +3092,7 @@ function EventsForum({
               <Ionicons name="time-outline" size={21} color="#B97A0D" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.myEventStateTitle}>Welcome to London Mixer</Text>
+              <Text style={styles.myEventStateTitle}>{tr(language, "Welcome to London Mixer", "伦敦迎新交流会", "倫敦迎新交流會")}</Text>
               <Text style={styles.myEventStateMeta}>{tr(language, "Submitted 22 September 2026", "2026年9月22日提交", "2026年9月22日提交")}</Text>
             </View>
             <View style={styles.myEventPendingPill}><Text style={styles.myEventPendingText}>{tr(language, "Pending approval", "等待审核", "等待審核")}</Text></View>
@@ -3110,7 +3111,7 @@ function EventsForum({
               <Ionicons name={declinedResubmitted ? "time-outline" : "close-circle-outline"} size={21} color={declinedResubmitted ? "#B97A0D" : palette.coral} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.myEventStateTitle}>Freshers House Party</Text>
+              <Text style={styles.myEventStateTitle}>{tr(language, "Freshers House Party", "新生派对", "新生派對")}</Text>
               <Text style={styles.myEventStateMeta}>{tr(language, "Submitted 20 September 2026", "2026年9月20日提交", "2026年9月20日提交")}</Text>
             </View>
             <View style={declinedResubmitted ? styles.myEventPendingPill : styles.myEventDeclinedPill}><Text style={declinedResubmitted ? styles.myEventPendingText : styles.myEventDeclinedText}>{declinedResubmitted ? tr(language, "Pending approval", "等待审核", "等待審核") : tr(language, "Declined", "未通过", "未通過")}</Text></View>
@@ -3136,12 +3137,12 @@ function EventsForum({
             <PhotoSourceActions language={language} onCamera={() => pickDraftEventPhoto("camera")} onLibrary={() => pickDraftEventPhoto("library")} />
             <View style={styles.field}><Text style={styles.fieldLabel}>{tr(language, "Event name", "活动名称", "活動名稱")}</Text><TextInput value={editingEvent === "approved" ? draftEventTitle : "Freshers House Party"} onChangeText={editingEvent === "approved" ? setDraftEventTitle : undefined} /></View>
             <EventDateField language={language} value={draftEventDateKey} onChange={setDraftEventDateKey} />
-            <EventTimeField label={tr(language, "Start time", "开始时间", "開始時間")} value={draftEventStartTime} onChange={setDraftEventStartTime} />
-            <EventTimeField label={tr(language, "End time", "结束时间", "結束時間")} value={draftEventEndTime} onChange={setDraftEventEndTime} />
+            <EventTimeField language={language} label={tr(language, "Start time", "开始时间", "開始時間")} value={draftEventStartTime} onChange={setDraftEventStartTime} />
+            <EventTimeField language={language} label={tr(language, "End time", "结束时间", "結束時間")} value={draftEventEndTime} onChange={setDraftEventEndTime} />
             <View style={styles.field}><Text style={styles.fieldLabel}>{tr(language, "Location / full address", "地点 / 完整地址", "地點 / 完整地址")}</Text><TextInput value={draftEventLocation} onChangeText={setDraftEventLocation} /></View>
             <View style={[styles.field, { minHeight: 100 }]}><Text style={styles.fieldLabel}>{tr(language, "Summary of the event", "活动简介", "活動簡介")}</Text><TextInput multiline value={draftEventSummary} onChangeText={setDraftEventSummary} /></View>
             <View style={styles.field}><Text style={styles.fieldLabel}>{tr(language, "Cost / ticket price", "费用 / 票价", "費用 / 票價")}</Text><View style={styles.currencyInputRow}><Text style={styles.currencyPrefix}>£</Text><TextInput value={draftEventPrice} onChangeText={setDraftEventPrice} keyboardType="decimal-pad" style={styles.currencyInput} /></View></View>
-            <EventTimeField label={tr(language, "Last entry time", "最晚入场时间", "最晚入場時間")} value={draftEventLastEntry} onChange={setDraftEventLastEntry} />
+            <EventTimeField language={language} label={tr(language, "Last entry time", "最晚入场时间", "最晚入場時間")} value={draftEventLastEntry} onChange={setDraftEventLastEntry} />
             <View style={styles.eventCapacityField}>
               <View style={styles.eventCapacityHead}><View style={styles.eventCapacityIcon}><Ionicons name="people-outline" size={20} color={palette.blue} /></View><View style={{ flex: 1 }}><Text style={styles.fieldLabel}>{tr(language, "Event capacity", "活动人数上限", "活動人數上限")}</Text><Text style={styles.eventCapacityHint}>{tr(language, "Standard student events can host 2–30 people.", "普通学生活动可容纳2至30人。", "一般學生活動可容納2至30人。")}</Text></View></View>
               <View style={styles.eventCapacityControl}>
@@ -7241,6 +7242,8 @@ function FoodForum({ language, visitedPlaces, setVisitedPlaces, submittedReviews
   reviewReplies: Record<string, string>;
   restaurantProfile: RestaurantPublicProfile;
 }) {
+  const [showLeaderboard,setShowLeaderboard]=useState(false);
+  const [leaderboardScope,setLeaderboardScope]=useState<"all"|"friends">("all");
   const [mode, setMode] = useState<
     "discover" | "trending" | "friends" | "saved" | "visited"
   >("discover");
@@ -7473,6 +7476,16 @@ function FoodForum({ language, visitedPlaces, setVisitedPlaces, submittedReviews
       </LinearGradient>
     </Pressable>
   );
+  if(showLeaderboard)return <ScrollView contentContainerStyle={styles.scroll}><Pressable style={styles.categoryChip} onPress={()=>setShowLeaderboard(false)}><Text style={styles.categoryChipText}>{tr(language,"Back to restaurants","返回餐厅","返回餐廳")}</Text></Pressable><View style={styles.foodModeRow}>{([['all','All time','总榜','總榜'],['friends','Friends','好友','好友']] as const).map(([value,en,cn,tw])=><Pressable key={value} style={[styles.foodMode,leaderboardScope===value&&styles.foodModeActive]} onPress={()=>setLeaderboardScope(value)}><Text style={[styles.foodModeText,leaderboardScope===value&&styles.foodModeTextActive]}>{tr(language,en,cn,tw)}</Text></Pressable>)}</View><Text style={styles.workspaceHint}>{tr(language,"Layout preview · Example rankings","布局预览 · 示例排名","版面預覽 · 範例排名")}</Text>        <View style={styles.workspaceCard}>
+          <View style={styles.workspaceCardTop}><View><Text style={styles.workspaceCardTitle}>{tr(language, "Food reviewer leaderboard", "美食点评达人榜", "美食評論達人榜")}</Text><Text style={styles.workspaceHint}>{tr(language, "Based on helpful, verified student reviews", "按真实到访且有帮助的学生点评排名", "按真實到訪且有幫助的學生評論排名")}</Text></View><Ionicons name="trophy" size={24} color="#E7A51A" /></View>
+          {(leaderboardScope === "all" ? [
+            ["1", "Jenna · UniMate official reviewer", "42", "4.9"],
+            ["2", "@londonlatte", "28", "4.8"],
+            ["3", "@studybuddy_uk", "17", "4.7"],
+          ] : [["1", "@londonlatte", "28", "4.8"], ["2", "@studybuddy_uk", "17", "4.7"]]).map(([rank, name, reviews, rating]) => <View key={rank} style={[styles.friend, { paddingHorizontal: 0 }]}><View style={[styles.avatar, { backgroundColor: rank === "1" ? "#FFF0BD" : "#DCEBFF" }]}><Text style={styles.avatarText}>{rank}</Text></View><View style={{ flex: 1 }}><Text style={styles.friendName}>{name}</Text><Text style={styles.friendInterests}>{reviews} {tr(language, "reviews", "条点评", "則評論")} · ★ {rating}</Text></View>{rank === "1" && <VerificationBadge kind="staff" language={language} />}</View>)}
+          <Text style={styles.workspaceHint}>{tr(language, "Jenna independently reviews value, dishes and student offers, and helps restaurants join UniMate. Official reviews are labelled and are never restaurant photoshoots.", "Jenna 会独立点评价格、菜品和学生优惠，并协助餐厅加入优你伴。官方点评均有明确标识，绝不使用餐厅摆拍照片。", "Jenna 會獨立評論價錢、菜式及學生優惠，並協助餐廳加入優你伴。官方評論均有清晰標示，絕不使用餐廳擺拍相片。")}</Text>
+        </View>
+</ScrollView>;
   return (
     <>
       <ScrollView
@@ -7520,15 +7533,7 @@ function FoodForum({ language, visitedPlaces, setVisitedPlaces, submittedReviews
             placeholderTextColor="#8B98AD"
           />
         </View>
-        <View style={styles.workspaceCard}>
-          <View style={styles.workspaceCardTop}><View><Text style={styles.workspaceCardTitle}>{tr(language, "Food reviewer leaderboard", "美食点评达人榜", "美食評論達人榜")}</Text><Text style={styles.workspaceHint}>{tr(language, "Based on helpful, verified student reviews", "按真实到访且有帮助的学生点评排名", "按真實到訪且有幫助的學生評論排名")}</Text></View><Ionicons name="trophy" size={24} color="#E7A51A" /></View>
-          {[
-            ["1", "Jenna · UniMate official reviewer", "42", "4.9"],
-            ["2", "@londonlatte", "28", "4.8"],
-            ["3", "@studybuddy_uk", "17", "4.7"],
-          ].map(([rank, name, reviews, rating]) => <View key={rank} style={[styles.friend, { paddingHorizontal: 0 }]}><View style={[styles.avatar, { backgroundColor: rank === "1" ? "#FFF0BD" : "#DCEBFF" }]}><Text style={styles.avatarText}>{rank}</Text></View><View style={{ flex: 1 }}><Text style={styles.friendName}>{name}</Text><Text style={styles.friendInterests}>{reviews} {tr(language, "reviews", "条点评", "則評論")} · ★ {rating}</Text></View>{rank === "1" && <VerificationBadge kind="staff" language={language} />}</View>)}
-          <Text style={styles.workspaceHint}>{tr(language, "Jenna independently reviews value, dishes and student offers, and helps restaurants join UniMate. Official reviews are labelled and are never restaurant photoshoots.", "Jenna 会独立点评价格、菜品和学生优惠，并协助餐厅加入优你伴。官方点评均有明确标识，绝不使用餐厅摆拍照片。", "Jenna 會獨立評論價錢、菜式及學生優惠，並協助餐廳加入優你伴。官方評論均有清晰標示，絕不使用餐廳擺拍相片。")}</Text>
-        </View>
+        <Pressable style={styles.categoryChip} onPress={() => setShowLeaderboard(true)}><Text style={styles.categoryChipText}>{tr(language, "Leaderboard", "排行榜", "排行榜")}</Text></Pressable>
         <SlidableCategories language={language} rowStyle={styles.foodModeRow}>
           {modeOptions.map((item) => (
             <Pressable
@@ -7938,7 +7943,7 @@ function FoodForum({ language, visitedPlaces, setVisitedPlaces, submittedReviews
             {submittedReviews.filter((review) => review.placeName === placeKey(selected)).map((review, index) => (
               <View style={styles.studentReviewCard} key={`${selected.name}-${index}`}>
                 <View style={styles.studentReviewHead}>
-                  <View style={[styles.avatar, { backgroundColor: palette.sky }]}><Text style={styles.avatarText}>YOU</Text></View>
+                  <View style={[styles.avatar, { backgroundColor: palette.sky }]}><Text style={styles.avatarText}>{tr(language, "YOU", "你", "你")}</Text></View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.friendName}>{tr(language, "Your review", "你的评价", "你的評價")}</Text>
                     <Text style={styles.metaText}>{review.friendsOnly ? tr(language, "Visible to friends", "仅好友可见", "只限好友可見") : tr(language, "Visible to students", "学生可见", "學生可見")}</Text>
@@ -9788,7 +9793,9 @@ function SellItemForm({
       : fair === "caution"
         ? tr(language, "Slightly overpriced", "价格略高", "價格略高")
         : tr(language, "Overpriced", "价格过高", "價格過高");
-  const payout = selling * 0.85;
+  const itemPricePence = Math.round(selling * 100);
+  const split = marketplaceSplit(Number.isSafeInteger(itemPricePence) && itemPricePence >= 0 && itemPricePence <= 10000000 ? itemPricePence : 0);
+  const payout = split.sellerPence / 100;
   const scalePosition = Math.max(
     4,
     Math.min(
@@ -10204,13 +10211,13 @@ function SellItemForm({
               <Text style={styles.payoutLabel}>
                 {tr(
                   language,
-                  "UNIMATE commission (15%)",
-                  "UNIMATE佣金（15%）",
-                  "UNIMATE佣金（15%）",
+                  "UNIMATE commission (12%)",
+                  "UNIMATE佣金（12%）",
+                  "UNIMATE佣金（12%）",
                 )}
               </Text>
               <Text style={styles.payoutFee}>
-                −£{(selling * 0.15).toFixed(2)}
+                −£{(split.commissionPence / 100).toFixed(2)}
               </Text>
             </View>
             <View style={styles.payoutTotal}>
@@ -11571,7 +11578,7 @@ function BookingsPage({
         <Text style={styles.authFieldLabel}>{tr(language, "What happened?", "发生了什么？", "發生了甚麼事？")}</Text><TextInput style={[styles.authInput, { minHeight: 96 }]} multiline value={caseDetails} onChangeText={setCaseDetails} placeholder={tr(language, "Add the details UniMate needs to review", "填写优你伴审核所需详情", "填寫優你伴審核所需詳情")} />
         <Pressable accessibilityRole="button" disabled={!caseJob || !caseReason || !caseDetails.trim()} style={[styles.primaryButton, (!caseReason || !caseDetails.trim()) && { opacity: 0.45 }]} onPress={() => { if (!caseJob || !caseReason || !caseDetails.trim()) return; const id = caseJob.booking.id; onOpenServiceChatCase(caseJob, caseReason, "customer", caseDetails); setCaseJob(null); onOpenMessages(`case-${id}`); }}><Text style={styles.primaryButtonText}>{tr(language, "Open supported conversation", "开启支持对话", "開啟支援對話")}</Text></Pressable>
       </ScrollView></Sheet>
-      <Sheet visible={detailBooking !== null} title={tr(language, "Booking details", "预订详情", "預訂詳情")} onClose={() => setDetailBooking(null)}>{detailBooking && <ScrollView contentContainerStyle={styles.bookingDetailSheet} showsVerticalScrollIndicator={false}><View style={styles.bookingDetailHero}><View style={[styles.bookingDetailHeroIcon, { backgroundColor: detailBooking.color + "18" }]}><Ionicons name={detailBooking.icon as any} size={28} color={detailBooking.color} /></View><View style={{ flex: 1 }}><Text style={styles.bookingDetailType}>{detailBooking.type}</Text><Text style={styles.bookingDetailTitle}>{detailBooking.title}</Text><Text style={styles.bookingDetailStatus}>{detailBooking.statusLabel}</Text></View><Text style={styles.bookingDetailPrice}>{detailBooking.price}</Text></View><View style={styles.bookingDetailFacts}><View style={styles.bookingDetailFact}><Ionicons name="calendar-outline" size={18} color={palette.blue} /><View><Text style={styles.detailLabel}>{tr(language, "Schedule", "日期与时间", "日期及時間")}</Text><Text style={styles.detailValue}>{detailBooking.detail}</Text></View></View>{detailBooking.id === "airport" && <><View style={styles.bookingDetailFact}><Ionicons name="airplane-outline" size={18} color={palette.green} /><View><Text style={styles.detailLabel}>{tr(language, "Flight", "航班", "航班")}</Text><Text style={styles.detailValue}>BA 2836 · Terminal 2</Text></View></View><View style={styles.bookingDetailFact}><Ionicons name="location-outline" size={18} color={palette.coral} /><View><Text style={styles.detailLabel}>{tr(language, "Destination", "目的地", "目的地")}</Text><Text style={styles.detailValue}>UCL, Bloomsbury, London</Text></View></View></>}{detailBooking.id === "clean" && <><View style={styles.bookingDetailFact}><Ionicons name="home-outline" size={18} color="#F28A18" /><View><Text style={styles.detailLabel}>{tr(language, "Property", "房屋", "房屋")}</Text><Text style={styles.detailValue}>{tr(language, "1-bedroom student flat · End-of-tenancy clean", "一居室学生公寓 · 退租清洁", "一房學生公寓 · 退租清潔")}</Text></View></View><View style={styles.bookingDetailFact}><Ionicons name="person-circle-outline" size={18} color={palette.green} /><View><Text style={styles.detailLabel}>{tr(language, "Assigned professional", "已安排人员", "已安排人員")}</Text><Text style={styles.detailValue}>Maya Patel · UNIMATE approved</Text></View></View></>}{detailBooking.id === "move" && <><View style={styles.bookingDetailFact}><Ionicons name="navigate-outline" size={18} color="#00A1A7" /><View><Text style={styles.detailLabel}>{tr(language, "Route", "搬运路线", "搬運路線")}</Text><Text style={styles.detailValue}>Bloomsbury → Canary Wharf</Text></View></View><View style={styles.bookingDetailFact}><Ionicons name="cube-outline" size={18} color={palette.blue} /><View><Text style={styles.detailLabel}>{tr(language, "Inventory", "物品清单", "物品清單")}</Text><Text style={styles.detailValue}>{tr(language, "4 boxes · 1 suitcase · 1 mover", "4个箱子 · 1个行李箱 · 1名搬运人员", "4個箱 · 1個行李箱 · 1名搬運人員")}</Text></View></View></>}{detailBooking.id === "market" && <><View style={styles.bookingDetailFact}><Ionicons name="receipt-outline" size={18} color="#713CE0" /><View><Text style={styles.detailLabel}>{tr(language, "Order reference", "订单编号", "訂單編號")}</Text><Text style={styles.detailValue}>UM-1048</Text></View></View><View style={styles.bookingDetailFact}><Ionicons name="checkmark-circle-outline" size={18} color={palette.green} /><View><Text style={styles.detailLabel}>{tr(language, "Handover", "交付", "交收")}</Text><Text style={styles.detailValue}>{tr(language, "Collected from the seller", "已从卖家处取货", "已從賣家處取貨")}</Text></View></View></>}</View><View style={styles.bookingReferenceCard}><Ionicons name="shield-checkmark" size={20} color={palette.green} /><Text style={styles.bookingReferenceText}>{tr(language, "This booking is protected by UNIMATE support. Your reference is included automatically if you need help.", "此预订受UNIMATE客服保障。如需帮助，系统会自动附上预订编号。", "此預訂受UNIMATE客服保障。如需協助，系統會自動附上預訂編號。")}</Text></View><Pressable style={styles.primaryButton} onPress={() => { const selected = detailBooking; setDetailBooking(null); setSupportBooking(selected); }}><Text style={styles.primaryButtonText}>{tr(language, "Get help with this booking", "获取此预订的帮助", "取得此預訂的協助")}</Text></Pressable></ScrollView>}</Sheet>
+      <Sheet visible={detailBooking !== null} title={tr(language, "Booking details", "预订详情", "預訂詳情")} onClose={() => setDetailBooking(null)}>{detailBooking && <ScrollView contentContainerStyle={styles.bookingDetailSheet} showsVerticalScrollIndicator={false}><View style={styles.bookingDetailHero}><View style={[styles.bookingDetailHeroIcon, { backgroundColor: detailBooking.color + "18" }]}><Ionicons name={detailBooking.icon as any} size={28} color={detailBooking.color} /></View><View style={{ flex: 1 }}><Text style={styles.bookingDetailType}>{detailBooking.type}</Text><Text style={styles.bookingDetailTitle}>{detailBooking.title}</Text><Text style={styles.bookingDetailStatus}>{detailBooking.statusLabel}</Text></View><Text style={styles.bookingDetailPrice}>{detailBooking.price}</Text></View><View style={styles.bookingDetailFacts}><View style={styles.bookingDetailFact}><Ionicons name="calendar-outline" size={18} color={palette.blue} /><View><Text style={styles.detailLabel}>{tr(language, "Schedule", "日期与时间", "日期及時間")}</Text><Text style={styles.detailValue}>{detailBooking.detail}</Text></View></View>{detailBooking.id === "airport" && <><View style={styles.bookingDetailFact}><Ionicons name="airplane-outline" size={18} color={palette.green} /><View><Text style={styles.detailLabel}>{tr(language, "Flight", "航班", "航班")}</Text><Text style={styles.detailValue}>BA 2836 · Terminal 2</Text></View></View><View style={styles.bookingDetailFact}><Ionicons name="location-outline" size={18} color={palette.coral} /><View><Text style={styles.detailLabel}>{tr(language, "Destination", "目的地", "目的地")}</Text><Text style={styles.detailValue}>UCL, Bloomsbury, London</Text></View></View></>}{detailBooking.id === "clean" && <><View style={styles.bookingDetailFact}><Ionicons name="home-outline" size={18} color="#F28A18" /><View><Text style={styles.detailLabel}>{tr(language, "Property", "房屋", "房屋")}</Text><Text style={styles.detailValue}>{tr(language, "1-bedroom student flat · End-of-tenancy clean", "一居室学生公寓 · 退租清洁", "一房學生公寓 · 退租清潔")}</Text></View></View><View style={styles.bookingDetailFact}><Ionicons name="person-circle-outline" size={18} color={palette.green} /><View><Text style={styles.detailLabel}>{tr(language, "Assigned professional", "已安排人员", "已安排人員")}</Text><Text style={styles.detailValue}>{tr(language, "Maya Patel · UNIMATE approved", "Maya Patel · UNIMATE 已认证", "Maya Patel · UNIMATE 已認證")}</Text></View></View></>}{detailBooking.id === "move" && <><View style={styles.bookingDetailFact}><Ionicons name="navigate-outline" size={18} color="#00A1A7" /><View><Text style={styles.detailLabel}>{tr(language, "Route", "搬运路线", "搬運路線")}</Text><Text style={styles.detailValue}>Bloomsbury → Canary Wharf</Text></View></View><View style={styles.bookingDetailFact}><Ionicons name="cube-outline" size={18} color={palette.blue} /><View><Text style={styles.detailLabel}>{tr(language, "Inventory", "物品清单", "物品清單")}</Text><Text style={styles.detailValue}>{tr(language, "4 boxes · 1 suitcase · 1 mover", "4个箱子 · 1个行李箱 · 1名搬运人员", "4個箱 · 1個行李箱 · 1名搬運人員")}</Text></View></View></>}{detailBooking.id === "market" && <><View style={styles.bookingDetailFact}><Ionicons name="receipt-outline" size={18} color="#713CE0" /><View><Text style={styles.detailLabel}>{tr(language, "Order reference", "订单编号", "訂單編號")}</Text><Text style={styles.detailValue}>UM-1048</Text></View></View><View style={styles.bookingDetailFact}><Ionicons name="checkmark-circle-outline" size={18} color={palette.green} /><View><Text style={styles.detailLabel}>{tr(language, "Handover", "交付", "交收")}</Text><Text style={styles.detailValue}>{tr(language, "Collected from the seller", "已从卖家处取货", "已從賣家處取貨")}</Text></View></View></>}</View><View style={styles.bookingReferenceCard}><Ionicons name="shield-checkmark" size={20} color={palette.green} /><Text style={styles.bookingReferenceText}>{tr(language, "This booking is protected by UNIMATE support. Your reference is included automatically if you need help.", "此预订受UNIMATE客服保障。如需帮助，系统会自动附上预订编号。", "此預訂受UNIMATE客服保障。如需協助，系統會自動附上預訂編號。")}</Text></View><Pressable style={styles.primaryButton} onPress={() => { const selected = detailBooking; setDetailBooking(null); setSupportBooking(selected); }}><Text style={styles.primaryButtonText}>{tr(language, "Get help with this booking", "获取此预订的帮助", "取得此預訂的協助")}</Text></Pressable></ScrollView>}</Sheet>
       <Sheet
         visible={supportBooking !== null}
         title={
@@ -12243,7 +12250,7 @@ function MessagesPage({
         </View>
         <Pressable style={styles.groupMemberRow} onPress={() => { setMembersOpen(false); setSelected("host"); setMessageDraft(""); }}>
           <View style={[styles.avatar, styles.groupMemberAvatar, { backgroundColor: "#DCEBFF" }]}><Text style={styles.avatarText}>U</Text></View>
-          <View style={{ flex: 1 }}><View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}><Text style={styles.friendName}>UniMate Events</Text><VerificationBadge kind="organisation" language={language} /></View><Text style={styles.friendUni}>{tr(language, "Event host", "活动主办方", "活動主辦方")}</Text><Text style={styles.friendInterests}>{tr(language, "Message privately about this event", "私信咨询此活动", "私訊查詢此活動")}</Text></View>
+          <View style={{ flex: 1 }}><View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}><Text style={styles.friendName}>{tr(language, "UniMate Events", "UniMate 活动", "UniMate 活動")}</Text><VerificationBadge kind="organisation" language={language} /></View><Text style={styles.friendUni}>{tr(language, "Event host", "活动主办方", "活動主辦方")}</Text><Text style={styles.friendInterests}>{tr(language, "Message privately about this event", "私信咨询此活动", "私訊查詢此活動")}</Text></View>
           <Ionicons name="chatbubble-ellipses-outline" size={21} color={palette.blue} />
         </Pressable>
         {groupMembers.map((member) => (
@@ -12341,7 +12348,7 @@ function MessagesPage({
           </View>
           {active.id === "group" && <Pressable accessibilityRole="button" style={styles.groupHostCard} onPress={() => { setSelected("host"); setMessageDraft(""); }}>
             <View style={styles.groupHostAvatar}><Text style={styles.groupHostInitial}>U</Text></View>
-            <View style={{ flex: 1 }}><Text style={styles.groupHostEyebrow}>{tr(language, "EVENT HOST", "活动主办方", "活動主辦方")}</Text><View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}><Text style={styles.groupHostName}>UniMate Events</Text><VerificationBadge kind="organisation" language={language} /></View><Text style={styles.groupHostHint}>{tr(language, "Contact privately about event details", "私信咨询活动详情", "私訊查詢活動詳情")}</Text></View>
+            <View style={{ flex: 1 }}><Text style={styles.groupHostEyebrow}>{tr(language, "EVENT HOST", "活动主办方", "活動主辦方")}</Text><View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}><Text style={styles.groupHostName}>{tr(language, "UniMate Events", "UniMate 活动", "UniMate 活動")}</Text><VerificationBadge kind="organisation" language={language} /></View><Text style={styles.groupHostHint}>{tr(language, "Contact privately about event details", "私信咨询活动详情", "私訊查詢活動詳情")}</Text></View>
             <View style={styles.groupHostMessage}><Ionicons name="chatbubble-ellipses-outline" size={19} color={palette.blue} /></View>
           </Pressable>}
           <View style={styles.chatSafety}>
@@ -14217,7 +14224,7 @@ function EventDateField({ language, value, onChange, label }: { language: Langua
   );
 }
 
-function EventTimeField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function EventTimeField({ label, value, onChange, language }: { language: Language; label: string; value: string; onChange: (value: string) => void }) {
   const [open, setOpen] = useState(false);
   const [hour, minute] = value.split(":").map(Number);
   const updateHour = (amount: number) => onChange(`${String((hour + amount + 24) % 24).padStart(2, "0")}:${String(minute).padStart(2, "0")}`);
@@ -14225,13 +14232,13 @@ function EventTimeField({ label, value, onChange }: { label: string; value: stri
   return <View style={styles.eventTimeField}>
     <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${value}`} accessibilityState={{ expanded: open }} style={[styles.eventDateButton, open && styles.eventDateButtonOpen]} onPress={() => setOpen(!open)}><View style={styles.eventScheduleIcon}><Ionicons name="time-outline" size={19} color={palette.blue} /></View><View style={styles.eventDateButtonCopy}><Text style={styles.eventScheduleLabel}>{label}</Text><Text style={styles.eventTimeValue}>{value}</Text></View><Ionicons name={open ? "chevron-up" : "chevron-down"} size={17} color={palette.blue} /></Pressable>
     {open && <View style={styles.eventTimePanel}>
-      <View style={styles.eventTimeHeader}><Text style={styles.eventTimePanelTitle}>Set time</Text><Text style={styles.eventTimePanelHint}>24-hour clock · 5-minute intervals</Text></View>
+      <View style={styles.eventTimeHeader}><Text style={styles.eventTimePanelTitle}>{tr(language, "Set time", "设置时间", "設置時間")}</Text><Text style={styles.eventTimePanelHint}>{tr(language, "24-hour clock · 5-minute intervals", "24小时制 · 每5分钟一档", "24小時制 · 每5分鐘一檔")}</Text></View>
       <View style={styles.eventTimeStepperRow}>
-        <View style={styles.eventTimeSegment}><Text style={styles.eventTimeSegmentLabel}>Hour</Text><View style={styles.eventTimeStepper}><Pressable accessibilityLabel="Previous hour" style={styles.eventTimeStepButton} onPress={() => updateHour(-1)}><Ionicons name="remove" size={19} color={palette.blue} /></Pressable><Text style={styles.eventTimeStepValue}>{String(hour).padStart(2, "0")}</Text><Pressable accessibilityLabel="Next hour" style={styles.eventTimeStepButton} onPress={() => updateHour(1)}><Ionicons name="add" size={19} color={palette.blue} /></Pressable></View></View>
+        <View style={styles.eventTimeSegment}><Text style={styles.eventTimeSegmentLabel}>{tr(language, "Hour", "小时", "小時")}</Text><View style={styles.eventTimeStepper}><Pressable accessibilityLabel={tr(language, "Previous hour", "上一小时", "上一小時")} style={styles.eventTimeStepButton} onPress={() => updateHour(-1)}><Ionicons name="remove" size={19} color={palette.blue} /></Pressable><Text style={styles.eventTimeStepValue}>{String(hour).padStart(2, "0")}</Text><Pressable accessibilityLabel={tr(language, "Next hour", "下一小时", "下一小時")} style={styles.eventTimeStepButton} onPress={() => updateHour(1)}><Ionicons name="add" size={19} color={palette.blue} /></Pressable></View></View>
         <Text style={styles.eventTimeColon}>:</Text>
-        <View style={styles.eventTimeSegment}><Text style={styles.eventTimeSegmentLabel}>Minute</Text><View style={styles.eventTimeStepper}><Pressable accessibilityLabel="Previous five minutes" style={styles.eventTimeStepButton} onPress={() => updateMinute(-5)}><Ionicons name="remove" size={19} color={palette.blue} /></Pressable><Text style={styles.eventTimeStepValue}>{String(minute).padStart(2, "0")}</Text><Pressable accessibilityLabel="Next five minutes" style={styles.eventTimeStepButton} onPress={() => updateMinute(5)}><Ionicons name="add" size={19} color={palette.blue} /></Pressable></View></View>
+        <View style={styles.eventTimeSegment}><Text style={styles.eventTimeSegmentLabel}>{tr(language, "Minute", "分钟", "分鐘")}</Text><View style={styles.eventTimeStepper}><Pressable accessibilityLabel={tr(language, "Previous five minutes", "前5分钟", "前5分鐘")} style={styles.eventTimeStepButton} onPress={() => updateMinute(-5)}><Ionicons name="remove" size={19} color={palette.blue} /></Pressable><Text style={styles.eventTimeStepValue}>{String(minute).padStart(2, "0")}</Text><Pressable accessibilityLabel={tr(language, "Next five minutes", "后5分钟", "後5分鐘")} style={styles.eventTimeStepButton} onPress={() => updateMinute(5)}><Ionicons name="add" size={19} color={palette.blue} /></Pressable></View></View>
       </View>
-      <Pressable style={styles.eventTimeDone} onPress={() => setOpen(false)}><Ionicons name="checkmark" size={16} color="white" /><Text style={styles.eventTimeDoneText}>Use {value}</Text></Pressable>
+      <Pressable style={styles.eventTimeDone} onPress={() => setOpen(false)}><Ionicons name="checkmark" size={16} color="white" /><Text style={styles.eventTimeDoneText}>{tr(language, "Use", "使用", "使用")} {value}</Text></Pressable>
     </View>}
   </View>;
 }
@@ -14582,11 +14589,11 @@ function EventModal({
               index === 1 ? (
                 <EventDateField key={field} language={language} value={eventDate} onChange={setEventDate} />
               ) : index === 2 ? (
-                <EventTimeField key={field} label={field} value={startTime} onChange={setStartTime} />
+                <EventTimeField language={language} key={field} label={field} value={startTime} onChange={setStartTime} />
               ) : index === 3 ? (
-                <EventTimeField key={field} label={field} value={endTime} onChange={setEndTime} />
+                <EventTimeField language={language} key={field} label={field} value={endTime} onChange={setEndTime} />
               ) : index === 7 ? (
-                <EventTimeField key={field} label={field} value={lastEntryTime} onChange={setLastEntryTime} />
+                <EventTimeField language={language} key={field} label={field} value={lastEntryTime} onChange={setLastEntryTime} />
               ) : (
                 <View
                   key={field}
@@ -16668,17 +16675,17 @@ function OrganisationWorkspace({ kind, language, onLanguage, darkMode, onToggleD
         <PhotoSourceActions language={language} onCamera={async () => { const uris = await selectPhotoUris(language, "camera", { allowsEditing: true, aspect: [16, 9], quality: .8 }); if (uris[0]) setEventCover(uris[0]); }} onLibrary={async () => { const uris = await selectPhotoUris(language, "library", { allowsEditing: true, aspect: [16, 9], quality: .8 }); if (uris[0]) setEventCover(uris[0]); }} />
         <View style={styles.field}><Text style={styles.fieldLabel}>{t("Event name", "活动名称", "活動名稱")}</Text><TextInput value={eventTitle} onChangeText={setEventTitle} placeholder={t("Enter event name", "输入活动名称", "輸入活動名稱")} placeholderTextColor="#A1ADBE" /></View>
         <EventDateField language={language} value={eventDate} onChange={setEventDate} />
-        <EventTimeField label={t("Start time", "开始时间", "開始時間")} value={eventStartTime} onChange={setEventStartTime} />
-        <EventTimeField label={t("End time", "结束时间", "結束時間")} value={eventEndTime} onChange={setEventEndTime} />
+        <EventTimeField language={language} label={t("Start time", "开始时间", "開始時間")} value={eventStartTime} onChange={setEventStartTime} />
+        <EventTimeField language={language} label={t("End time", "结束时间", "結束時間")} value={eventEndTime} onChange={setEventEndTime} />
         <View style={styles.field}><Text style={styles.fieldLabel}>{t("Location / full address", "地点 / 完整地址", "地點 / 完整地址")}</Text><TextInput value={eventVenue} onChangeText={setEventVenue} placeholder={t("Enter location / full address", "输入地点及完整地址", "輸入地點及完整地址")} placeholderTextColor="#A1ADBE" /></View>
         <View style={[styles.field, { minHeight: 100 }]}><Text style={styles.fieldLabel}>{t("Summary of the event", "活动简介", "活動簡介")}</Text><TextInput multiline value={eventSummary} onChangeText={setEventSummary} placeholder={t("Describe the experience for students", "为学生介绍活动内容", "向學生介紹活動內容")} placeholderTextColor="#A1ADBE" /></View>
         <View style={styles.field}><Text style={styles.fieldLabel}>{t("Ticket price · £0 for free sign-up", "门票价格 · £0 表示免费报名", "門票價格 · £0 表示免費報名")}</Text><View style={styles.currencyInputRow}><Text style={styles.currencyPrefix}>£</Text><TextInput value={eventPrice} onChangeText={setEventPrice} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor="#A1ADBE" style={styles.currencyInput} /></View></View>
-        <EventTimeField label={t("Last entry time", "最晚入场时间", "最晚入場時間")} value={eventLastEntry} onChange={setEventLastEntry} />
+        <EventTimeField language={language} label={t("Last entry time", "最晚入场时间", "最晚入場時間")} value={eventLastEntry} onChange={setEventLastEntry} />
         <Text style={[styles.formSectionLabel, { marginTop: 8 }]}>{t("BOOKING RELEASE PLAN", "报名开放计划", "報名開放計劃")}</Text>
         <Text style={styles.workspaceHint}>{t("Choose when paid tickets or free sign-up should open after UniMate approval. Saving a draft does not publish the event.", "选择优你伴审核通过后购票或免费报名开放的时间。保存草稿不会发布活动。", "選擇優你伴審核通過後購票或免費報名開放的時間。儲存草稿不會發佈活動。")}</Text>
         <Text style={styles.fieldLabel}>{t("Booking opens on", "报名开放日期", "報名開放日期")}</Text>
         <EventDateField language={language} value={eventReleaseDate} onChange={setEventReleaseDate} />
-        <EventTimeField label={t("Ticket release time", "门票开售时间", "門票發售時間")} value={eventReleaseTime} onChange={setEventReleaseTime} />
+        <EventTimeField language={language} label={t("Ticket release time", "门票开售时间", "門票發售時間")} value={eventReleaseTime} onChange={setEventReleaseTime} />
         <View style={styles.eventCapacityField}><View style={styles.eventCapacityHead}><View style={styles.eventCapacityIcon}><Ionicons name="people-outline" size={20} color={palette.blue} /></View><View style={{ flex: 1 }}><Text style={styles.fieldLabel}>{t("Event capacity", "活动人数上限", "活動人數上限")}</Text><Text style={styles.eventCapacityHint}>{t("Organisation event drafts are limited to 20–350 people. Discuss larger or festival-scale events with UniMate first.", "机构活动草稿限 20–350 人。更大型或节庆规模活动须先与优你伴商议。", "機構活動草稿限 20–350 人。更大型或節慶規模活動須先與優你伴商議。")}</Text></View></View><View style={styles.eventCapacityControl}><Pressable accessibilityRole="button" accessibilityLabel={t("Reduce capacity", "减少人数", "減少人數")} disabled={Number(eventCapacity) <= 20} style={[styles.eventCapacityButton, Number(eventCapacity) <= 20 && styles.eventCapacityButtonDisabled]} onPress={() => setEventCapacity(String(Math.max(20, Number(eventCapacity || 20) - 1)))}><Ionicons name="remove" size={20} color={Number(eventCapacity) <= 20 ? "#AAB7C5" : palette.blue} /></Pressable><View style={styles.eventCapacityValueWrap}><TextInput accessibilityLabel={t("Event capacity", "活动人数上限", "活動人數上限")} value={eventCapacity} onChangeText={(value) => { const digits = value.replace(/\D/g, ""); setEventCapacity(digits ? String(Math.min(350, Number(digits))) : ""); }} keyboardType="number-pad" style={[styles.eventCapacityValue, { width: 96, height: 30, padding: 0, textAlign: "center" }]} /><Text style={styles.eventCapacityUnit}>{t("spots", "个名额", "個名額")}</Text></View><Pressable accessibilityRole="button" accessibilityLabel={t("Increase capacity", "增加人数", "增加人數")} disabled={Number(eventCapacity) >= 350} style={[styles.eventCapacityButton, Number(eventCapacity) >= 350 && styles.eventCapacityButtonDisabled]} onPress={() => setEventCapacity(String(Math.min(350, Number(eventCapacity || 20) + 1)))}><Ionicons name="add" size={20} color={Number(eventCapacity) >= 350 ? "#AAB7C5" : palette.blue} /></Pressable></View><View style={styles.eventCapacityPresets}>{[20, 100, 200, 350].map((value) => <Pressable key={value} accessibilityRole="button" style={[styles.eventCapacityPreset, eventCapacity === String(value) && styles.eventCapacityPresetActive]} onPress={() => setEventCapacity(String(value))}><Text style={[styles.eventCapacityPresetText, eventCapacity === String(value) && styles.eventCapacityPresetTextActive]}>{value}</Text></Pressable>)}</View></View>
         <Pressable accessibilityRole="button" style={styles.reviewCountAction} onPress={() => { setShowEventForm(false); setTab("messages"); setSelectedMessage("UniMate operations"); setMessageDraft(t(`I'd like to discuss an event for more than 350 people. Event: ${eventTitle.trim() || "[event name]"}. Venue: ${eventVenue.trim() || "[venue]"}.`, `我想商议超过 350 人的活动。活动：${eventTitle.trim() || "[活动名称]"}。场地：${eventVenue.trim() || "[场地]"}。`, `我想商議超過 350 人的活動。活動：${eventTitle.trim() || "[活動名稱]"}。場地：${eventVenue.trim() || "[場地]"}。`)); }}><Text style={styles.reviewCountActionText}>{t("Discuss more than 350 places with UniMate", "与优你伴商议超过 350 人的活动", "與優你伴商議超過 350 人的活動")}</Text><Ionicons name="chevron-forward" size={17} color={palette.blue} /></Pressable>
         <View style={styles.field}><Text style={styles.fieldLabel}>{t("Voucher code (optional)", "优惠码（选填）", "優惠碼（選填）")}</Text><TextInput value={eventVoucher} onChangeText={setEventVoucher} autoCapitalize="characters" placeholder={t("e.g. STUDENT15", "例如 STUDENT15", "例如 STUDENT15")} placeholderTextColor="#A1ADBE" /></View>
