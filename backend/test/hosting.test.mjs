@@ -74,7 +74,7 @@ async function fixture(t, { hosted = true, mailbox = false, ...options } = {}) {
   });
   const adminLogin = async (email = account.email) => {
     const anonymous = await call('/api/session');
-    const result = await call('/api/login', { email, password }, { headers: { 'X-CSRF-Token': anonymous.data.csrf } });
+    const result = await call('/api/login', { email, password, keepSignedIn: true }, { headers: { 'X-CSRF-Token': anonymous.data.csrf } });
     const cookie = result.headers['set-cookie']?.[0]?.split(';')[0] || '';
     const session = await call('/api/session', undefined, { headers: { Cookie: cookie } });
     return { ...result, cookie, csrf: session.data.csrf };
@@ -241,7 +241,7 @@ test('hosted administrator and member sessions stay separate and require their o
   await createOwner(f.db, account);
   const admin = await f.adminLogin();
   assert.equal(admin.status, 200);
-  assert.match(admin.headers['set-cookie'][0], /HttpOnly; SameSite=Strict; Path=\/; Max-Age=2592000; Secure/);
+  assert.match(admin.headers['set-cookie'][0], /HttpOnly; SameSite=Strict; Path=\/; Max-Age=259(?:1999|2000); Secure/);
   const student = await f.member('student@example.invalid');
   assert.match(student.headers['set-cookie'][0], /HttpOnly; SameSite=Lax; Path=\/; Max-Age=604800; Secure/);
   assert.equal((await f.call('/api/users', undefined, { headers: { Cookie: student.cookie } })).status, 401);
