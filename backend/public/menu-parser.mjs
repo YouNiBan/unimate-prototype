@@ -1,0 +1,2 @@
+// OCR suggestions are always reviewed by a person before publication.
+export function parseMenuText(text){const items=[];for(const raw of String(text).split(/\r?\n/)){const line=raw.trim();const match=/^(.*?)\s*(?:£\s*|GBP\s*)?(\d{1,3}[.,]\d{2})\s*$/.exec(line);if(!match)continue;const name=match[1].replace(/[.·…\s-]+$/u,'').trim();if(name.length<2)continue;items.push({name:name.slice(0,180),category:'',description:'',pricePence:Math.round(Number(match[2].replace(',','.'))*100)});if(items.length===200)break;}return items;}

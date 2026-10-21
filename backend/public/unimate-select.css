@@ -1,0 +1,16 @@
+.unimate-select{position:relative;display:inline-flex;min-width:0;width:100%;font-family:inherit;vertical-align:middle}
+.unimate-select-native{display:none!important}
+.unimate-select .unimate-select-trigger{display:flex;align-items:center;justify-content:space-between;gap:16px;width:100%;min-width:0;min-height:42px;margin:0;padding:10px 12px;border:1px solid var(--line,#dbe6f3);border-radius:10px;background:var(--surface,#fff);color:var(--ink,var(--text,#16213d));font:inherit;font-size:12px;font-weight:600;text-align:left;cursor:pointer;line-height:1.4}
+.unimate-select-trigger>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.unimate-select-trigger:hover,.unimate-select-trigger[aria-expanded=true]{border-color:var(--blue,var(--accent,#087ee5));background:var(--soft,#eaf4ff)}
+.unimate-select-trigger:focus-visible,.unimate-select-option:focus-visible{outline:2px solid var(--blue,var(--accent,#087ee5));outline-offset:2px}
+.unimate-select-trigger:disabled{opacity:.5;cursor:default}
+.unimate-select-chevron{flex:none;width:7px;height:7px;border-right:1.5px solid var(--muted,#71809b);border-bottom:1.5px solid var(--muted,#71809b);transform:rotate(45deg);margin:0 3px 4px 0}
+.unimate-select-trigger[aria-expanded=true] .unimate-select-chevron{transform:rotate(225deg);margin-top:5px;margin-bottom:0}
+.unimate-select .unimate-select-menu{position:fixed;inset:auto;z-index:10000;box-sizing:border-box;margin:0;padding:6px;border:1px solid var(--line,#dbe6f3);border-radius:14px;background:var(--surface,#fff);color:var(--ink,var(--text,#16213d));box-shadow:0 10px 32px #061b3933;overflow:auto;overscroll-behavior:contain;font-family:inherit}
+.unimate-select-menu[hidden]{display:none!important}
+.unimate-select .unimate-select-option{display:flex;align-items:center;justify-content:space-between;gap:14px;width:100%;min-height:42px;padding:10px 11px;margin:0;border:0;border-radius:9px;background:transparent;color:inherit;text-align:left;font:inherit;font-size:13px;font-weight:550;line-height:1.45;cursor:pointer;white-space:normal}
+.unimate-select .unimate-select-option:hover,.unimate-select .unimate-select-option:focus{background:var(--soft,#eaf4ff)}
+.unimate-select .unimate-select-option[aria-selected=true]{color:var(--blue,var(--accent,#087ee5));background:var(--soft,#eaf4ff);font-weight:750}
+.unimate-select-option:disabled{opacity:.45;cursor:default}.unimate-select-check{visibility:hidden;flex:none}.unimate-select-option[aria-selected=true] .unimate-select-check{visibility:visible}
+.website-display-control .unimate-select{width:auto;min-width:110px}.website-display-control .unimate-select-trigger{min-height:34px;font-size:11px}

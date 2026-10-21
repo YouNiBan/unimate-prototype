@@ -30,7 +30,14 @@ function photo(value) {
   return valid ? { src: source } : { unavailable: 'Photo unavailable: the saved file does not match its image format.' };
 }
 
-function groupsFor(submission) {
+function privatePhoto(value, bookingId) {
+  const row = object(value);
+  if (typeof row.id !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(row.id) || typeof bookingId !== 'string' || !/^[A-Za-z0-9_-]{1,100}$/.test(bookingId)) return null;
+  const suffix = `bookings/${encodeURIComponent(bookingId)}/photos/${encodeURIComponent(row.id)}`;
+  const expected = [`/api/member/${suffix}`, `/api/${suffix}`];
+  return expected.includes(row.url) ? { src: row.url } : { unavailable: 'Photo unavailable: the saved private photo reference is invalid.' };
+}
+function groupsFor(submission, sharedPhotos, bookingId) {
   const nestedBooking = object(submission.booking);
   const intake = object(submission.intake || nestedBooking.intake);
   const rawIntake = Array.isArray(submission.fields);
@@ -43,7 +50,9 @@ function groupsFor(submission) {
     { key: 'request', label: 'Request photos', values: request },
     { key: 'before', label: 'Before-service photos', values: before },
     { key: 'completion', label: 'Completion photos', values: completion },
-  ].map(({ key, label, values }) => ({ key, label, photos: values.map(photo) }));
+  ].map(({ key, label, values }) => ({
+    key, label, photos: [...values.map(photo), ...list(sharedPhotos).filter(item => object(item).group === key).map(item => privatePhoto(item, bookingId)).filter(Boolean)],
+  }));
 }
 
 const labels = {
@@ -73,7 +82,8 @@ export function normalizeBookingDetails(input) {
   add('Service', serviceName(row.service || submission.service));
   add('Customer', row.customer || booking.student || submission.student);
   add('Status', typeof row.status === 'string' ? row.status.replaceAll('_',' ').replaceAll('-',' ') : row.status);
-  if (Number.isSafeInteger(row.amount_pence)) add('Booking amount', new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(row.amount_pence / 100));
+  if (row.pricingStatus === 'unquoted') add('Booking amount', 'Awaiting quote');
+  else if (Number.isSafeInteger(row.amount_pence)) add('Booking amount', new Intl.NumberFormat('en-GB',{style:'currency',currency:'GBP'}).format(row.amount_pence / 100));
   add('Created', row.created_at);
   const assignment = object(row.assignment);
   add('Assigned staff', assignment.name);
@@ -91,6 +101,6 @@ export function normalizeBookingDetails(input) {
   for (const field of [...list(intake.fields), ...list(submission.fields)]) {
     if (typeof object(field).label === 'string') add(field.label, field.value);
   }
-  return { fields, photoGroups: groupsFor(submission) };
+  return { fields, photoGroups: groupsFor(submission, row.photos, row.id) };
 }
 
