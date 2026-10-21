@@ -10012,5 +10012,16 @@ export const uiTranslations = {
 "Account verification":["账户认证", "帳戶認證"],
 "Account verified by UniMate":["账户已由UniMate认证", "帳戶已由UniMate認證"],
 "An Owner or SuperAdmin approved your account. You can use verified member features without university email confirmation. Your personal email remains your login.":["Owner或SuperAdmin已批准你的账户。无需大学邮箱确认即可使用已认证会员功能，个人邮箱仍用于登录。", "Owner或SuperAdmin已批准你的帳戶。無需大學電郵確認即可使用已認證會員功能，個人電郵仍用於登入。"],
-"Personal details saved. Your account is verified.":["个人资料已保存，账户已认证。", "個人資料已儲存，帳戶已認證。"]
+"Personal details saved. Your account is verified.":["个人资料已保存，账户已认证。", "個人資料已儲存，帳戶已認證。"],
+"People can find you by your username in Friends search. Your personal email stays your login.":["其他用户可以在好友搜索中通过用户名找到你。你的个人邮箱仍用于登录。", "其他用戶可以在好友搜尋中透過用戶名稱找到你。你的個人電郵仍用於登入。"],
+"You can change your username once every three months. Your current password is required.":["每三个月可更改一次用户名，需要输入当前密码确认。", "每三個月可更改一次用戶名稱，需要輸入目前密碼確認。"],
+"Next username change":["下次可更改用户名日期", "下次可更改用戶名稱日期"],
+"Change username":["更改用户名", "更改用戶名稱"],
+"Choose a username":["选择用户名", "選擇用戶名稱"],
+"Username updated. People can find you using your new username.":["用户名已更新，其他用户可以通过新用户名找到你。", "用戶名稱已更新，其他用戶可以透過新用戶名稱找到你。"],
+"Search by name or username":["搜索姓名或用户名", "搜尋姓名或用戶名稱"],
+"Enter your current password to change your username.":["请输入当前密码以更改用户名。", "請輸入目前密碼以更改用戶名稱。"],
+"Your current password is incorrect.":["当前密码不正确。", "目前密碼不正確。"],
+"You can change your username once every three months. Check your next available date.":["每三个月可更改一次用户名，请查看下次可更改的日期。", "每三個月可更改一次用戶名稱，請查看下次可更改的日期。"],
+"Your username changed in another session. Reload and try again.":["用户名已在其他会话中更改，请刷新后重试。", "用戶名稱已在其他工作階段更改，請重新整理後再試。"]
 };
