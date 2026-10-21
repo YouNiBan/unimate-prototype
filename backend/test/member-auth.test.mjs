@@ -250,3 +250,27 @@ test('account choices queue verified staff, seller and organisation requests wit
  assert.equal((await f.signup('owner-choice@example.invalid',{accountType:'owner'})).status,400);
  assert.equal((await f.signup('bad-team@example.invalid',{accountType:'staff',service:'admin'})).status,400);
 });
+
+test('username changes require password, CSRF, a current session and three calendar months between selections',async t=>{
+ const f=await fixture(t);await f.signup('handle@example.invalid',{username:'original.name'});await f.verify();const login=await f.login('handle@example.invalid');
+ assert.equal((await f.call('username')).status,401);
+ assert.equal((await f.call('username',{username:'new.name',password,expectedUsername:'original.name'},{cookie:login.cookie})).status,403);
+ assert.equal((await f.call('username',{username:'new.name',password:'wrong',expectedUsername:'original.name'},login)).status,403);
+ const current=(await f.call('username',undefined,login)).data;assert.equal(current.canChange,false);assert.ok(current.nextChangeAt);
+ assert.equal((await f.call('username',{username:'new.name',password,expectedUsername:'original.name'},login)).status,409);
+ f.db.prepare("UPDATE member_username_times SET changed_at='2025-01-31T12:00:00.000Z'").run();
+ const changed=await f.call('username',{username:'New.Name_',password,expectedUsername:'original.name'},login);assert.equal(changed.status,200);assert.equal(changed.data.username,'new.name_');assert.equal(changed.data.canChange,false);
+ assert.equal((await f.call('session',undefined,login)).data.user.username,'new.name_');
+ assert.equal((await f.call('username',{username:'again.name',password,expectedUsername:'new.name_'},login)).status,409);
+ assert.equal((await f.call('username',{username:'new.name_',password,expectedUsername:'original.name'},login)).status,409);
+ assert.equal(f.db.prepare("SELECT count(*) n FROM audit WHERE action='member.username_changed'").get().n,1);
+ assert.ok(!JSON.stringify(f.db.prepare("SELECT * FROM audit WHERE action='member.username_changed'").get()).includes(password));
+ await f.call('logout',{},login);assert.equal((await f.call('username',{username:'another.name',password,expectedUsername:'new.name_'},login)).status,403);
+});
+test('an existing account without a username can choose one with password confirmation, and duplicates stay unavailable',async t=>{
+ const f=await fixture(t);await f.signup('first@example.invalid',{username:'first.name'});await f.verify();await f.signup('second@example.invalid',{username:'second.name'});await f.verify();const login=await f.login('first@example.invalid');
+ f.db.prepare('DELETE FROM member_username_times WHERE user_id=?').run(login.data.user.id);f.db.prepare('DELETE FROM member_usernames WHERE user_id=?').run(login.data.user.id);
+ assert.equal((await f.call('username',undefined,login)).data.canChange,true);
+ assert.equal((await f.call('username',{username:'SECOND.NAME',expectedUsername:'',password},login)).status,409);
+ assert.equal((await f.call('username',{username:'new_first',expectedUsername:'',password},login)).status,200);
+});
