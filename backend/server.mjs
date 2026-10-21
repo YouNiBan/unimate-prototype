@@ -3,6 +3,7 @@ import {createMemberEvents} from './member-events.mjs';
 import {createOwnerDocumentVault,businessDocumentChecklist} from './owner-documents.mjs';
 import {createProductSales} from './product-sales.mjs';
 import {createRestaurantCommunity} from './restaurant-community.mjs';
+import {createPlaceDiscovery} from './place-discovery.mjs';
 import {createRestaurantMenus} from './restaurant-menus.mjs';
 import {createStudentAccess} from './student-access.mjs';
 import {createRestaurants} from './restaurants.mjs';
@@ -92,6 +93,7 @@ export async function createApplication({
   const foodReviews=createFoodReviews(db,{requireRestaurant:enforceAdminScopes});
   const memberAuth = createMemberAuth({db, secureCookies:!!runtime?.hosted, publicWebOrigin:runtime?.webOrigin || 'http://localhost:8083', sendMail, allowRegistration,mailMode:localMailbox?'local':'smtp'});
   const restaurantCommunity=createRestaurantCommunity(db);
+  const placeDiscovery=createPlaceDiscovery(db);
   const memberEvents=createMemberEvents({db});
   const studentAccess=createStudentAccess({db,memberAuth,sendMail,extraDomains:(process.env.UNIMATE_UNIVERSITY_DOMAINS||'').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean)});
   const sharedBookings = createSharedBookings({db, mediaDirectory, memberAuth,scopes,onComplete:(actor,booking)=>submitCompletion(db,actor,booking),onCreated:id=>supportChat.bookingThread(id)});
@@ -168,6 +170,12 @@ export async function createApplication({
         res.end(localMailbox.render());return;
       }
       if (path==='/api/member/marketplace'&&req.method==='GET'){const member=memberAuth.authenticate(req);if(!member)fail(401,'Please sign in.');return reply(200,marketplace.list({published:true,q:url.searchParams.get('q')||'',page:Number(url.searchParams.get('page')||1)}));}
+      if(['/api/member/place-discovery','/api/member/place-bookmark','/api/member/place-visit'].includes(path)){
+        const member=memberAuth.authenticate(req);if(!member)fail(401,'Please sign in.');
+        if(path.endsWith('/place-discovery')){if(req.method!=='GET')fail(405,'Method not allowed.');return reply(200,placeDiscovery.list(member.user,{q:url.searchParams.get('q')||'',type:url.searchParams.get('type')||'restaurant',mode:url.searchParams.get('mode')||'discover',filter:url.searchParams.get('filter')||'All',page:Number(url.searchParams.get('page')||1)}));}
+        if(req.method!=='POST')fail(405,'Method not allowed.');memberAuth.requireMutation(req,member);const data=await body(req),current=memberAuth.authenticate(req);if(!current)fail(401,'Please sign in again.');
+        return reply(200,path.endsWith('/place-bookmark')?placeDiscovery.bookmark(current.user,data):placeDiscovery.visit(current.user,data));
+      }
       if(path==='/api/member/restaurant-reviews'||path==='/api/member/restaurant-review-vote'||path==='/api/member/food-review-leaderboard'||path==='/api/member/connections'){const member=memberAuth.authenticate(req);if(!member)fail(401,'Please sign in.');if(req.method==='GET'){if(path.endsWith('/restaurant-reviews'))return reply(200,restaurantCommunity.reviews(url.searchParams.get('restaurantId'),member.user.id));if(path.endsWith('/food-review-leaderboard'))return reply(200,restaurantCommunity.leaderboard(member.user,url.searchParams.get('scope')||'all'));if(path.endsWith('/connections'))return reply(200,restaurantCommunity.connections(member.user,url.searchParams.get('q')||''));fail(405,'Method not allowed.');}if(req.method!=='POST')fail(405,'Method not allowed.');memberAuth.requireMutation(req,member);const data=await body(req),current=memberAuth.authenticate(req);if(!current)fail(401,'Please sign in again.');if(path.endsWith('/restaurant-reviews'))return reply(200,restaurantCommunity.saveReview(current.user,data));if(path.endsWith('/restaurant-review-vote'))return reply(200,restaurantCommunity.vote(current.user,data));if(path.endsWith('/connections'))return reply(200,restaurantCommunity.connect(current.user,data));fail(405,'Method not allowed.');}
       const menuPath=/^\/api\/(member\/)?restaurants\/([^/]+)\/menu(?:\/photos\/([^/]+))?$/.exec(path);if(menuPath){const published=!!menuPath[1],id=menuPath[2];if(published){if(!memberAuth.authenticate(req))fail(401,'Please sign in.');if(req.method!=='GET')fail(405,'Method not allowed.');}else if(!restaurants.canManage(actor))fail(403,'Food & Reviews access required.');if(req.method==='GET'){if(menuPath[3]){const photo=restaurantMenus.photo(id,menuPath[3],published);res.writeHead(200,{'Content-Type':photo.mime,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"sandbox; default-src 'none'"});res.end(Buffer.from(photo.bytes));return;}return reply(200,restaurantMenus.get(id,published));}if(req.method==='POST'&&!menuPath[3]){if(!session||!actor)fail(401,'Please sign in.');if(req.headers['x-csrf-token']!==session.csrf)fail(403,'Refresh and try again.');return reply(200,restaurantMenus.save(actor,id,await body(req,9000000)));}fail(405,'Method not allowed.');}
       const restaurantPhoto=/^\/api\/(member\/)?restaurants\/([^/]+)\/photo$/.exec(path);if(restaurantPhoto&&req.method==='GET'){const memberRoute=!!restaurantPhoto[1];if(memberRoute){if(!memberAuth.authenticate(req))fail(401,'Please sign in.');}else if(!restaurants.canManage(actor))fail(403,'Food & Reviews access required.');const photo=restaurants.photo(restaurantPhoto[2],memberRoute);res.writeHead(200,{'Content-Type':photo.mime,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"sandbox; default-src 'none'"});res.end(Buffer.from(photo.bytes));return;}
