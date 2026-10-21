@@ -1,4 +1,5 @@
 import {manageMember,memberDetails,restoreExpiredMembers} from './member-management.mjs';
+import {createMemberEvents} from './member-events.mjs';
 import {createOwnerDocumentVault,businessDocumentChecklist} from './owner-documents.mjs';
 import {createProductSales} from './product-sales.mjs';
 import {createRestaurantCommunity} from './restaurant-community.mjs';
@@ -91,6 +92,7 @@ export async function createApplication({
   const foodReviews=createFoodReviews(db,{requireRestaurant:enforceAdminScopes});
   const memberAuth = createMemberAuth({db, secureCookies:!!runtime?.hosted, publicWebOrigin:runtime?.webOrigin || 'http://localhost:8083', sendMail, allowRegistration,mailMode:localMailbox?'local':'smtp'});
   const restaurantCommunity=createRestaurantCommunity(db);
+  const memberEvents=createMemberEvents({db});
   const studentAccess=createStudentAccess({db,memberAuth,sendMail,extraDomains:(process.env.UNIMATE_UNIVERSITY_DOMAINS||'').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean)});
   const sharedBookings = createSharedBookings({db, mediaDirectory, memberAuth,scopes,onComplete:(actor,booking)=>submitCompletion(db,actor,booking),onCreated:id=>supportChat.bookingThread(id)});
   const staffInvoices = createStaffInvoices({db,memberAuth});
@@ -174,8 +176,20 @@ export async function createApplication({
       if(path==='/api/member/food-reviews'&&req.method==='GET'){const member=memberAuth.authenticate(req);if(!member)fail(401,'Please sign in.');return reply(200,foodReviews.list({published:true,restaurantId:url.searchParams.get('restaurantId')||'',page:Number(url.searchParams.get('page')||1),q:url.searchParams.get('q')||''}));}
       if(/^\/api\/member\/bookings\/[^/]+\/conversation$/.test(path)&&req.method==='POST'){const member=memberAuth.authenticate(req);if(!member)fail(401,'Please sign in.');memberAuth.requireMutation(req,member);const id=path.split('/')[4];if(!db.prepare('SELECT booking_id FROM booking_owners WHERE booking_id=? AND user_id=?').get(id,member.user.id))fail(404,'Booking not found.');return reply(200,{conversationId:supportChat.bookingThread(id)});}
       if(path==='/api/member/profile'||path.startsWith('/api/member/student-verification')){const member=memberAuth.authenticate(req);if(!member)fail(401,'Please sign in.');if(req.method==='GET'&&path==='/api/member/profile')return reply(200,studentAccess.profile(member.user));if(req.method!=='POST')fail(405,'Method not allowed.');memberAuth.requireMutation(req,member);const data=await body(req);const current=memberAuth.authenticate(req);if(!current)fail(401,'Please sign in again.');if(path==='/api/member/profile')return reply(200,studentAccess.saveProfile(current.user,data));if(path==='/api/member/student-verification/request')return reply(200,await studentAccess.requestCode(current.user,data,req.clientAddress));if(path==='/api/member/student-verification/confirm')return reply(200,studentAccess.confirm(current.user,data));fail(404,'Not found.');}
-      if(req.method==='POST'&&/^\/api\/member\/(?:events|listings|forum|moments|restaurant-reviews)(?:\/|$)/.test(path)&&!/^\/api\/member\/events\/[^/]+\/(?:join|cancel)$/.test(path))studentAccess.requireVerified(req);
+      if(req.method==='POST'&&/^\/api\/member\/(?:events|listings|forum|moments|restaurant-reviews)(?:\/|$)/.test(path)&&!/^\/api\/member\/events\/[^/]+\/(?:join|cancel|favourite)$/.test(path))studentAccess.requireVerified(req);
       if (path.startsWith('/api/member/')) {
+        const eventRoute=/^\/api\/member\/events(?:\/([^/]+)(?:\/(photo|join|cancel|favourite))?)?$/.exec(path);
+        if(eventRoute){
+          const member=memberAuth.authenticate(req);if(!member)fail(401,'Please sign in.');const [,eventId,eventAction]=eventRoute;
+          if(req.method==='GET'){
+            if(eventAction==='photo'){const photo=memberEvents.photo(member.user,eventId);res.writeHead(200,{'Content-Type':photo.mime,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"sandbox; default-src 'none'"});res.end(Buffer.from(photo.bytes));return;}
+            if(eventAction)fail(405,'Method not allowed.');
+            return reply(200,eventId?memberEvents.detail(member.user,eventId):memberEvents.list(member.user,{scope:url.searchParams.get('scope')||'discover',q:url.searchParams.get('q')||'',category:url.searchParams.get('category')||'All'}));
+          }
+          if(req.method!=='POST'||eventAction==='photo')fail(405,'Method not allowed.');memberAuth.requireMutation(req,member);const data=await body(req,1500000),current=memberAuth.authenticate(req);if(!current)fail(401,'Please sign in again.');
+          if(!eventId)return reply(201,memberEvents.create(current.user,data));
+          return reply(200,memberEvents.mutate(current.user,eventId,eventAction,data));
+        }
         if (await payments.handle(req,res,url)) return;
         if (await supportChat.handle(req,res,url)) return;
         if (await staffInvoices.handle(req,res,url)) return;

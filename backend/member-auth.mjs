@@ -1,4 +1,4 @@
-import {installMemberUsernames,claimMemberUsername,usernameAvailability} from './member-usernames.mjs';
+import {installMemberUsernames,claimMemberUsername,usernameAvailability,memberUsernameStatus,changeMemberUsername} from './member-usernames.mjs';
 import {installStudentAccess,studentCapabilities} from './student-access.mjs';
 import { accountEmail } from './account-email.mjs';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
@@ -225,7 +225,7 @@ export function createMemberAuth({
   }
 
   async function handle(req, res, url) {
-    const routes = new Set(['session', 'signup', 'login', 'logout', 'verify', 'forgot-password', 'reset-password','username-availability']);
+    const routes = new Set(['session', 'signup', 'login', 'logout', 'verify', 'forgot-password', 'reset-password','username-availability','username']);
     const match = /^\/api\/member\/([^/]+)$/.exec(url.pathname);
     if (!match || !routes.has(match[1])) return false;
     try {
@@ -236,11 +236,22 @@ export function createMemberAuth({
         reply(res, 200, { user: session?.user || null, csrf: session?.csrf || anonymousCsrf, ...configuration });
         return true;
       }
+      if(action==='username'&&req.method==='GET'){if(!session)fail(401,'Please sign in.');reply(res,200,memberUsernameStatus(db,session.user.id));return true;}
       if(action==='username-availability'){if(req.method!=='GET')fail(405,'Method not allowed.');rateLimit(req,'username-availability');reply(res,200,usernameAvailability(db,url.searchParams.get('username')));return true;}
       if (req.method !== 'POST') fail(405, 'Method not allowed.');
       requireMutation(req, session);
       const data = await readBody(req);
-      if (action === 'signup') {
+      if(action==='username'){
+        if(!session)fail(401,'Please sign in.');
+        rateLimit(req,'change-username',session.user.id,5);
+        if(typeof data.password!=='string'||!data.password||data.password.length>128)fail(400,'Enter your current password to change your username.');
+        const before=db.prepare('SELECT password_hash FROM member_credentials WHERE user_id=?').get(session.user.id);
+        const valid=await passwordWork(async()=>{try{return await verifyPassword(data.password,before?.password_hash||dummyHash);}catch{return false;}});
+        const current=authenticate(req);if(!current||current.user.id!==session.user.id)fail(401,'Please sign in again.');requireMutation(req,current);
+        const live=db.prepare('SELECT password_hash FROM member_credentials WHERE user_id=?').get(current.user.id);
+        if(!valid||live?.password_hash!==before?.password_hash)fail(403,'Your current password is incorrect.');
+        reply(res,200,changeMemberUsername(db,current.user,data));
+      } else if (action === 'signup') {
         if (!registrationEnabled) fail(503, 'Account registration is not available yet.');
         const email = emailAddress(data.email), password = newPassword(data);
         if (typeof data.name !== 'string' || data.name.trim().length < 2 || data.name.length > 80) fail(400, 'Enter your name (2–80 characters).');
