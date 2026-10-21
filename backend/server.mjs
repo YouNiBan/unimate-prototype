@@ -1,3 +1,4 @@
+import {manageMember,memberDetails,restoreExpiredMembers} from './member-management.mjs';
 import {createOwnerDocumentVault,businessDocumentChecklist} from './owner-documents.mjs';
 import {createProductSales} from './product-sales.mjs';
 import {createRestaurantCommunity} from './restaurant-community.mjs';
@@ -97,6 +98,7 @@ export async function createApplication({
   const oversight = createOversight({db,sharedBookings});
   const payments = createStripePayments({db,memberAuth,webOrigin:runtime?.webOrigin||'http://localhost:8083',stripe,webhookSecret:stripeWebhookSecret});
   const marketplace=createMarketplace(db);
+  for(const row of db.prepare("SELECT id,created_at FROM users WHERE kind<>'deleted'").all())memberDetails(db,row);
   const adminMfa=createAdminMfa({db,filename,hosted:!!runtime?.hosted});
   const ownerDocuments=createOwnerDocumentVault(db,{filename});
   const productSales=createProductSales(db);
@@ -118,6 +120,7 @@ export async function createApplication({
     res.setHeader('Referrer-Policy','no-referrer');
     res.setHeader('Content-Security-Policy', `default-src 'self'; frame-src ${webDirectory?"'self' ":''}${runtime?.webOrigin||'http://localhost:8083'}; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'`);
     try {
+      restoreExpiredMembers(db);
       const url = applyRequestBoundary(req, res, runtime, server.address()?.port || port);
       if (!url) return;
       req.clientAddress = requestAddress(req, runtime?.trustProxy);
@@ -612,7 +615,7 @@ export async function createApplication({
           approvals: db.prepare("SELECT count(*) AS n FROM approvals WHERE status='pending' AND ("+scopes.approvalSql(actor)+")"+(accountReviews(actor.role)?'':" AND kind='event'")).get().n,
           reports: scopes.has(actor,'community')?db.prepare(`SELECT count(*) AS n FROM reports WHERE status='open' AND ${reviewEligibleSql}`).get().n:0,
           ...(scopes.access(actor).canViewBookings?{bookings:db.prepare('SELECT count(*) n FROM bookings').get().n}:{}),
-          ...(fullAccess(actor.role)?{users:db.prepare('SELECT count(*) AS n FROM users').get().n,
+          ...(fullAccess(actor.role)?{users:db.prepare("SELECT count(*) AS n FROM users WHERE kind<>'deleted'").get().n,
             bookings: db.prepare('SELECT count(*) AS n FROM bookings').get().n,
             business:{bookingStatuses:db.prepare('SELECT status,count(*) count FROM bookings GROUP BY status').all(),newMembers:db.prepare("SELECT count(*) n FROM users WHERE created_at>=?").get(new Date(Date.now()-30*86400000).toISOString()).n,
               activeBookings:db.prepare("SELECT count(*) n FROM bookings WHERE status IN ('requested','assigned','confirmed','in_progress')").get().n,
@@ -621,6 +624,8 @@ export async function createApplication({
             }: {}) });
       }
       if (/^\/api\/(admins|users|bookings|audit|invoices|finance|accounts)(\/|$)/.test(path) && !fullAccess(actor.role) && !((actor.role==='admin'&&req.method==='GET'&&/^\/api\/users(?:\/|$)/.test(path))||(scopes.access(actor).canViewBookings&&req.method==='GET'&&/^\/api\/bookings(?:\/|$)/.test(path)))) fail(403,'Superadmin access required.');
+      const memberAction=/^\/api\/users\/([^/]+)\/manage$/.exec(path);
+      if(memberAction&&req.method==='POST'){const data=await body(req);if(!db.prepare('SELECT 1 FROM sessions WHERE token_hash=? AND admin_id=? AND expires>?').get(session.token_hash,actor.id,Date.now()))fail(401,'Please sign in again.');return reply(200,manageMember(db,actor,memberAction[1],data));}
       const adminMatch=/^\/api\/admins(?:\/([^/]+))?$/.exec(path);
       if(adminMatch){
         if(!fullAccess(actor.role))fail(403,'Superadmin access required.');
@@ -683,7 +688,7 @@ export async function createApplication({
       scopes.requireResource(actor,kind);
       if (!fullAccess(actor.role) && !['admin','viewer','support'].includes(actor.role)) fail(403,'This role cannot access these records.');
       if(req.method==='GET'&&id){
-        const row=db.prepare(`SELECT ${config.fields} FROM ${kind} WHERE id=?`).get(id);if(!row)fail(404,'Record not found.');
+        let row=db.prepare(`SELECT ${config.fields} FROM ${kind} WHERE id=?`).get(id);if(kind==='users'&&row){if(row.kind==='deleted')fail(404,'Member not found.');row=memberDetails(db,row);}if(!row)fail(404,'Record not found.');
         scopes.requireResource(actor,kind,row);if(kind==='audit'&&actor.role!=='owner'&&['documents','staff_hr'].includes(row.resource))fail(404,'Record not found.');
         if(kind==='approvals'&&!accountReviews(actor.role)&&row.kind!=='event')fail(403,'Account approvals require SuperAdmin or UniMate Owner access.');
         if(kind==='reports'&&row.unique_reports<REPORT_THRESHOLD)fail(404,'Review threshold not reached.');
@@ -696,8 +701,8 @@ export async function createApplication({
       if (req.method === 'GET' && !id) {
         const page = Number(url.searchParams.get('page') || 1);
         if (!Number.isSafeInteger(page) || page < 1 || page > 100000) fail(400,'Invalid page.');
-        const columns={users:['name','email'],approvals:['title','applicant'],posts:['title','author'],reports:['title','reporter'],account_reports:['title','details'],bookings:['title','customer'],audit:['actor_name','action','resource','resource_id']};
-        let {where,values}=listFilter(url,columns[kind],kind!=='audit');if(kind==='audit'&&actor.role!=='owner')where+=(where?' AND ':' WHERE ')+"resource NOT IN ('documents','staff_hr')";
+        const columns={users:['name','email',"(SELECT username FROM member_usernames WHERE user_id=users.id)","(SELECT reference FROM record_references WHERE kind='member' AND record_id=users.id)"],approvals:['title','applicant'],posts:['title','author'],reports:['title','reporter'],account_reports:['title','details'],bookings:['title','customer'],audit:['actor_name','action','resource','resource_id']};
+        let {where,values}=listFilter(url,columns[kind],kind!=='audit');if(kind==='users')where+=(where?' AND ':' WHERE ')+"kind<>'deleted'";if(kind==='audit'&&actor.role!=='owner')where+=(where?' AND ':' WHERE ')+"resource NOT IN ('documents','staff_hr')";
         if(kind==='reports'&&url.searchParams.has('type')){const type=url.searchParams.get('type');if(!['post','comment','forum','moment'].includes(type))fail(400,'Invalid report type.');where+=(where?' AND ':' WHERE ')+"COALESCE((SELECT kind FROM moderation_targets WHERE post_id=reports.post_id),'moment') "+(type==='post'?"IN ('moment','forum')":"='"+type+"'");}
         if(kind==='reports')where+=(where?' AND ':' WHERE ')+reviewEligibleSql;
         if(kind==='approvals'){
@@ -717,11 +722,12 @@ export async function createApplication({
         }
         const total = db.prepare(`SELECT count(*) AS n FROM ${kind}${where}`).get(...values).n;
         const rows = db.prepare(`SELECT ${config.fields} FROM ${kind}${where} ORDER BY created_at DESC,id LIMIT 25 OFFSET ?`).all(...values,(page-1)*25);
-        return reply(200,{rows,total,page,...(divisionCounts?{divisionCounts}:{}),...(kind==='reports'?{reportThreshold:REPORT_THRESHOLD}:{}),canManage:config.roles.includes(actor.role)||(actor.role==='owner'&&config.roles.includes('superadmin'))});
+        return reply(200,{rows:kind==='users'?rows.map(row=>memberDetails(db,row)):rows,total,page,...(divisionCounts?{divisionCounts}:{}),...(kind==='reports'?{reportThreshold:REPORT_THRESHOLD}:{}),canManage:config.roles.includes(actor.role)||(actor.role==='owner'&&config.roles.includes('superadmin'))});
       }
       if (req.method !== 'POST' || !id) fail(405,'Method not allowed.');
       if (!config.roles.includes(actor.role)&&!(actor.role==='owner'&&config.roles.includes('superadmin'))) fail(403,'You do not have permission to change this record.');
       const data = await body(req);
+      if(kind==='users'){if(!db.prepare('SELECT 1 FROM sessions WHERE token_hash=? AND admin_id=? AND expires>?').get(session.token_hash,actor.id,Date.now()))fail(401,'Please sign in again.');const c=db.prepare('SELECT version FROM member_controls WHERE user_id=?').get(id);return reply(200,manageMember(db,actor,id,{...data,action:data.status==='suspended'?'suspend':data.status==='active'?'restore':'invalid',version:data.version??c?.version??0,suspendedUntil:data.suspendedUntil||new Date(Date.now()+7*86400000).toISOString()}));}
       const reason = text(data.reason,5,500,'decision reason (5–500 characters)');
       if (!config.states.includes(data.status)) fail(400,'Invalid status.');
       transaction(db,() => {

@@ -1,4 +1,6 @@
+import {installMemberUsernames,claimMemberUsername,usernameAvailability} from './member-usernames.mjs';
 import {installStudentAccess,studentCapabilities} from './student-access.mjs';
+import { accountEmail } from './account-email.mjs';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { audit, transaction } from './database.mjs';
 import { digest, hashPassword, token, verifyPassword } from './security.mjs';
@@ -100,7 +102,7 @@ export function createMemberAuth({
     || website.username || website.password || website.pathname !== '/' || website.search || website.hash) {
     throw Error('publicWebOrigin must be an HTTPS origin, or a local development origin.');
   }
-  installSchema(db);installStudentAccess(db);
+  installSchema(db);installStudentAccess(db);installMemberUsernames(db);
   const mailAvailable = typeof sendMail === 'function';
   const registrationEnabled = allowRegistration === true && mailAvailable;
   const configured = true;
@@ -120,7 +122,7 @@ export function createMemberAuth({
       ORDER BY m.team
     `).all(row.id).map(item => item.team) : [];
     const request=db.prepare('SELECT r.account_type,a.status FROM member_account_requests r LEFT JOIN approvals a ON a.id=r.approval_id WHERE r.user_id=?').get(row.id);
-    return { id: row.id, email: row.email, name: row.name, role: teams.length ? 'staff' : 'student', staffTeams: teams, ...studentCapabilities(db,row.id), ...(request && request.account_type!=='student'?{requestedAccountType:request.account_type,approvalStatus:request.status||'pending'}:{}) };
+    return { id: row.id, username:db.prepare('SELECT username FROM member_usernames WHERE user_id=?').get(row.id)?.username||null, email: row.email, name: row.name, role: teams.length ? 'staff' : 'student', staffTeams: teams, ...studentCapabilities(db,row.id), ...(request && request.account_type!=='student'?{requestedAccountType:request.account_type,approvalStatus:request.status||'pending'}:{}) };
   }
 
   function authenticate(req) {
@@ -199,10 +201,7 @@ export function createMemberAuth({
     try {
       await sendMail({
         to: user.email,
-        subject: verification ? 'Confirm your UniMate email' : 'Reset your UniMate password',
-        text: verification
-          ? `Confirm your email to finish creating your UniMate account:\n\n${link.href}\n\nThis link expires in 24 hours. Opening it does not confirm your account until you choose Confirm email. If you did not request an account, you can ignore this email.`
-          : `Reset your UniMate password:\n\n${link.href}\n\nThis link expires in 1 hour. Your password will change only after you submit a new password. If you did not request this, you can ignore this email.`,
+        ...accountEmail({kind:verification ? 'verify' : 'reset',link:link.href}),
       });
     } catch {
       db.prepare('DELETE FROM member_email_tokens WHERE token_hash=? AND consumed_at IS NULL').run(tokenHash);
@@ -226,7 +225,7 @@ export function createMemberAuth({
   }
 
   async function handle(req, res, url) {
-    const routes = new Set(['session', 'signup', 'login', 'logout', 'verify', 'forgot-password', 'reset-password']);
+    const routes = new Set(['session', 'signup', 'login', 'logout', 'verify', 'forgot-password', 'reset-password','username-availability']);
     const match = /^\/api\/member\/([^/]+)$/.exec(url.pathname);
     if (!match || !routes.has(match[1])) return false;
     try {
@@ -237,6 +236,7 @@ export function createMemberAuth({
         reply(res, 200, { user: session?.user || null, csrf: session?.csrf || anonymousCsrf, ...configuration });
         return true;
       }
+      if(action==='username-availability'){if(req.method!=='GET')fail(405,'Method not allowed.');rateLimit(req,'username-availability');reply(res,200,usernameAvailability(db,url.searchParams.get('username')));return true;}
       if (req.method !== 'POST') fail(405, 'Method not allowed.');
       requireMutation(req, session);
       const data = await readBody(req);
@@ -257,6 +257,8 @@ export function createMemberAuth({
           if (existing) {
             const credential = db.prepare('SELECT verified_at FROM member_credentials WHERE user_id=?').get(existing.id);
             if (credential && !credential.verified_at && existing.status === 'active') {
+              const saved=db.prepare('SELECT username FROM member_usernames WHERE user_id=?').get(existing.id);
+              if(!saved)claimMemberUsername(db,existing.id,data.username);
               // A renewed signup must use the password entered for that request.
               // Previously emailed confirmation links are replaced below.
               db.prepare('UPDATE member_credentials SET password_hash=? WHERE user_id=?').run(hashed, existing.id);
@@ -268,6 +270,7 @@ export function createMemberAuth({
           const id = randomUUID(), createdAt = new Date().toISOString();
           db.prepare('INSERT INTO users(id,name,email,kind,status,created_at) VALUES(?,?,?,?,?,?)')
             .run(id, data.name.trim(), email, 'student', 'active', createdAt);
+          claimMemberUsername(db,id,data.username);
           db.prepare('INSERT INTO member_credentials(user_id,password_hash,verified_at,created_at) VALUES(?,?,NULL,?)')
             .run(id, hashed, createdAt);
           db.prepare('INSERT INTO member_account_requests(user_id,account_type,service,organisation) VALUES(?,?,?,?)').run(id,accountType,accountType==='staff'?service:'',accountType==='organisation'?organisation:'');
