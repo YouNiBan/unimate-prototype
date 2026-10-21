@@ -212,7 +212,7 @@ async function render(){
   refreshNotifications();
   const version=++requestVersion, current=section,main=app.querySelector('main');message('');
   app.querySelectorAll('.rail-button[data-sections]').forEach(b=>b.setAttribute('aria-current',JSON.parse(b.dataset.sections).includes(current==='admins'?'settings':current)?'page':'false'));
-  app.querySelectorAll('nav button').forEach(b=>b.setAttribute('aria-current',b.dataset.section===current&&(!b.dataset.division||b.dataset.division===bookingDivision)?'page':'false'));
+  app.querySelectorAll('nav button[data-section]').forEach(b=>b.setAttribute('aria-current',b.dataset.section===current&&(!b.dataset.division||b.dataset.division===bookingDivision)?'page':'false'));
   main.replaceChildren(el('div',session.demo?'DEVELOPER DEMO — Fictional accounts and sample records. No live payments.':session.hosted?'UniMate administration workspace.':'LOCAL WORKSPACE — These records are not connected to the live UniMate app. Sample records, if loaded, are fictional.','banner'),el('h1',names[current]),el('p',current==='overview'?'A clear view of your community and what needs attention.':['settings','password','two_factor','admins'].includes(current)?'Manage your account, security and team access.':'Review records and keep every decision accountable.','muted'));
   if(['settings','two_factor','password'].includes(current)){await accountSettings(main,current);return;}
   if(current==='payments'||current==='fees'){await renderPayments({container:main,api,mode:current,onOpenBooking:async id=>{try{const data=await api('bookings/'+encodeURIComponent(id));details(data.row,true,'bookings');}catch(error){message(error.message);}}});return;}
