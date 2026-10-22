@@ -4,6 +4,7 @@ import http from 'node:http';
 import { openDatabase } from '../database.mjs';
 import { createMemberAuth } from '../member-auth.mjs';
 import { digest } from '../security.mjs';
+test('signup requires complete names for all account types and keeps private names separate from public display names',async t=>{const f=await fixture(t);for(const accountType of ['student','seller','organisation','staff'])assert.equal((await f.signup(accountType+'@example.invalid',{name:'Onlyfirst',accountType,service:'cleaning',organisation:'Example Org'})).status,400);const response=await f.signup('private-name@example.invalid',{name:'Private Full Name',displayName:'Public Nickname'});assert.equal(response.status,202);const u=f.db.prepare("SELECT * FROM users WHERE email='private-name@example.invalid'").get();assert.equal(u.name,'Public Nickname');assert.equal(f.db.prepare('SELECT full_name FROM member_identity_names WHERE user_id=?').get(u.id).full_name,'Private Full Name');});
 
 const password = 'Example-Password!123';
 const replacement = 'Another-Password!456';
@@ -140,7 +141,7 @@ test('email confirmation is explicit, single-use and cannot grant client-supplie
   assert.equal((await f.verify(raw)).status, 400);
   const login = await f.login('member@example.invalid');
   assert.equal(login.status, 200);
-  assert.deepEqual(Object.keys(login.data.user).sort(), ['badge','email','id','name','ownerTester','permissions','profileComplete','role','staffTeams','studentVerified','username','verificationSource']);
+  assert.deepEqual(Object.keys(login.data.user).sort(), ['badge','email','fullNameComplete','id','name','ownerTester','permissions','profileComplete','role','staffTeams','studentVerified','username','verificationSource']);
   assert.equal(login.data.user.role, 'student');
   assert.deepEqual(login.data.user.staffTeams, []);
   assert.equal(f.db.prepare('SELECT kind FROM users').get().kind, 'student');

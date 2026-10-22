@@ -137,7 +137,7 @@ test('members see only their own conversations and admin cookies never authentic
   assert.equal(created.status, 201);
   const id = created.data.conversation.id;
   assert.equal(created.data.conversation.participant.id, 'student-a');
-  assert.deepEqual(created.data.messages[0].sender, { id: 'student-a', name: 'student-a', kind: 'member' });
+  assert.deepEqual(created.data.messages[0].sender, { id: 'student-a', name: 'student-a', kind: 'member',avatarUrl:null });
   assert.equal((await f.call()).data.rows.length, 1);
   assert.equal((await f.call('', undefined, 'student-b')).data.rows.length, 0);
   assert.equal((await f.call('/' + id, undefined, 'student-b')).status, 404);
@@ -191,7 +191,7 @@ test('create and reply retries are idempotent only for the same sender and conte
   const draft = { body: 'A reply from the support team.', clientId: randomUUID(), senderId: 'student-a', sender: { kind: 'member' } };
   const replied = await f.call('/api/support/' + id + '/messages', draft, 'support');
   assert.equal(replied.status, 201);
-  assert.deepEqual(replied.data.message.sender, { id: 'support', name: 'Team support', kind: 'support' });
+  assert.deepEqual(replied.data.message.sender, { id: 'support', name: 'Team support', kind: 'support',avatarUrl:null });
   const duplicate = await f.call('/api/support/' + id + '/messages', draft, 'support');
   assert.equal(duplicate.status, 200);
   assert.equal(duplicate.data.message.id, replied.data.message.id);
