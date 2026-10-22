@@ -1,3 +1,4 @@
+import {profilePhoto} from './social-profiles.mjs';
 import {teamForService} from './departments.mjs';
 import { randomUUID } from 'node:crypto';
 import {recordReference} from './references.mjs';
@@ -71,6 +72,7 @@ function validPng(bytes) {
   }
   return false;
 }
+export function decodeSupportAttachments(value) { return attachments(value); }
 function attachments(value) {
   if (value === undefined) return [];
   if (!Array.isArray(value) || value.length > 3) fail(400, 'Attach up to 3 files per message.');
@@ -187,11 +189,12 @@ export function createSupportChat({ db, memberAuth, scopes = null }) {
       .get(id, actor.kind, id, actor.kind, actor.id).n;
   }
   function conversationTeam(row){const assigned=db.prepare('SELECT team_id FROM support_conversation_teams WHERE conversation_id=?').get(row.id);if(assigned)return teamForService(db,assigned.team_id);const service=row.booking_id?db.prepare('SELECT service FROM bookings WHERE id=?').get(row.booking_id)?.service:null;return teamForService(db,service)||teamForService(db,row.category==='technical'?'technical':'support');}
+  function avatarUrl(row,actor){if(!tableExists('member_profile_content'))return null;const p=db.prepare('SELECT length(avatar) size,revision FROM member_profile_content WHERE user_id=?').get(row.participant_id);return p?.size?`/api/${actor.kind==='member'?'member/':''}support/${row.id}/avatar?v=${p.revision}`:null;}
   function rowValue(row, actor) {
     const last = db.prepare('SELECT body FROM support_messages WHERE conversation_id=? ORDER BY sequence DESC LIMIT 1').get(row.id);
     return {
       id: row.id, reference:recordReference(db,'support',row.id,row.created_at), subject: row.subject, category: row.category, status: row.status,
-      teamName:conversationTeam(row)?.name,teamId:conversationTeam(row)?.id,participant: participant(row.participant_id), updatedAt: row.updated_at,
+      teamName:conversationTeam(row)?.name,teamId:conversationTeam(row)?.id,participant: {...participant(row.participant_id),avatarUrl:avatarUrl(row,actor)}, updatedAt: row.updated_at,
       lastMessage: last ? last.body || 'Attachment' : '',
       unreadCount: unread(row.id, actor), bookingId: row.booking_id,
       bookingReference: row.booking_id ? recordReference(db,'booking',row.booking_id,db.prepare('SELECT created_at FROM bookings WHERE id=?').get(row.booking_id)?.created_at) : null,
@@ -204,7 +207,7 @@ export function createSupportChat({ db, memberAuth, scopes = null }) {
       id: file.id, filename: file.filename, mime: file.mime, bytes: file.byte_length,
       url: `${prefix}${row.conversation_id}/attachments/${file.id}`,
     }));
-    return { id: row.id, reference:recordReference(db,'message',row.id,row.created_at), body: row.body, createdAt: row.created_at, sender: { id:actor.kind==='member'&&row.sender_kind==='support'?'team:'+conversationTeam(db.prepare('SELECT * FROM support_conversations WHERE id=?').get(row.conversation_id)).id:row.sender_id, name:actor.kind==='member'&&row.sender_kind==='support'?conversationTeam(db.prepare('SELECT * FROM support_conversations WHERE id=?').get(row.conversation_id)).name:row.sender_name, kind: row.sender_kind }, clientId: row.client_id, attachments: files };
+    return { id: row.id, reference:recordReference(db,'message',row.id,row.created_at), body: row.body, createdAt: row.created_at, sender: { id:actor.kind==='member'&&row.sender_kind==='support'?'team:'+conversationTeam(db.prepare('SELECT * FROM support_conversations WHERE id=?').get(row.conversation_id)).id:row.sender_id, name:actor.kind==='member'&&row.sender_kind==='support'?conversationTeam(db.prepare('SELECT * FROM support_conversations WHERE id=?').get(row.conversation_id)).name:(db.prepare('SELECT name FROM users WHERE id=?').get(row.sender_id)?.name||row.sender_name), avatarUrl:row.sender_kind==='member'?avatarUrl(db.prepare('SELECT * FROM support_conversations WHERE id=?').get(row.conversation_id),actor):null, kind: row.sender_kind }, clientId: row.client_id, attachments: files };
   }
   function detail(row, actor, page = 1) {
     return {
@@ -255,7 +258,7 @@ export function createSupportChat({ db, memberAuth, scopes = null }) {
     return db.prepare('SELECT * FROM support_messages WHERE id=?').get(id);
   }
   async function handle(req, res, url, adminActor = null) {
-    const match = /^\/api\/(member\/)?support(?:\/([^/]+)(?:\/(messages|read|status|attachments)(?:\/([^/]+))?)?)?$/.exec(url.pathname);
+    const match = /^\/api\/(member\/)?support(?:\/([^/]+)(?:\/(messages|read|status|attachments|avatar)(?:\/([^/]+))?)?)?$/.exec(url.pathname);
     if (!match) return false;
     if (!['GET', 'POST'].includes(req.method)) fail(405, 'Method not allowed.');
     const memberRoute = !!match[1], id = match[2], action = match[3], attachmentId = match[4];
@@ -295,6 +298,7 @@ export function createSupportChat({ db, memberAuth, scopes = null }) {
       });
     }
     if (id && !uuid.test(id)) fail(404, 'Conversation not found.');
+    if(action==='avatar'){if(req.method!=='GET'||attachmentId)fail(405,'Method not allowed.');const conversation=accessible(id,actor),photo=profilePhoto(db,conversation.participant_id);res.writeHead(200,{'Content-Type':photo.mime,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"sandbox; default-src 'none'"});res.end(photo.bytes);return true;}
     if (action === 'attachments') {
       if (req.method !== 'GET') fail(405, 'Method not allowed.');
       accessible(id, actor);

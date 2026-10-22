@@ -1,3 +1,4 @@
+import {validFullName,saveFullName,readFullName} from './member-full-names.mjs';
 import {installMemberUsernames,claimMemberUsername,usernameAvailability,memberUsernameStatus,changeMemberUsername} from './member-usernames.mjs';
 import {installStudentAccess,studentCapabilities} from './student-access.mjs';
 import { accountEmail } from './account-email.mjs';
@@ -123,7 +124,7 @@ export function createMemberAuth({
       ORDER BY m.team
     `).all(row.id).map(item => item.team) : [];
     const request=db.prepare('SELECT r.account_type,a.status FROM member_account_requests r LEFT JOIN approvals a ON a.id=r.approval_id WHERE r.user_id=?').get(row.id);
-    return { id: row.id, username:db.prepare('SELECT username FROM member_usernames WHERE user_id=?').get(row.id)?.username||null, email: row.email, name: row.name, role: teams.length ? 'staff' : 'student', staffTeams: teams, ...studentCapabilities(db,row.id), ...(request && request.account_type!=='student'?{requestedAccountType:request.account_type,approvalStatus:request.status||'pending'}:{}) };
+    return { id: row.id, fullNameComplete:!!readFullName(db,row.id), username:db.prepare('SELECT username FROM member_usernames WHERE user_id=?').get(row.id)?.username||null, email: row.email, name: row.name, role: teams.length ? 'staff' : 'student', staffTeams: teams, ...studentCapabilities(db,row.id), ...(request && request.account_type!=='student'?{requestedAccountType:request.account_type,approvalStatus:request.status||'pending'}:{}) };
   }
 
   function authenticate(req) {
@@ -290,7 +291,7 @@ export function createMemberAuth({
       } else if (action === 'signup') {
         if (!registrationEnabled) fail(503, 'Account registration is not available yet.');
         const email = emailAddress(data.email), password = newPassword(data);
-        if (typeof data.name !== 'string' || data.name.trim().length < 2 || data.name.length > 80) fail(400, 'Enter your name (2–80 characters).');
+        if(!validFullName(data.name))fail(400,'Enter your full name, including your surname (2–80 characters).');if(data.displayName!==undefined&&(typeof data.displayName!=='string'||data.displayName.trim().length<2||data.displayName.length>80))fail(400,'Enter a public display name of 2–80 characters.');
         const accountType=data.accountType||'student',service=data.service||'',organisation=typeof data.organisation==='string'?data.organisation.trim():'';
         if(!['student','staff','organisation','seller'].includes(accountType))fail(400,'Choose a valid account type.');
         if(accountType==='staff'&&!['cleaning','moving','airport_transfer'].includes(service))fail(400,'Choose your staff service.');
@@ -316,7 +317,8 @@ export function createMemberAuth({
           }
           const id = randomUUID(), createdAt = new Date().toISOString();
           db.prepare('INSERT INTO users(id,name,email,kind,status,created_at) VALUES(?,?,?,?,?,?)')
-            .run(id, data.name.trim(), email, 'student', 'active', createdAt);
+            .run(id,(data.displayName||data.name).trim(),email,'student','active',createdAt);
+          saveFullName(db,id,data.name);
           claimMemberUsername(db,id,data.username);
           db.prepare('INSERT INTO member_credentials(user_id,password_hash,verified_at,created_at) VALUES(?,?,NULL,?)')
             .run(id, hashed, createdAt);
