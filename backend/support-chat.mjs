@@ -325,7 +325,14 @@ export function createSupportChat({ db, memberAuth, scopes = null }) {
       const recipientId = actor.kind === 'member' ? actor.id : data.recipientId;
       if (typeof recipientId !== 'string' || recipientId.length > 100) fail(400, 'Choose an account.');
       participant(recipientId, true);
-      const bookingId = data.bookingId == null || data.bookingId === '' ? null : data.bookingId;
+      let bookingId = data.bookingId == null || data.bookingId === '' ? null : data.bookingId;
+      if(data.bookingReference!=null&&data.bookingReference!==''){
+        const code=typeof data.bookingReference==='string'?data.bookingReference.trim().toUpperCase():'';
+        if(!/^UM-\d{6,20}$/.test(code))fail(400,'Enter a job code such as UM-000001.');
+        const linked=db.prepare("SELECT record_id FROM record_references WHERE kind='booking' AND reference=?").get(code)?.record_id;
+        if(!linked||(bookingId&&bookingId!==linked)||!canAccessBooking(linked,recipientId))fail(400,'Choose one of this account’s bookings.');
+        bookingId=linked;
+      }
       bookingAllowed(bookingId, recipientId);
       const requestedTeam=data.teamId||null;if(requestedTeam&&(actor.kind!=='support'||!['support','technical','cleaning','moving','airport_transfer'].includes(requestedTeam)))fail(400,'Choose a valid sending team.');if(requestedTeam&&bookingId&&requestedTeam!==teamForService(db,db.prepare('SELECT service FROM bookings WHERE id=?').get(bookingId)?.service)?.id)fail(400,'Sending team must match the booking service.');
       const sendingTeam=requestedTeam||(bookingId?teamForService(db,db.prepare('SELECT service FROM bookings WHERE id=?').get(bookingId)?.service)?.id:null)||(data.category==='technical'?'technical':'support');

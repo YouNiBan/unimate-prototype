@@ -30,7 +30,7 @@ import { randomUUID } from 'node:crypto';
 import { openDatabase, transaction, audit } from './database.mjs';
 import { token, digest, hashPassword, verifyPassword, passwordValid } from './security.mjs';
 import {reportCountSql,reviewEligibleSql,REPORT_THRESHOLD} from './moderation.mjs';
-import {taskList,taskQuery} from './tasks.mjs';
+import {taskList,taskQuery,notificationQuery} from './tasks.mjs';
 import {createBookingInvoice} from './invoices.mjs';
 import {readBookingSubmission} from './public/booking-details.mjs';
 import { createMemberAuth } from './member-auth.mjs';
@@ -334,7 +334,7 @@ export async function createApplication({
       if (await supportChat.handle(req,res,url,actor)) return;
       if (await oversight.handle(req,res,url,actor)) return;
       if (await staffInvoices.handle(req,res,url,actor)) return;
-      if (actor.role === 'support' && !/^\/api\/bookings(?:\/|$)/.test(path) && !['/api/overview','/api/staff-schedule'].includes(path) && !(path === '/api/tasks' && req.method === 'GET') && !['/api/logout','/api/settings/password','/api/navigation-counts'].includes(path) && !path.startsWith('/api/support')) fail(403,'Support access is limited to the support inbox and account settings.');
+      if (actor.role === 'support' && !/^\/api\/bookings(?:\/|$)/.test(path) && !['/api/overview','/api/staff-schedule'].includes(path) && !((path === '/api/tasks' && req.method === 'GET')||(path==='/api/tasks/seen'&&req.method==='POST')) && !['/api/logout','/api/settings/password','/api/navigation-counts'].includes(path) && !path.startsWith('/api/support')) fail(403,'Support access is limited to the support inbox and account settings.');
       if(path==='/api/marketplace'){if(enforceAdminScopes&&!scopes.has(actor,'marketplace'))fail(403,'Marketplace access required.');if(!(fullAccess(actor.role)||(actor.role==='admin'&&req.method==='GET')))fail(403,'Owner or SuperAdmin access required.');if(req.method==='GET')return reply(200,marketplace.list({published:url.searchParams.get('published')==='1',q:url.searchParams.get('q')||'',page:Number(url.searchParams.get('page')||1)}));if(req.method==='POST')return reply(200,marketplace.save(actor,await body(req,1500000)));fail(405,'Method not allowed.');}
       if(path==='/api/dev-mail'&&req.method==='GET'){
         if(!localMailbox)fail(404,'Not found.');
@@ -504,13 +504,14 @@ export async function createApplication({
       if(path==='/api/invoices'||path.startsWith('/api/invoices/')){
         if(!fullAccess(actor.role))fail(403,'Owner or SuperAdmin access required.');
         const id=path.split('/')[3],today=londonDate(Date.now());
+        const withJobReference=row=>({...row,bookingReference:recordReference(db,'booking',row.booking_id,db.prepare('SELECT created_at FROM bookings WHERE id=?').get(row.booking_id)?.created_at)});
         if(req.method==='GET'){
-          if(id){const row=db.prepare('SELECT * FROM invoices WHERE id=?').get(id);if(!row)fail(404,'Invoice not found.');return reply(200,{row});}
+          if(id){const row=db.prepare('SELECT * FROM invoices WHERE id=?').get(id);if(!row)fail(404,'Invoice not found.');return reply(200,{row:withJobReference(row)});}
           const state=url.searchParams.get('status')||'open',q=(url.searchParams.get('q')||'').trim(),page=Number(url.searchParams.get('page')||1);
           const filters={all:'1=1',open:"status='open'",due:"status='open' AND due_on>=?",overdue:"status='open' AND due_on<?",closed:"status<>'open'",paid:"status='paid'",paid_off_platform:"status='paid_off_platform'",void:"status='void'"};if(!Object.hasOwn(filters,state)||q.length>100||!Number.isSafeInteger(page)||page<1)fail(400,'Invalid invoice filter.');
           const args=['due','overdue'].includes(state)?[today]:[],pattern='%'+q.replace(/[\\%_]/g,'\\$&')+'%';args.push(pattern,pattern);const where=filters[state]+" AND (reference LIKE ? ESCAPE '\\' OR customer LIKE ? ESCAPE '\\')";
           const rows=db.prepare(`SELECT * FROM invoices WHERE ${where} ORDER BY due_on,id LIMIT 25 OFFSET ?`).all(...args,(page-1)*25),counts={};for(const [key,filter] of Object.entries(filters))counts[key]=db.prepare('SELECT count(*) n FROM invoices WHERE '+filter).get(...(['due','overdue'].includes(key)?[today]:[])).n;
-          return reply(200,{rows,total:db.prepare('SELECT count(*) n FROM invoices WHERE '+where).get(...args).n,counts,outstanding_pence:db.prepare("SELECT COALESCE(sum(amount_pence),0) n FROM invoices WHERE status='open'").get().n,today});
+          return reply(200,{rows:rows.map(withJobReference),total:db.prepare('SELECT count(*) n FROM invoices WHERE '+where).get(...args).n,counts,outstanding_pence:db.prepare("SELECT COALESCE(sum(amount_pence),0) n FROM invoices WHERE status='open'").get().n,today});
         }
         const data=await body(req);
         if(id){if(!['paid','paid_off_platform','void'].includes(data.status))fail(400,'Invalid invoice status.');const reason=text(data.reason,5,500,'reason');transaction(db,()=>{const before=db.prepare('SELECT * FROM invoices WHERE id=?').get(id);if(!before)fail(404,'Invoice not found.');if(before.status!=='open')fail(409,'This invoice is already closed.');db.prepare('UPDATE invoices SET status=? WHERE id=?').run(data.status,id);audit(db,actor,'invoice.status_changed','invoices',id,{status:before.status},{status:data.status},reason);});return reply(200,{ok:true});}
@@ -560,8 +561,13 @@ export async function createApplication({
         const page=Number(url.searchParams.get('page')||1);if(!Number.isSafeInteger(page)||page<1||page>100000)fail(400,'Invalid page.');return reply(200,taskList(db,actor,page,url.searchParams.get('filter')||'all',scopes));
       }
       if(path==='/api/tasks/seen'&&req.method==='POST'){
-        const data=await body(req);if(!['approvals','reports','account_reports'].includes(data.resource)||typeof data.record_id!=='string')fail(400,'Invalid task.');
-        const task=db.prepare(`SELECT * FROM (${taskQuery(accountReviews(actor.role),scopes,actor)}) WHERE resource=? AND record_id=?`).get(data.resource,data.record_id);
+        if(actor.role==='support'){
+          const notification=await body(req);if(notification.resource!=='bookings')fail(403,'This notification is not available to Support.');
+          const task=db.prepare(`SELECT * FROM (${notificationQuery(db,actor,scopes)}) WHERE resource=? AND record_id=?`).get('bookings',notification.record_id);
+          if(!task)fail(404,'Notification is not accessible.');db.prepare('INSERT OR IGNORE INTO task_seen VALUES(?,?,?)').run(actor.id,'bookings',notification.record_id);return reply(200,{ok:true});
+        }
+        const data=await body(req);if(!['approvals','reports','account_reports','users','posts','bookings'].includes(data.resource)||typeof data.record_id!=='string')fail(400,'Invalid task.');
+        const task=db.prepare(`SELECT * FROM (${notificationQuery(db,actor,scopes)}) WHERE resource=? AND record_id=?`).get(data.resource,data.record_id);
         if(!task)fail(404,'Task is no longer pending or is not accessible.');
         db.prepare('INSERT OR IGNORE INTO task_seen VALUES(?,?,?)').run(actor.id,data.resource,data.record_id);return reply(200,{ok:true});
       }
@@ -724,7 +730,7 @@ export async function createApplication({
       if (req.method === 'GET' && !id) {
         const page = Number(url.searchParams.get('page') || 1);
         if (!Number.isSafeInteger(page) || page < 1 || page > 100000) fail(400,'Invalid page.');
-        const columns={users:['name','email',"(SELECT username FROM member_usernames WHERE user_id=users.id)","(SELECT reference FROM record_references WHERE kind='member' AND record_id=users.id)"],approvals:['title','applicant'],posts:['title','author'],reports:['title','reporter'],account_reports:['title','details'],bookings:['title','customer','id',"(SELECT reference FROM record_references WHERE kind='booking' AND record_id=bookings.id)"],audit:['actor_name','action','resource','resource_id']};
+        const columns={users:['name','email',"(SELECT username FROM member_usernames WHERE user_id=users.id)","(SELECT reference FROM record_references WHERE kind='member' AND record_id=users.id)","(SELECT reference FROM record_references WHERE kind='account' AND record_id=users.id)"],approvals:['title','applicant'],posts:['title','author'],reports:['title','reporter'],account_reports:['title','details'],bookings:['title','customer','id',"(SELECT reference FROM record_references WHERE kind='booking' AND record_id=bookings.id)"],audit:['actor_name','action','resource','resource_id']};
         let {where,values}=listFilter(url,columns[kind],kind!=='audit');if(kind==='users')where+=(where?' AND ':' WHERE ')+"kind<>'deleted'";if(kind==='audit'&&actor.role!=='owner')where+=(where?' AND ':' WHERE ')+"resource NOT IN ('documents','staff_hr')";
         if(kind==='reports'&&url.searchParams.has('type')){const type=url.searchParams.get('type');if(!['post','comment','forum','moment'].includes(type))fail(400,'Invalid report type.');where+=(where?' AND ':' WHERE ')+"COALESCE((SELECT kind FROM moderation_targets WHERE post_id=reports.post_id),'moment') "+(type==='post'?"IN ('moment','forum')":"='"+type+"'");}
         if(kind==='reports')where+=(where?' AND ':' WHERE ')+reviewEligibleSql;

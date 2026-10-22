@@ -68,6 +68,7 @@ function installSchema(db) {
     );
     CREATE INDEX IF NOT EXISTS member_sessions_user_idx ON member_sessions(user_id);
     CREATE INDEX IF NOT EXISTS member_sessions_expiry_idx ON member_sessions(expires);
+    CREATE TABLE IF NOT EXISTS member_deactivation_challenges(token_hash TEXT PRIMARY KEY,user_id TEXT NOT NULL REFERENCES users(id),session_hash TEXT NOT NULL,expires INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS member_email_tokens(
       token_hash TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES member_credentials(user_id),
@@ -106,7 +107,7 @@ export function createMemberAuth({
   const mailAvailable = typeof sendMail === 'function';
   const registrationEnabled = allowRegistration === true && mailAvailable;
   const configured = true;
-  const configuration = { configured, registrationEnabled, mailConfigured: mailAvailable, mailMode: mailAvailable && mailMode === 'local' ? 'local' : 'smtp' };
+  const configuration = { configured, registrationEnabled, mailConfigured: mailAvailable, mailMode: mailAvailable && mailMode === 'local' ? 'local' : 'smtp', accountDeactivationEnabled:true, passwordChangeEnabled:true };
   const anonymousCsrf = token();
   // A nonexistent account still performs the same scrypt verification work.
   const dummyHash = `${token()}:${token()}${token()}`;
@@ -225,7 +226,7 @@ export function createMemberAuth({
   }
 
   async function handle(req, res, url) {
-    const routes = new Set(['session', 'signup', 'login', 'logout', 'verify', 'forgot-password', 'reset-password','username-availability','username']);
+    const routes = new Set(['session', 'signup', 'login', 'logout', 'verify', 'forgot-password', 'reset-password','username-availability','username','change-password','deactivation-request','deactivate-account']);
     const match = /^\/api\/member\/([^/]+)$/.exec(url.pathname);
     if (!match || !routes.has(match[1])) return false;
     try {
@@ -241,7 +242,42 @@ export function createMemberAuth({
       if (req.method !== 'POST') fail(405, 'Method not allowed.');
       requireMutation(req, session);
       const data = await readBody(req);
-      if(action==='username'){
+      if(['change-password','deactivation-request','deactivate-account'].includes(action)){
+        // Request bodies and password hashing yield: recheck session, CSRF and credential before mutation.
+        const liveSession=()=>{const current=authenticate(req);if(!session||!current||current.user.id!==session.user.id)fail(401,'Please sign in again.');requireMutation(req,current);return current;};
+        const current=liveSession(),userId=current.user.id;
+        rateLimit(req,action,userId,5);
+        if(action==='deactivation-request'){
+          const raw=token();
+          transaction(db,()=>{liveSession();db.prepare('DELETE FROM member_deactivation_challenges WHERE session_hash=? OR expires<=?').run(current.tokenHash,Date.now());db.prepare('INSERT INTO member_deactivation_challenges VALUES(?,?,?,?)').run(digest(raw),userId,current.tokenHash,Date.now()+5*60000);});
+          reply(res,200,{token:raw,expiresInSeconds:300});return true;
+        }
+        if(typeof data.password!=='string'||!data.password||data.password.length>128)fail(400,'Enter your current password.');
+        const challenge=()=>{if(data.confirmation!=='DEACTIVATE'||typeof data.token!=='string'||!/^[a-f0-9]{64}$/.test(data.token))fail(400,'Complete both deactivation confirmations.');const row=db.prepare('SELECT * FROM member_deactivation_challenges WHERE token_hash=? AND user_id=? AND session_hash=? AND expires>?').get(digest(data.token),userId,current.tokenHash,Date.now());if(!row)fail(400,'Confirmation expired. Start account deactivation again.');};
+        if(action==='deactivate-account')challenge();
+        const replacement=action==='change-password'?newPassword({password:data.newPassword,confirmPassword:data.confirmPassword}):null;
+        const before=db.prepare('SELECT password_hash FROM member_credentials WHERE user_id=?').get(userId);
+        const valid=await passwordWork(async()=>{try{return await verifyPassword(data.password,before?.password_hash||dummyHash);}catch{return false;}});
+        liveSession();if(!valid)fail(403,'Your current password is incorrect.');
+        const hashed=replacement?await passwordWork(()=>hashPassword(replacement)):null;
+        const raw=action==='change-password'?token():null,csrf=action==='change-password'?token():null;
+        transaction(db,()=>{
+          liveSession();const credential=db.prepare('SELECT password_hash FROM member_credentials WHERE user_id=?').get(userId);if(credential?.password_hash!==before?.password_hash)fail(409,'Your account changed. Sign in again.');
+          if(action==='deactivate-account'){
+            challenge();
+            db.prepare("UPDATE users SET status='suspended' WHERE id=?").run(userId);
+            db.prepare('INSERT INTO member_controls(user_id,version,suspended_until) VALUES(?,1,NULL) ON CONFLICT(user_id) DO UPDATE SET version=version+1,suspended_until=NULL').run(userId);
+            db.prepare('DELETE FROM student_verification_codes WHERE user_id=?').run(userId);
+          }else db.prepare('UPDATE member_credentials SET password_hash=? WHERE user_id=?').run(hashed,userId);
+          db.prepare('DELETE FROM member_sessions WHERE user_id=?').run(userId);
+          db.prepare('DELETE FROM member_email_tokens WHERE user_id=?').run(userId);
+          db.prepare('DELETE FROM member_deactivation_challenges WHERE user_id=?').run(userId);
+          if(raw)db.prepare('INSERT INTO member_sessions VALUES(?,?,?,?)').run(digest(raw),userId,csrf,Date.now()+SESSION_MS);
+          audit(db,{id:userId,name:current.user.name},action==='deactivate-account'?'member.self_deactivated':'member.password_changed','users',userId,null,null,action==='deactivate-account'?'Member confirmed deactivation twice and verified current password; records retained for support reactivation':'Member verified current password and changed password; other sessions revoked');
+        });
+        setCookie(res,raw||'',!raw);
+        reply(res,200,{ok:true,...(raw?{csrf}:{}),message:raw?'Password updated. Other devices have been signed out.':'Account deactivated. Contact UniMate Support to request reactivation.'});
+      } else if(action==='username'){
         if(!session)fail(401,'Please sign in.');
         rateLimit(req,'change-username',session.user.id,5);
         if(typeof data.password!=='string'||!data.password||data.password.length>128)fail(400,'Enter your current password to change your username.');
