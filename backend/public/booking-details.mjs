@@ -78,7 +78,7 @@ export function normalizeBookingDetails(input) {
     const text = String(value), key = label + '\0' + text;
     if (!known.has(key)) { fields.push({ label, value: text }); known.add(key); }
   };
-  add('Booking reference', row.id || booking.id);
+  add('Booking reference', row.reference || row.id || booking.id);
   add('Service', serviceName(row.service || submission.service));
   add('Customer', row.customer || booking.student || submission.student);
   add('Status', typeof row.status === 'string' ? row.status.replaceAll('_',' ').replaceAll('-',' ') : row.status);

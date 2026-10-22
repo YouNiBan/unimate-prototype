@@ -233,7 +233,7 @@ export function createSharedChat(container) {
       ? `${next.conversation.participant.name} · ${t(next.conversation.participant.role === 'staff' ? 'Staff' : 'Student')}`
       : t(next.conversation.teamName||'UniMate Support');
     const category = { general: 'General enquiry', booking: 'Booking help', technical: 'Technical help' }[next.conversation.category] || 'Support';
-    meta.textContent = `${next.conversation.reference ? next.conversation.reference+' · ' : ''}${t(category)} · ${t(next.conversation.status === 'closed' ? 'Closed' : 'Open')}${next.conversation.bookingId ? ` · ${t('Booking')} ${next.conversation.bookingId}` : ''}`;
+    meta.textContent = `${next.conversation.reference ? next.conversation.reference+' · ' : ''}${t(category)} · ${t(next.conversation.status === 'closed' ? 'Closed' : 'Open')}${next.conversation.bookingId ? ` · ${t('Booking')} ${next.conversation.bookingReference || next.conversation.bookingId}` : ''}${next.conversation.audience === 'staff_internal' ? ' · '+t('Internal staff chat — not visible to client') : ''}`;
     earlier.hidden = next.page * 50 >= next.total;
     newer.hidden = next.page <= 1;
     const nextSignature = JSON.stringify([currentLocale(), next.page, next.messages]);
