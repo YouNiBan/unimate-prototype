@@ -31,7 +31,7 @@ export function manageMember(db,actor,id,data){return transaction(db,()=>{
  }else{
  const reference=recordReference(db,'member',id,row.created_at);if(data.confirmation!==reference)fail(400,'Type the member ID to confirm permanent account deletion.');
  // Keep a minimal tombstone for booking, payment and audit references. The account cannot be restored.
- for(const table of ['member_sessions','member_email_tokens','student_verification_codes','student_verifications','student_profiles','user_profiles','member_credentials'])db.prepare('DELETE FROM '+table+' WHERE user_id=?').run(id);
+ for(const table of ['member_sessions','member_email_tokens','student_verification_codes','student_verifications','student_profiles','member_profile_content','user_profiles','member_credentials'])db.prepare('DELETE FROM '+table+' WHERE user_id=?').run(id);
  db.prepare('DELETE FROM restaurant_review_votes WHERE user_id=? OR review_id IN (SELECT id FROM restaurant_student_reviews WHERE user_id=?)').run(id,id);
  db.prepare('DELETE FROM restaurant_student_reviews WHERE user_id=?').run(id);db.prepare('DELETE FROM student_connections WHERE sender_id=? OR recipient_id=?').run(id,id);
  db.prepare('DELETE FROM report_votes WHERE user_id=?').run(id);
