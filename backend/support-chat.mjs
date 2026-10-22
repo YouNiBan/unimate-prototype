@@ -176,6 +176,7 @@ export function createSupportChat({ db, memberAuth, scopes = null }) {
   function accessible(id, actor) {
     const row = db.prepare('SELECT * FROM support_conversations WHERE id=?').get(id);
     if (!row || (actor.kind === 'member' && row.participant_id !== actor.id)) fail(404, 'Conversation not found.');
+    if (actor.kind === 'member' && row.booking_id && !canAccessBooking(row.booking_id, actor.id)) fail(404, 'Conversation not found.');
     if(actor.kind==='support'&&scopes?.enabled&&!scopes.access(actor).inboxes.includes(conversationTeam(row).id))fail(404,'Conversation not found.');
     return row;
   }
@@ -193,6 +194,8 @@ export function createSupportChat({ db, memberAuth, scopes = null }) {
       teamName:conversationTeam(row)?.name,teamId:conversationTeam(row)?.id,participant: participant(row.participant_id), updatedAt: row.updated_at,
       lastMessage: last ? last.body || 'Attachment' : '',
       unreadCount: unread(row.id, actor), bookingId: row.booking_id,
+      bookingReference: row.booking_id ? recordReference(db,'booking',row.booking_id,db.prepare('SELECT created_at FROM bookings WHERE id=?').get(row.booking_id)?.created_at) : null,
+      audience: row.booking_id && !db.prepare('SELECT 1 FROM booking_owners WHERE booking_id=? AND user_id=?').get(row.booking_id,row.participant_id) ? 'staff_internal' : 'client_team',
     };
   }
   function messageValue(row, actor) {
@@ -219,15 +222,21 @@ export function createSupportChat({ db, memberAuth, scopes = null }) {
     if ((db.prepare('SELECT count FROM support_rate_limits WHERE key=?').get(key)?.count || 0) >= maximum) fail(429, 'Please wait before sending more support requests.');
     db.prepare('INSERT INTO support_rate_limits VALUES(?,1,?) ON CONFLICT(key) DO UPDATE SET count=count+1').run(key, now + duration);
   }
+  function bookingAccessSql(booking, user) {
+    if (!tableExists('booking_owners')) return '0';
+    const owner = `EXISTS(SELECT 1 FROM booking_owners o WHERE o.booking_id=${booking} AND o.user_id=${user})`;
+    if (!tableExists('staff_user_links')) return owner;
+    return `(${owner} OR EXISTS(SELECT 1 FROM booking_assignments a JOIN bookings b ON b.id=a.booking_id
+      JOIN team_members t ON t.id=a.member_id JOIN staff_user_links l ON l.member_id=t.id
+      WHERE a.booking_id=${booking} AND l.user_id=${user} AND t.status='active'
+      AND t.team=CASE b.service WHEN 'cleaning' THEN 'cleaners' WHEN 'moving' THEN 'movers' WHEN 'airport_transfer' THEN 'drivers' ELSE '' END))`;
+  }
+  function canAccessBooking(bookingId, userId) {
+    return !!db.prepare(`SELECT 1 FROM bookings job WHERE job.id=? AND ${bookingAccessSql('job.id','?')}`).get(bookingId,...(tableExists('staff_user_links')?[userId,userId]:tableExists('booking_owners')?[userId]:[]));
+  }
   function bookingAllowed(bookingId, userId) {
     if (!bookingId) return;
-    if (typeof bookingId !== 'string' || bookingId.length > 100 || !tableExists('booking_owners')) fail(400, 'Choose one of this account’s bookings.');
-    const owner = db.prepare('SELECT 1 FROM booking_owners WHERE booking_id=? AND user_id=?').get(bookingId, userId);
-    const assigned = tableExists('staff_user_links') && db.prepare(`SELECT 1 FROM booking_assignments a
-      JOIN bookings b ON b.id=a.booking_id JOIN team_members t ON t.id=a.member_id
-      JOIN staff_user_links l ON l.member_id=t.id
-      WHERE a.booking_id=? AND l.user_id=? AND t.status='active' AND t.team=CASE b.service WHEN 'cleaning' THEN 'cleaners' WHEN 'moving' THEN 'movers' WHEN 'airport_transfer' THEN 'drivers' ELSE '' END`).get(bookingId, userId);
-    if (!owner && !assigned) fail(400, 'Choose one of this account’s bookings.');
+    if (typeof bookingId !== 'string' || bookingId.length > 100 || !canAccessBooking(bookingId,userId)) fail(400, 'Choose one of this account’s bookings.');
   }
   function existing(actor, reference) {
     return db.prepare('SELECT * FROM support_messages WHERE sender_kind=? AND sender_id=? AND client_id=?').get(actor.kind, actor.id, reference);
@@ -265,9 +274,10 @@ export function createSupportChat({ db, memberAuth, scopes = null }) {
       const status = url.searchParams.get('status') || 'all';
       if (!['all', 'open', 'closed'].includes(status)) fail(400, 'Choose open, closed or all conversations.');
       const q = search(url), parameters = [];
-      const conditions = ["(c.subject LIKE ? ESCAPE '\\' OR u.name LIKE ? ESCAPE '\\')"];
-      parameters.push(q, q);
+      const conditions = ["(c.subject LIKE ? ESCAPE '\\' OR u.name LIKE ? ESCAPE '\\' OR EXISTS(SELECT 1 FROM record_references ref WHERE ref.kind='booking' AND ref.record_id=c.booking_id AND ref.reference LIKE ? ESCAPE '\\'))"];
+      parameters.push(q, q, q);
       if (actor.kind === 'member') { conditions.push('c.participant_id=?'); parameters.push(actor.id); }
+      if (actor.kind === 'member') conditions.push(`(c.booking_id IS NULL OR ${bookingAccessSql('c.booking_id','c.participant_id')})`);
       if(actor.kind==='support'&&scopes?.enabled)conditions.push(scopes.inboxSql(actor));
       const team=url.searchParams.get('team')||'';if(team){if(!['cleaning','moving','airport_transfer','technical','support'].includes(team))fail(400,'Choose a valid service team.');conditions.push("COALESCE((SELECT team_id FROM support_conversation_teams WHERE conversation_id=c.id),(SELECT service FROM bookings WHERE id=c.booking_id),CASE c.category WHEN 'technical' THEN 'technical' ELSE 'support' END)=?");parameters.push(team);}
       const base = ' FROM support_conversations c JOIN users u ON u.id=c.participant_id WHERE ' + conditions.join(' AND ');
@@ -388,5 +398,20 @@ export function createSupportChat({ db, memberAuth, scopes = null }) {
     fail(405, 'Method not allowed.');
   }
   function bookingThread(bookingId){const booking=db.prepare('SELECT b.*,o.user_id FROM bookings b JOIN booking_owners o ON o.booking_id=b.id WHERE b.id=?').get(bookingId);if(!booking)return null;const existing=db.prepare("SELECT id FROM support_conversations WHERE booking_id=? AND participant_id=? AND category='booking' ORDER BY created_at,id LIMIT 1").get(bookingId,booking.user_id);if(existing)return existing.id;const id=randomUUID(),now=new Date().toISOString(),team=teamForService(db,booking.service);db.prepare("INSERT INTO support_conversations VALUES(?,?,?,'booking','open',?,?,?)").run(id,booking.user_id,(team?.name||'UniMate Support')+' · '+booking.title,bookingId,now,now);return id;}
-  return { handle,bookingThread };
+  function bookingConversationForMember(bookingId,userId) {
+    participant(userId,true);
+    if(!canAccessBooking(bookingId,userId))fail(404,'Booking not found.');
+    if(db.prepare('SELECT 1 FROM booking_owners WHERE booking_id=? AND user_id=?').get(bookingId,userId))return bookingThread(bookingId);
+    // A staff member is the sole participant of this internal thread. Never reuse the client's thread.
+    return transaction(db,()=>{
+      const existing=db.prepare("SELECT id FROM support_conversations WHERE booking_id=? AND participant_id=? AND category='booking' ORDER BY created_at,id LIMIT 1").get(bookingId,userId);
+      if(existing)return existing.id;
+      const booking=db.prepare('SELECT * FROM bookings WHERE id=?').get(bookingId),id=randomUUID(),now=new Date().toISOString();
+      const reference=recordReference(db,'booking',booking.id,booking.created_at),team=teamForService(db,booking.service);
+      db.prepare("INSERT INTO support_conversations VALUES(?,?,?,'booking','open',?,?,?)").run(id,userId,`Internal job · ${reference} · ${team?.name||'UniMate Support'}`,bookingId,now,now);
+      audit(db,{id:userId,kind:'member'},'support.internal_job_created','support_conversations',id,null,{bookingId},'Private assigned-job conversation created');
+      return id;
+    });
+  }
+  return { handle,bookingThread,bookingConversationForMember };
 }

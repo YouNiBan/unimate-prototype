@@ -1,4 +1,4 @@
-const prefixes={payment:'PAY',support:'SUP',message:'MSG',member:'MEM'};
+const prefixes={payment:'PAY',support:'SUP',message:'MSG',member:'MEM',booking:'JOB'};
 export function recordReference(db,kind,id,createdAt) {
   if(!prefixes[kind]||typeof id!=='string'||!id)throw Error('Invalid reference resource.');
   const existing=db.prepare('SELECT reference FROM record_references WHERE kind=? AND record_id=?').get(kind,id);

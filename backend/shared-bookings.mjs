@@ -1,3 +1,4 @@
+import { recordReference } from './references.mjs';
 import {teamForService} from './departments.mjs';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, chmodSync, lstatSync, realpathSync, constants } from 'node:fs';
@@ -102,7 +103,7 @@ export function getBookingDetail(db, id, { admin = false } = {}) {
   const pricingStatus = db.prepare('SELECT status FROM booking_pricing WHERE booking_id=?').get(id)?.status || 'legacy';
   const photos = mediaMetadata(db, id, admin);
   return {
-    row: { ...row, submission, assignment, photos, pricingStatus, team:teamForService(db,row.service), ...(saved && !submission ? { submissionUnavailable: true } : {}) },
+    row: { ...row, reference:recordReference(db,'booking',row.id,row.created_at), submission, assignment, photos, pricingStatus, team:teamForService(db,row.service), ...(saved && !submission ? { submissionUnavailable: true } : {}) },
     submission, assignment, photos, pricingStatus,
   };
 }
