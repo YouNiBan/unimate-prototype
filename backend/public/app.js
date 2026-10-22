@@ -71,8 +71,8 @@ async function refreshNotifications(){if(!session?.admin)return;try{const data=a
 let notificationVersion=0;
 dialog.addEventListener('close',()=>{notificationVersion++;notificationView=null;dialog.classList.remove('notifications-expanded','notifications-dialog');document.querySelectorAll('[data-notifications]').forEach(b=>b.setAttribute('aria-expanded','false'));});
 let notificationView=null;
-async function notifications(taskPage=1,taskFilter='all'){
- const version=++notificationVersion;document.querySelectorAll('[data-notifications]').forEach(b=>b.setAttribute('aria-expanded','true'));dialog.classList.add('notifications-dialog');
+async function notifications(taskPage=1,taskFilter='new'){
+ const version=++notificationVersion;document.querySelectorAll('[data-notifications]').forEach(b=>b.setAttribute('aria-expanded','true'));dialog.classList.add('notifications-dialog','notifications-expanded');
  if(!notificationView||!notificationView.centre.isConnected){
   const centre=el('div',undefined,'notification-centre'),header=el('header',undefined,'notification-header'),close=button('×',()=>dialog.close());close.setAttribute('aria-label','Close notifications');const headerTools=el('div',undefined,'notification-header-tools'),expand=button('',()=>{dialog.classList.toggle('notifications-expanded');syncExpand();},'icon-button');
   const syncExpand=()=>{const expanded=dialog.classList.contains('notifications-expanded');expand.replaceChildren(icon(expanded?'Collapse':'Expand'));expand.setAttribute('aria-label',expanded?'Restore notification size':'Expand notifications');expand.title=expanded?'Restore size':'Expand';expand.setAttribute('aria-pressed',String(expanded));};syncExpand();headerTools.append(brandLogo());header.append(close,el('h2','Notifications'),headerTools);
