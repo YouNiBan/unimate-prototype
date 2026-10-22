@@ -1,3 +1,6 @@
+// Exact outlined artwork from UniMate's existing Ionicons asset set.
+const composePaths={"attachment":"M221 385Q221 385 221 385Q260 388 288 360Q302 346 308 326Q311 317 311.5 302.0Q312 287 312 205Q312 119 311.5 108.0Q311 97 306 87Q299 73 286 65Q255 46 226 66Q208 78 202 98Q202 98 200 105V182Q200 260 202.0 263.5Q204 267 207.5 269.5Q211 272 216 272Q226 272 230 263Q232 261 232 183Q232 183 233 106L235 102Q242 89 257.0 89.0Q272 89 278 103Q280 107 280.0 208.0Q280 309 279 314Q273 335 254.5 346.0Q236 357 216 352Q186 344 178 315Q177 308 177.0 205.5Q177 103 178 96Q185 56 222 38Q256 22 289 38Q323 54 333 90Q335 97 335.5 195.0Q336 293 337 296Q342 305 353.0 304.0Q364 303 367 292Q368 289 368.0 197.5Q368 106 367 98Q362 55 330.5 26.5Q299 -2 256 -2Q210 -2 177 31Q154 54 147 87Q145 95 144.5 197.5Q144 300 145 309Q148 334 162.5 353.0Q177 372 201 381Q209 384 221 385Z","emoji":"M231 415Q239 415 255.0 415.0Q271 415 280 415Q289 414 300 412Q355 401 399.0 364.5Q443 328 464 276Q491 207 472.5 135.5Q454 64 397 18Q344 -24 278.0 -30.5Q212 -37 152 -6Q94 24 61.5 81.5Q29 139 32 205Q35 253 58 296Q79 337 115 366Q143 389 177 401Q204 412 231 415ZM284 382Q261 385 242 383Q216 381 195 374Q119 349 84 276Q64 237 64 192Q64 167 70 146Q85 83 136 42Q199 -8 278 1Q327 7 367.0 35.5Q407 64 428 108Q448 147 448 192Q448 226 437 256Q430 277 417 296Q369 369 284 382ZM192 238Q201 236 205.5 227.0Q210 218 207 210Q202 194 186 192Q171 191 163.5 203.5Q156 216 163 228Q167 234 175.0 238.0Q183 242 192 238ZM319 238Q329 242 339 237Q356 229 351 210Q348 199 337.5 194.0Q327 189 316 195Q302 203 304 218Q306 234 319 238ZM165 143Q165 143 165 143Q167 144 257 144Q257 144 347 144L349 142Q353 138 350 130Q343 109 326.5 92.5Q310 76 288 69Q273 64 256.0 64.0Q239 64 224 69Q179 84 162 128Q158 140 165 143Z"};
+function composeIcon(doc,name){const make=tag=>doc.createElementNS?doc.createElementNS('http://www.w3.org/2000/svg',tag):doc.createElement(tag),svg=make('svg'),path=make('path');for(const [key,value]of Object.entries({viewBox:'0 0 512 512',width:'20',height:'20',fill:'currentColor','aria-hidden':'true',focusable:'false'}))svg.setAttribute(key,value);path.setAttribute('d',composePaths[name]);path.setAttribute('transform','translate(0 448) scale(1 -1)');svg.append(path);return svg;}
 import {bindText,translateCurrent as t,currentLocale,observeUiAttributes} from './ui-i18n.mjs';
 export function createComposeIcon(doc) {
   const svg = doc.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -34,8 +37,9 @@ export function createComposerTools(container, { input, getDraft, onChange, onEr
   const root = make('div', undefined, 'shared-compose-tools'), bar = make('div', undefined, 'shared-compose-toolbar');
   const files = make('input'); files.type = 'file'; files.multiple = true; files.hidden = true; files.accept = 'image/png,image/jpeg,image/webp,application/pdf';
   files.setAttribute('aria-label', 'Choose attachments');
-  const attach = button('📎', () => files.click()); attach.title = 'Add attachments'; attach.setAttribute('aria-label', 'Add attachments');
-  const emoji = button('☺', () => { picker.hidden = !picker.hidden; emoji.setAttribute('aria-expanded', String(!picker.hidden)); if (!picker.hidden) picker.children[0]?.focus(); });
+  const attach = button('', () => files.click());attach.append(composeIcon(doc,'attachment')); attach.title = 'Add attachments'; attach.setAttribute('aria-label', 'Add attachments');
+  const emoji = button('', () => { picker.hidden = !picker.hidden; emoji.setAttribute('aria-expanded', String(!picker.hidden)); if (!picker.hidden) picker.children[0]?.focus(); });
+  emoji.append(composeIcon(doc,'emoji'));
   emoji.title = 'Choose emoji'; emoji.setAttribute('aria-label', 'Choose emoji'); emoji.setAttribute('aria-expanded', 'false');
   const hint = make('small', 'Up to 3 files · 5 MB each');
   const picker = make('div', undefined, 'shared-emoji-picker'); picker.hidden = true; picker.setAttribute('role', 'dialog'); picker.setAttribute('aria-label', 'Choose emoji');
@@ -108,7 +112,7 @@ export function createSharedChat(container) {
     return result;
   };
   let props, disposed = false, sending = false, preparing = false, changing = false, signature = '', identity = '';
-  const attachmentCache = new Map();
+  const attachmentCache = new Map(),avatarCache=new Map();
   const root = node('section', undefined, 'shared-chat');
   const head = node('header', undefined, 'shared-chat-head');
   const back = button('← Inbox', () => props.onBack?.(), 'shared-chat-back');
@@ -163,16 +167,17 @@ export function createSharedChat(container) {
   const imageDialog = node('dialog', undefined, 'shared-chat-image-dialog');
   imageDialog.setAttribute('aria-label', 'Photo preview');
   const closeImage = button('Close photo', () => imageDialog.close());
-  const largeImage = node('img');
-  imageDialog.append(closeImage, largeImage);
+  const largeImage = node('img'),saveImage=node('a','Save image','shared-chat-save-image');saveImage.download='photo.jpg';
+  imageDialog.append(closeImage,largeImage,saveImage);
   imageDialog.onclick = event => { if (event.target === imageDialog) imageDialog.close(); };
   root.append(head, history, closed, feedback, composer, imageDialog);
   container.replaceChildren(root);
 
+  function avatar(name,url,team=false){const frame=node('span',team?'U':name.trim().split(/\s+/).slice(0,2).map(v=>v[0]||'').join('').toUpperCase()||'?','shared-chat-avatar'+(team?' is-team':''),false);frame.setAttribute('aria-label',name+' profile picture');if(url&&props.loadAvatar){let entry=avatarCache.get(url);if(!entry){const controller=new AbortController();entry={controller,url:'',promise:null};entry.promise=Promise.resolve().then(()=>props.loadAvatar(url,controller.signal)).then(blob=>{if(disposed||controller.signal.aborted||!['image/png','image/jpeg','image/webp'].includes(blob.type)||blob.size>512000)throw Error('Photo unavailable');entry.url=URL.createObjectURL(blob);return entry.url;});avatarCache.set(url,entry);}entry.promise.then(src=>{if(disposed||!frame.isConnected)return;const image=node('img');image.src=src;image.alt='';image.onerror=()=>{frame.textContent=name.slice(0,1).toUpperCase();};frame.replaceChildren(image);}).catch(()=>{});}return frame;}
   function updateControls() {
     if (!props) return;
     const isClosed = props.conversation.status === 'closed';
-    status.hidden = !isClosed && props.viewer !== 'support';
+    status.hidden = props.conversation.audience==='personal'||(!isClosed && props.viewer !== 'support');
     bindText(status,changing ? 'Updating…' : isClosed ? 'Reopen conversation' : 'Close conversation');
     status.disabled = changing || sending;
     closed.hidden = !isClosed;
@@ -229,21 +234,22 @@ export function createSharedChat(container) {
       tools.refresh();
     }
     subject.textContent = next.conversation.subject;
-    participant.textContent = next.viewer === 'support'
+    participant.textContent = next.conversation.audience==='personal'?t('Friends · Personal chat'):next.viewer === 'support'
       ? `${next.conversation.participant.name} · ${t(next.conversation.participant.role === 'staff' ? 'Staff' : 'Student')}`
       : t(next.conversation.teamName||'UniMate Support');
-    const category = { general: 'General enquiry', booking: 'Booking help', technical: 'Technical help' }[next.conversation.category] || 'Support';
+    bindText(hint,()=>next.conversation.audience==='personal'?t('Private chat with your friend.'):t('Messages go to {team}.',{team:t(next.conversation.teamName||'UniMate Support')}));
+    const category = { personal:'Friends only',general: 'General enquiry', booking: 'Booking help', technical: 'Technical help' }[next.conversation.category] || 'Support';
     meta.textContent = `${next.conversation.reference ? next.conversation.reference+' · ' : ''}${t(category)} · ${t(next.conversation.status === 'closed' ? 'Closed' : 'Open')}${next.conversation.bookingId ? ` · ${t('Booking')} ${next.conversation.bookingReference || next.conversation.bookingId}` : ''}${next.conversation.audience === 'staff_internal' ? ' · '+t('Internal staff chat — not visible to client') : ''}`;
     earlier.hidden = next.page * 50 >= next.total;
     newer.hidden = next.page <= 1;
-    const nextSignature = JSON.stringify([currentLocale(), next.page, next.messages]);
+    const nextSignature = JSON.stringify([currentLocale(), next.page,next.conversation.participant,next.conversation.audience,next.messages]);
     for (const [key, cached] of attachmentCache) if (cached.failed) { attachmentCache.delete(key); signature = ''; }
     if (nextSignature !== signature) {
       const nearBottom = history.scrollHeight - history.scrollTop - history.clientHeight < 100;
       const oldScroll = history.scrollTop;
       messages.replaceChildren();
       for (const message of next.messages) {
-        const own = (next.viewer === 'support') === (message.sender.kind === 'support');
+        const own = next.conversation.audience==='personal'?message.sender.id===next.viewerId:(next.viewer === 'support') === (message.sender.kind === 'support');
         const row = node('article', undefined, `shared-chat-message${own ? ' is-own' : ''}`);
         const bubble = node('div', undefined, 'shared-chat-bubble');
         const sender = node('strong', message.sender.kind === 'support' ? (next.viewer==='support'?`${t(next.conversation.teamName||'UniMate Support')} · ${message.sender.name}`:t(next.conversation.teamName||'UniMate Support')) : message.sender.name, 'shared-chat-sender',false);
@@ -252,7 +258,7 @@ export function createSharedChat(container) {
         const time = node('time', Number.isNaN(date.getTime()) ? '' : date.toLocaleString(currentLocale(), { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }));
         time.dateTime = message.createdAt;
         if(message.reference)bubble.append(node('small',message.reference,'shared-chat-reference',false));
-        bubble.append(sender);
+        const content=node('div',undefined,'shared-chat-message-content');content.append(sender);const picture=avatar(message.sender.kind==='support'?(next.conversation.teamName||'UniMate Support'):message.sender.name,message.sender.avatarUrl,message.sender.kind==='support');
         if (message.body) bubble.append(body);
         if (message.attachments?.length) {
           const files = node('div', undefined, 'shared-chat-attachments');
@@ -279,18 +285,18 @@ export function createSharedChat(container) {
               if (disposed || !file.isConnected) return;
               file.replaceChildren();
               if (attachment.mime.startsWith('image/')) {
-                const open = button('', () => { largeImage.src = url; largeImage.alt = attachment.filename; imageDialog.showModal(); }, 'shared-chat-image-open');
-                open.setAttribute('aria-label', t('Enlarge {filename}',{filename:attachment.filename}));
-                const image = node('img'); image.src = url; image.alt = attachment.filename; open.append(image); file.append(open);
+                const open = button('', () => { largeImage.src=url;largeImage.alt=t('Chat photo');saveImage.href=url;saveImage.download=attachment.filename;imageDialog.showModal(); }, 'shared-chat-image-open');
+                open.setAttribute('aria-label',t('Open photo'));
+                const image = node('img'); image.src = url; image.alt = t('Chat photo'); open.append(image); file.append(open);
               }
               const download = node('a', attachment.mime === 'application/pdf' ? t('Download {filename}',{filename:attachment.filename}) : attachment.filename,undefined,false);
-              download.href = url; download.download = attachment.filename; file.append(download);
+              download.href=url;download.download=attachment.filename;if(attachment.mime==='application/pdf')file.append(download);
             }).catch(() => { cached.failed = true; if (!disposed && file.isConnected) file.replaceChildren(caption, node('small', 'Attachment unavailable. Refresh to try again.')); });
           }
           bubble.append(files);
         }
         bubble.append(time);
-        row.append(bubble);
+        content.append(bubble);row.append(picture,content);
         messages.append(row);
       }
       if (!next.messages.length) messages.append(node('p', 'No messages in this conversation yet.', 'shared-chat-empty'));
@@ -310,6 +316,7 @@ export function createSharedChat(container) {
       container.ownerDocument.removeEventListener?.('unimate-language-change',onLanguageChange);
       disposed = true;
       tools.destroy();
+      for(const entry of avatarCache.values()){entry.controller.abort();if(entry.url)URL.revokeObjectURL(entry.url);}avatarCache.clear();
       for (const cached of attachmentCache.values()) { cached.controller.abort(); if (cached.url) URL.revokeObjectURL(cached.url); }
       attachmentCache.clear();
       input.oninput = null;
