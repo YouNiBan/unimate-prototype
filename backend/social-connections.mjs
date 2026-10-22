@@ -1,4 +1,5 @@
 import {randomUUID} from 'node:crypto';
+import {installProfilePrivacy,readProfilePrivacy,saveProfilePrivacy} from './profile-privacy.mjs';
 import {transaction,audit} from './database.mjs';
 import {socialProfile,profilePhoto} from './social-profiles.mjs';
 import {decodeSupportAttachments} from './support-chat.mjs';
@@ -6,6 +7,7 @@ const fail=(status,message)=>{throw Object.assign(new Error(message),{status});}
 const clean=(v,max)=>typeof v==='string'&&v.trim().length<=max?v.trim():null;
 const reply=(res,status,data)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store'});res.end(JSON.stringify(data));return true;};
 export function createSocialConnections(db){
+ installProfilePrivacy(db);
  db.exec(`CREATE TABLE IF NOT EXISTS member_follows(follower_id TEXT NOT NULL REFERENCES users(id),followed_id TEXT NOT NULL REFERENCES users(id),PRIMARY KEY(follower_id,followed_id),CHECK(follower_id<>followed_id));
  CREATE TABLE IF NOT EXISTS member_blocks(blocker_id TEXT NOT NULL REFERENCES users(id),blocked_id TEXT NOT NULL REFERENCES users(id),PRIMARY KEY(blocker_id,blocked_id),CHECK(blocker_id<>blocked_id));
  CREATE TABLE IF NOT EXISTS member_moment_privacy(owner_id TEXT NOT NULL REFERENCES users(id),hidden_from_id TEXT NOT NULL REFERENCES users(id),PRIMARY KEY(owner_id,hidden_from_id));
@@ -55,6 +57,7 @@ export function createSocialConnections(db){
  function content(user,id,kind){visible(user.id,id);if(!['moment','forum'].includes(kind))fail(400,'Choose Moments or Forum.');if(kind==='moment'&&db.prepare('SELECT 1 FROM member_moment_privacy WHERE owner_id=? AND hidden_from_id=?').get(id,user.id))return {rows:[]};return {rows:db.prepare(`SELECT p.id,p.title,p.body,p.created_at createdAt,s.media FROM posts p JOIN member_social_posts s ON s.post_id=p.id JOIN moderation_targets mt ON mt.post_id=p.id WHERE s.user_id=? AND mt.kind=? AND p.status='published' AND (s.audience='public' OR s.user_id=? OR ?=1) ORDER BY p.created_at DESC,p.id LIMIT 100`).all(id,kind,user.id,Number(friends(user.id,id))).map(p=>({...p,media:JSON.parse(p.media)}))};}
  function activity(user,id){visible(user.id,id);return {reviews:db.prepare("SELECT r.id,r.rating,r.body,p.name placeName FROM restaurant_student_reviews r JOIN restaurants p ON p.id=r.restaurant_id WHERE r.user_id=? AND p.status='published' ORDER BY r.created_at DESC LIMIT 20").all(id),events:friends(user.id,id)||user.id===id?db.prepare("SELECT e.id,e.title,e.event_date date FROM member_event_reservations r JOIN member_events e ON e.id=r.event_id JOIN approvals a ON a.id=e.approval_id WHERE r.user_id=? AND a.status='approved' AND e.cancelled_at IS NULL ORDER BY e.event_date DESC LIMIT 20").all(id):[]};}
  async function handle(req,res,url,user,data){const parts=url.pathname.split('/').slice(3),base=parts[0],id=parts[1],actionName=parts[2];
+ if(base==='social'&&url.searchParams.get('settings')==='privacy'){if(req.method==='GET')return reply(res,200,{privacy:readProfilePrivacy(db,user.id)});if(req.method==='POST')return reply(res,200,saveProfilePrivacy(db,user,data));}
  if(base==='social'){if(req.method==='GET')return reply(res,200,list(user,url.searchParams));if(req.method==='POST')return reply(res,200,action(user,data));}
  if(base==='people'&&id){if(req.method!=='GET')fail(405,'Method not allowed.');visible(user.id,id);if(actionName==='avatar'||actionName==='banner'){const p=profilePhoto(db,id,actionName);res.writeHead(200,{'Content-Type':p.mime,'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff','Content-Security-Policy':"sandbox; default-src 'none'"});res.end(p.bytes);return true;}if(actionName==='moments'||actionName==='forum')return reply(res,200,content(user,id,actionName==='moments'?'moment':'forum'));if(actionName==='activity')return reply(res,200,activity(user,id));if(!actionName)return reply(res,200,profile(user,id));}
  if(base==='direct'){
