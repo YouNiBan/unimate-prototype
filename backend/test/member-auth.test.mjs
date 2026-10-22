@@ -52,6 +52,48 @@ async function fixture(t, options = {}) {
   return { db, auth, sent, call, csrf, anonymous, signup, mailToken, verify, login };
 }
 
+test('deactivation needs a session-bound first confirmation, typed confirmation and current password; records remain restorable',async t=>{
+ const f=await fixture(t);await f.signup('deactivate@example.invalid');await f.verify();const first=await f.login('deactivate@example.invalid'),other=await f.login('deactivate@example.invalid');
+ const user=first.data.user,id=user.id;
+ assert.equal((await f.call('deactivation-request',{}, {csrf:f.csrf})).status,401);
+ const challenge=await f.call('deactivation-request',{},first);assert.equal(challenge.status,200);
+ assert.equal(f.db.prepare('SELECT status FROM users WHERE id=?').get(id).status,'active');
+ assert.ok(f.db.prepare('SELECT 1 FROM member_sessions WHERE user_id=?').get(id));
+ const data={token:challenge.data.token,confirmation:'DEACTIVATE',password};
+ assert.equal((await f.call('deactivate-account',{...data,confirmation:'DELETE'},first)).status,400);
+ assert.equal((await f.call('deactivate-account',{...data,password:'Wrong-password!123'},first)).status,403);
+ assert.equal((await f.call('deactivate-account',data,other)).status,400);
+ assert.equal((await f.call('deactivate-account',data,first)).status,200);
+ assert.equal(f.db.prepare('SELECT status FROM users WHERE id=?').get(id).status,'suspended');
+ assert.ok(f.db.prepare('SELECT username FROM member_usernames WHERE user_id=?').get(id));assert.ok(f.db.prepare('SELECT password_hash FROM member_credentials WHERE user_id=?').get(id));
+ assert.equal((await f.call('session',undefined,first)).data.user,null);assert.equal((await f.call('session',undefined,other)).data.user,null);
+ assert.equal((await f.login('deactivate@example.invalid')).status,401);
+ assert.equal(f.db.prepare('SELECT count(*) n FROM member_deactivation_challenges WHERE user_id=?').get(id).n,0);
+ assert.equal(f.db.prepare('SELECT suspended_until FROM member_controls WHERE user_id=?').get(id).suspended_until,null);
+ f.db.prepare("UPDATE users SET status='active' WHERE id=?").run(id);assert.equal((await f.login('deactivate@example.invalid')).status,200);
+});
+
+test('expired confirmations, missing CSRF and stale sessions never deactivate an account',async t=>{
+ const f=await fixture(t);await f.signup('expiry@example.invalid');await f.verify();const login=await f.login('expiry@example.invalid');
+ assert.equal((await f.call('deactivation-request',{}, {...login,csrf:'wrong'})).status,403);
+ const c=await f.call('deactivation-request',{},login);f.db.prepare('UPDATE member_deactivation_challenges SET expires=0').run();
+ assert.equal((await f.call('deactivate-account',{token:c.data.token,password,confirmation:'DEACTIVATE'},login)).status,400);
+ assert.equal(f.db.prepare('SELECT status FROM users WHERE id=?').get(login.data.user.id).status,'active');
+});
+
+test('changing password verifies current password and policy, rotates this session and revokes other devices',async t=>{
+ const f=await fixture(t);await f.signup('password@example.invalid');await f.verify();const first=await f.login('password@example.invalid'),other=await f.login('password@example.invalid');
+ const data={password,newPassword:replacement,confirmPassword:replacement};
+ assert.equal((await f.call('change-password',{...data,password:'Wrong-password!123'},first)).status,403);
+ assert.equal((await f.call('change-password',{...data,newPassword:'short',confirmPassword:'short'},first)).status,400);
+ assert.equal((await f.call('change-password',{...data,confirmPassword:'Mismatch'},first)).status,400);
+ const changed=await f.call('change-password',data,first);assert.equal(changed.status,200);
+ const cookie=changed.headers.get('set-cookie').split(';')[0];assert.notEqual(cookie,first.cookie);
+ assert.equal((await f.call('session',undefined,{cookie})).data.user.id,first.data.user.id);
+ assert.equal((await f.call('session',undefined,first)).data.user,null);assert.equal((await f.call('session',undefined,other)).data.user,null);
+ assert.equal((await f.login('password@example.invalid')).status,401);assert.equal((await f.login('password@example.invalid',replacement)).status,200);
+});
+
 test('registration stays closed without mail or explicit enablement and creates no accounts', async t => {
   for (const options of [{ sendMail: null }, { allowRegistration: false }]) {
     await t.test(JSON.stringify(options), async t => {

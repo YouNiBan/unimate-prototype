@@ -6,6 +6,7 @@ import { openDatabase } from '../database.mjs';
 import { createMemberAuth } from '../member-auth.mjs';
 import { createSupportChat } from '../support-chat.mjs';
 import { digest, token } from '../security.mjs';
+import {recordReference} from '../references.mjs';
 
 async function fixture(t) {
   const db = openDatabase(':memory:');
@@ -75,6 +76,60 @@ async function fixture(t) {
     { subject: 'A support question', category: 'general', body: 'Please help with my account.', clientId: randomUUID(), ...extra }, who);
   return { db, memberAuth, support, call, create, identities };
 }
+
+test('simple job codes are stable, distinct and never reset at a year boundary',async t=>{
+ const f=await fixture(t);
+ assert.equal(recordReference(f.db,'booking','booking-a','2026-12-31'),'UM-000001');
+ assert.equal(recordReference(f.db,'booking','booking-b','2027-01-01'),'UM-000002');
+ assert.equal(recordReference(f.db,'booking','booking-a','2030-01-01'),'UM-000001');
+});
+
+test('assigned staff have a separate private job chat and the same stable job reference as the client', async t => {
+  const f=await fixture(t);
+  const client=f.support.bookingConversationForMember('booking-a','student-a');
+  const internal=f.support.bookingConversationForMember('booking-a','staff-a');
+  assert.notEqual(client,internal);
+  assert.equal(f.support.bookingConversationForMember('booking-a','staff-a'),internal);
+  assert.throws(()=>f.support.bookingConversationForMember('booking-b','staff-a'),{status:404});
+  const c=await f.call('/'+client),s=await f.call('/'+internal,undefined,'staff-a');
+  assert.equal(c.data.conversation.bookingReference,s.data.conversation.bookingReference);
+  assert.match(s.data.conversation.bookingReference,/^UM-\d{6}$/);
+  const linked=await f.create('student-a',{category:'booking',bookingReference:s.data.conversation.bookingReference});
+  assert.equal(linked.status,201);assert.equal(linked.data.conversation.bookingId,'booking-a');
+  assert.equal((await f.create('student-b',{category:'booking',bookingReference:s.data.conversation.bookingReference})).status,400);
+  assert.equal((await f.create('student-a',{category:'booking',bookingReference:'UM-999999'})).status,400);
+  assert.equal(c.data.conversation.audience,'client_team');assert.equal(s.data.conversation.audience,'staff_internal');
+  assert.equal((await f.call('/'+client,undefined,'staff-a')).status,404);
+  assert.equal((await f.call('/'+internal)).status,404);
+  assert.equal((await f.call('/'+internal+'/messages',{body:'Internal staff note',clientId:randomUUID()},'staff-a')).status,201);
+  const upload=await f.call('/'+internal+'/messages',{body:'',clientId:randomUUID(),attachments:[{filename:'internal.pdf',mime:'application/pdf',base64:Buffer.from('%PDF-1.7\nPrivate job note\n%%EOF\n').toString('base64')}]},'staff-a');
+  const attachment=upload.data.message.attachments[0].url;
+  assert.equal((await f.call(attachment,undefined,'staff-a')).status,200);
+  assert.equal((await f.call('/'+client)).data.messages.length,0);
+  assert.equal((await f.call('/api/support/'+internal,undefined,'owner')).data.messages[0].body,'Internal staff note');
+  assert.equal((await f.call('/api/support/'+internal+'/messages',{body:'Private team instructions',clientId:randomUUID()},'owner')).status,201);
+  assert.match((await f.call('/'+internal,undefined,'staff-a')).data.messages[2].sender.id,/^team:/);
+  assert.equal((await f.call('/api/support/'+client+'/messages',{body:'Cannot impersonate team',clientId:randomUUID()},'staff-a')).status,401);
+  f.db.prepare("DELETE FROM booking_assignments WHERE booking_id='booking-a'").run();
+  assert.equal((await f.call('/'+internal,undefined,'staff-a')).status,404);
+  assert.equal((await f.call(attachment,undefined,'staff-a')).status,404);
+  assert.equal((await f.call('',undefined,'staff-a')).data.rows.length,0);
+  for(const action of ['messages','read','status']) assert.equal((await f.call('/'+internal+'/'+action,{body:'Old access',clientId:randomUUID(),status:'open',expectedStatus:'open'},'staff-a')).status,404);
+  assert.equal((await f.call('/api/support/'+internal,undefined,'owner')).status,200);
+});
+
+test('all service teams need an active matching assignment for internal job chat', async t=>{
+  const f=await fixture(t);
+  for(const [service,team]of [['cleaning','cleaners'],['moving','movers'],['airport_transfer','drivers']]){
+    f.db.prepare("UPDATE bookings SET service=? WHERE id='booking-a'").run(service);
+    f.db.prepare("UPDATE team_members SET team=?,status='active' WHERE id='cleaner'").run(team);
+    assert.ok(f.support.bookingConversationForMember('booking-a','staff-a'));
+    f.db.prepare("UPDATE team_members SET status='deactivated' WHERE id='cleaner'").run();
+    assert.throws(()=>f.support.bookingConversationForMember('booking-a','staff-a'),{status:404});
+    f.db.prepare("UPDATE team_members SET team='office',status='active' WHERE id='cleaner'").run();
+    assert.throws(()=>f.support.bookingConversationForMember('booking-a','staff-a'),{status:404});
+  }
+});
 
 test('members see only their own conversations and admin cookies never authenticate a member route', async t => {
   const f = await fixture(t);

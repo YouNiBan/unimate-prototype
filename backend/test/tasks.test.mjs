@@ -2,6 +2,22 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createApplication} from '../server.mjs';
 import {taskList} from '../tasks.mjs';
+import {recordReference} from '../references.mjs';
+import {memberDetails} from '../member-management.mjs';
+
+test('new account applications and all three service bookings notify immediately; seen state is individual and retained',async t=>{
+ const {db}=await createApplication({filename:':memory:'});t.after(()=>db.close());const now=new Date().toISOString();
+ for(const role of ['owner','superadmin','support'])db.prepare('INSERT INTO admins VALUES(?,?,?,?,?,1)').run(role,role+'@example.invalid',role,'unused',role);
+ db.prepare('INSERT INTO users VALUES(?,?,?,?,?,?)').run('applicant','New applicant','applicant@example.invalid','student','active',now);
+ db.prepare('INSERT INTO member_account_requests(user_id,account_type) VALUES(?,?)').run('applicant','student');
+ for(const service of ['cleaning','moving','airport_transfer'])db.prepare('INSERT INTO bookings VALUES(?,?,?,?,?,?,?)').run(service,service+' request','New applicant',service,'requested',0,now);
+ const owner={id:'owner',role:'owner'},first=taskList(db,owner);assert.equal(first.unseen,4);assert.equal(first.rows.find(r=>r.resource==='users').category,'student_signup');
+ for(const row of first.rows)db.prepare('INSERT INTO task_seen VALUES(?,?,?)').run('owner',row.resource,row.record_id);
+ assert.equal(taskList(db,owner,1,'new').rows.length,0);assert.equal(taskList(db,owner,1,'seen').rows.length,4);assert.equal(taskList(db,{id:'superadmin',role:'superadmin'}).unseen,4);
+ db.prepare("UPDATE bookings SET status='completed'").run();assert.equal(taskList(db,owner,1,'seen').rows.length,4);
+ assert.equal(taskList(db,{id:'support',role:'support'}).rows.some(r=>r.resource==='users'),false);
+ const row=db.prepare('SELECT * FROM users WHERE id=?').get('applicant'),details=memberDetails(db,row);assert.match(details.accountId,/^UMU-\d{6}$/);assert.equal(memberDetails(db,row).accountId,details.accountId);assert.match(recordReference(db,'member',row.id,now),/^UM-MEM-/);
+});
 
 test('notifications combine reviews and inbound conversations with per-person read state and role restrictions',async t=>{
   const {db}=await createApplication({filename:':memory:'});t.after(()=>db.close());

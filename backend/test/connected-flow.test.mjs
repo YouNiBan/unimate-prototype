@@ -109,6 +109,17 @@ test('connected local flow shares real owned bookings, staff progress and privat
   assert.equal(staffSession.user.role, 'staff'); assert.deepEqual(staffSession.user.staffTeams, ['cleaners']);
   ok(await call('/api/staff-schedule', { bookingId: booking.id, memberId: teamId, start: '2026-11-07T09:00:00Z', end: '2026-11-07T12:00:00Z', reason: 'Test cleaner assignment' }, admin), 200, 'admin assigns booking');
   assert.deepEqual(ok(await call('/api/member/bookings', undefined, staff), 200, 'staff assigned list').data.rows.map(row => row.id), [booking.id]);
+  const clientChat=ok(await call(`/api/member/bookings/${booking.id}/conversation`,{},first),200,'client team chat').data.conversationId;
+  const staffChat=ok(await call(`/api/member/bookings/${booking.id}/conversation`,{},staff),200,'internal staff job chat').data.conversationId;
+  assert.notEqual(clientChat,staffChat);
+  const clientThread=ok(await call('/api/member/support/'+clientChat,undefined,first),200,'client chat detail').data.conversation;
+  const staffThread=ok(await call('/api/member/support/'+staffChat,undefined,staff),200,'staff chat detail').data.conversation;
+  assert.equal(clientThread.bookingReference,booking.reference);assert.equal(staffThread.bookingReference,booking.reference);
+  assert.equal(staffThread.audience,'staff_internal');
+  assert.equal(ok(await call('/api/bookings/'+booking.id,undefined,admin),200,'admin booking reference').data.row.reference,booking.reference);
+  ok(await call('/api/member/support/'+clientChat,undefined,staff),404,'staff cannot open client chat');
+  ok(await call('/api/member/support/'+staffChat,undefined,first),404,'client cannot open internal chat');
+  ok(await call(`/api/member/bookings/${secondBooking.id}/conversation`,{},staff),404,'staff cannot open an unassigned job chat');
   ok(await call(requestPhoto.url, undefined, staff), 200, 'assigned staff can read request photo');
   ok(await call(`/api/member/bookings/${booking.id}/photos`, { group: 'before', filename: 'before.png', mime: 'image/png', base64: png }, first), 403, 'student cannot add staff evidence');
   const before = ok(await call(`/api/member/bookings/${booking.id}/photos`, { group: 'before', filename: 'before.png', mime: 'image/png', base64: png }, staff), 201, 'staff before-service photo').data.photo;

@@ -88,7 +88,7 @@ test('authentication, permissions, moderation, persistence and audit integrity',
     const task=tasks.rows[0];assert.equal((await request('/api/tasks/seen',task,{'X-CSRF-Token':'bad'})).res.status,403);
     assert.equal((await request('/api/'+task.resource+'/'+task.record_id)).res.status,200);
     assert.equal((await request('/api/tasks/seen',task)).res.status,200);assert.equal((await request('/api/tasks')).data.unseen,1);assert.equal((await request('/api/tasks')).data.total,2);
-    assert.equal((await request('/api/tasks/seen',task)).res.status,200);assert.equal((await request('/api/tasks/seen',{resource:'users',record_id:'sample-user'})).res.status,400);
+    assert.equal((await request('/api/tasks/seen',task)).res.status,200);assert.equal((await request('/api/tasks/seen',{resource:'users',record_id:'sample-user'})).res.status,404);
     db.exec("UPDATE admins SET role='admin'");assert.equal((await request('/api/tasks')).data.total,2);assert.equal((await request('/api/approvals/sample-approval')).res.status,200);assert.equal((await request('/api/tasks/seen',{resource:'approvals',record_id:'sample-approval'})).res.status,200);db.exec("UPDATE admins SET role='superadmin'");
   });
   await t.test('navigation badges count complete queues and booking divisions',async()=>{
