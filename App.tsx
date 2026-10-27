@@ -1,3 +1,4 @@
+import {BrandLogo,BrandMark} from './BrandLogo';
 import { marketplaceSplit } from "./marketplace-fees.mjs";
 import PostVideo from "./PostVideo";
 import { formatPostTime } from "./post-time";
@@ -1112,39 +1113,7 @@ function Header({
         accessibilityLabel={tr(language, "Go to Home", "返回首页", "返回首頁")}
         onPress={onHome}
       >
-        <View
-          style={[
-            styles.brandLogoFrame,
-            compact && styles.brandLogoFrameCompact,
-          ]}
-        >
-          <Image
-            source={require("./assets/unimate-logo.png")}
-            style={[
-              styles.brandLogo,
-              compact && styles.brandLogoCompact,
-              darkMode && styles.brandLogoDark,
-            ]}
-            resizeMode="contain"
-          />
-          {darkMode && (
-            <View
-              style={[
-                styles.brandLogoMarkClip,
-                compact && styles.brandLogoMarkClipCompact,
-              ]}
-            >
-              <Image
-                source={require("./assets/unimate-logo.png")}
-                style={[
-                  styles.brandLogoMark,
-                  compact && styles.brandLogoMarkCompact,
-                ]}
-                resizeMode="contain"
-              />
-            </View>
-          )}
-        </View>
+        <BrandLogo dark={darkMode} width={compact?108:150} height={compact?54:75}/>
       </Pressable>
       <View
         style={[styles.headerControls, compact && styles.headerControlsCompact]}
@@ -9734,7 +9703,7 @@ function Sheet({
             {cancelLabel ? <Text style={styles.faqActionText}>{cancelLabel}</Text> : <Ionicons name="close" size={28} color={palette.ink} />}
           </Pressable>
           <Text style={styles.modalTitle}>{title}</Text>
-          {headerAction || (navigation ? <Pressable accessibilityRole="button" accessibilityLabel={navigation.label} onPress={navigation.goHome} style={{ width: 72, minHeight: 44, justifyContent: "center" }}><View style={{ width: 72, height: 32, justifyContent: "center" }}><Image source={require("./assets/unimate-logo.png")} style={[{ width: 72, height: 32 }, sheetDarkMode && styles.brandLogoDark]} resizeMode="contain" />{sheetDarkMode && <View style={{ position: "absolute", left: 0, top: 0, width: 24, height: 32, overflow: "hidden" }}><Image source={require("./assets/unimate-logo.png")} style={{ width: 72, height: 32 }} resizeMode="contain" /></View>}</View></Pressable> : <View style={{ width: 28 }} />)}
+          {headerAction || (navigation ? <Pressable accessibilityRole="button" accessibilityLabel={navigation.label} onPress={navigation.goHome} style={{ width: 72, minHeight: 44, justifyContent: "center" }}><BrandLogo dark={sheetDarkMode} width={72} height={36}/></Pressable> : <View style={{ width: 28 }} />)}
         </View>
         {children}
       </SafeAreaView>
@@ -15360,7 +15329,7 @@ function AppContent({
                 setTab(item.id);
               }}
             >
-              <View>{item.id === "friends" ? <View style={{ width: 26, height: 26, overflow: "hidden", opacity: tab === "friends" || tab === "forum" ? 1 : 0.65 }}><Image source={require("./assets/unimate-logo.png")} resizeMode="contain" style={{ position: "absolute", width: 88, height: 35, left: -3, top: -4 }} /></View> : <Ionicons
+              <View>{item.id === "friends" ? <BrandMark active={tab === "friends" || tab === "forum"}/> : <Ionicons
                 name={
                   (tab === item.id || item.icon.endsWith("-outline") ? item.icon : `${item.icon}-outline`) as any
                 }
@@ -15498,7 +15467,7 @@ function AuthPreferences({ language, onLanguage, darkMode, onToggleDarkMode }: {
 }
 
 function AuthBrand({ darkMode }: { darkMode: boolean }) {
-  return <View style={styles.brandLogoFrame}><Image source={require("./assets/unimate-logo.png")} style={[styles.brandLogo, darkMode && styles.brandLogoDark]} resizeMode="contain" />{darkMode && <View style={styles.brandLogoMarkClip}><Image source={require("./assets/unimate-logo.png")} style={styles.brandLogoMark} resizeMode="contain" /></View>}</View>;
+  return <BrandLogo dark={darkMode}/>;
 }
 
 const sellerCategoryOptions = ["Handmade & crochet", "Custom jewellery", "Clothing & accessories", "Art & stationery", "Home & gifts", "Fragrance & beauty", "Other niche goods"];
