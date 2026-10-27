@@ -34,9 +34,9 @@ const t=text=>words[text]?.[language==='简体'?0:1]&&language!=='EN'?words[text
 function el(tag, text, cls) { const n=document.createElement(tag); if(text!==undefined){const node=document.createTextNode(t(text));n.append(node);if(words[text])localizedNodes.set(node,text);} if(cls)n.className=cls; return n; }
 function applyLanguage(){document.documentElement.lang=language==='EN'?'en':language==='简体'?'zh-Hans':'zh-Hant';for(const [node,source] of localizedNodes){if(node.isConnected)node.textContent=t(source);else localizedNodes.delete(node);}document.querySelectorAll('[data-language]').forEach(select=>{select.value=language;select.setAttribute('aria-label',t('Language'));});updateThemeButtons();document.querySelectorAll('[data-notifications]').forEach(b=>b.setAttribute('aria-label',t('Notifications')));}
 function brandLogo() {
-  const frame=el('div',undefined,'brand-logo'),img=el('img');img.src='./unimate-logo.png';img.alt='UNIMATE 优你伴 Administration';img.width=160;img.height=64;
-  const mark=img.cloneNode();mark.alt='';mark.setAttribute('aria-hidden','true');mark.className='brand-colour-mark';
-  frame.append(img,mark);if(session?.admin){frame.setAttribute('role','button');frame.tabIndex=0;frame.setAttribute('aria-label','UniMate home dashboard');const home=()=>{section='overview';page=1;search='';statusFilter='';init().catch(e=>message(e.message));};frame.onclick=home;frame.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();home();}};}return frame;
+  const frame=el('div',undefined,'brand-logo'),img=el('img');img.src='./unimate-logo.png';img.alt='UNIMATE 优你伴 Administration';img.width=160;img.height=80;
+  
+  frame.append(img);if(session?.admin){frame.setAttribute('role','button');frame.tabIndex=0;frame.setAttribute('aria-label','UniMate home dashboard');const home=()=>{section='overview';page=1;search='';statusFilter='';init().catch(e=>message(e.message));};frame.onclick=home;frame.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();home();}};}return frame;
 }
 const systemTheme=window.matchMedia('(prefers-color-scheme: dark)');
 let themePreference='system';
