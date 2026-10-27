@@ -34,9 +34,13 @@ aside footer .header-controls{margin:0 0 4px}aside footer{align-items:stretch}.o
 :root .brand-logo .brand-colour-mark{display:none!important}
 :root[data-theme=dark] img[src*="unimate-logo.png"]{content:url('./unimate-logo-dark.png?v=20261027')}
 :root .brand-logo img{height:auto;aspect-ratio:2/1}
-:root .shell:not(.menu-expanded) .nav-rail>.brand-logo{width:44px;height:48px;overflow:visible}
-:root .shell:not(.menu-expanded) .nav-rail>.brand-logo img{content:url('./unimate-mark.svg?v=20261027');width:38px;height:38px;max-width:100%;aspect-ratio:1}
-:root[data-theme=dark] .shell:not(.menu-expanded) .nav-rail>.brand-logo img{content:url('./unimate-mark-dark.svg?v=20261027')}
-:root .menu-expanded .nav-rail>.brand-logo{height:80px}
+:root .shell:not(.menu-expanded) .nav-rail>.brand-logo{width:44px;height:56px;overflow:visible;justify-content:center;align-items:center;flex-shrink:0}
+:root .shell:not(.menu-expanded) .nav-rail>.brand-logo img{content:url('./unimate-mark.svg?v=20261027-compact');width:40px;height:40px;max-width:100%;aspect-ratio:1;object-fit:contain}
+:root[data-theme=dark] .shell:not(.menu-expanded) .nav-rail>.brand-logo img{content:url('./unimate-mark-dark.svg?v=20261027-compact')}
+:root .menu-expanded .nav-rail>.brand-logo{width:176px;height:88px;justify-content:center;align-items:center;overflow:visible;flex-shrink:0}
+:root .menu-expanded .nav-rail>.brand-logo img{width:144px;height:72px;object-fit:contain}
 :root[data-admin-layout=mobile] .workspace-tools .admin-mobile-brand{width:120px;flex-basis:120px;height:60px}
 :root[data-admin-layout=mobile] .workspace-tools .admin-mobile-brand img:not(.brand-colour-mark){width:120px;max-height:60px;height:60px}
+
+/* Clean dark wordmark: blend the black artwork canvas into any dark surface. */
+:root[data-theme=dark] img[src*="unimate-logo"]{mix-blend-mode:lighten}
